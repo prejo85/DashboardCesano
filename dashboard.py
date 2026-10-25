@@ -184,47 +184,95 @@ with tab1:
     else:
         st.warning("Nessun dato corrispondente trovato per la selezione indicata.")
     # -----------------------------------------------------------------------------
-    # SEZIONE FILE ESTERNI AGGIORNATA E BLINDATA CON RICERCA DINAMICA
+    # SEZIONE FILE ESTERNI AGGIORNATA CON RIQUADRI RIASSUNTIVI KPI E VISTA DELTA PY
     # -----------------------------------------------------------------------------
     st.markdown("---")
-    st.subheader("🔗 Indicatori di Reparto Integrati (File Esterni)")
+    st.subheader("🔗 Indicatori di Performance dai File Esterni (BMPL & Indispensabili)")
     
     # Isola in modo sicuro i primi 3 caratteri numerici del reparto selezionato (es. "110")
     if selected_reparto and selected_reparto not in ["--- TOTALE AREA ---", "--- DETTAGLIO RICHIESTO ---"]:
         rep_filter_code = str(selected_reparto)[:3].strip()
     else:
         rep_filter_code = ""
-    
+
+    # Funzione riutilizzabile per generare i mini-riquadri orizzontali colorati
+    def get_mini_kpi_block(label, current_val, py_val, is_currency=True, is_positive_good=True):
+        delta_pct = ((current_val - py_val) / py_val * 100) if py_val != 0 else 0.0
+        color = "#2ecc71" if (delta_pct >= 0 if is_positive_good else delta_pct <= 0) else "#e74c3c"
+        val_str = f"€ {current_val:,.2f}" if is_currency else f"{int(current_val):,}"
+        py_str = f"€ {py_val:,.2f}" if is_currency else f"{int(py_val):,}"
+        return f"""
+        <div style="background-color: #1e2430; padding: 12px; border-radius: 6px; border: 1px solid #2d3748; margin-bottom: 8px;">
+            <span style="color: #a0aec0; font-size: 0.8rem; font-weight: bold; text-transform: uppercase;">{label}</span>
+            <h3 style="margin: 2px 0; font-size: 1.4rem; font-weight: 700; color: #ffffff;">{val_str}</h3>
+            <span style="color: {color}; font-size: 0.85rem; font-weight: 600;">{delta_pct:+.2f}% vs PY <span style="color: #718096; font-size: 0.75rem;">(ex {py_str})</span></span>
+        </div>
+        """
+
     col_c1, col_c2 = st.columns(2)
+    
+    # --- BOX SINISTRO: AGGREGAZIONE DATI BMPL REPARTI ---
     with col_c1:
-        st.markdown("#### 📈 Indicatori BMPL Reparti")
-        col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-        if col_rep_bmpl:
-            col_rep_target = col_rep_bmpl[0]
-            # Se viene selezionato un reparto specifico esegue il filtro, altrimenti mostra l'aggregato completo
-            match_bmpl = df_rep[df_rep[col_rep_target].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_rep.copy()
-            cols_to_show = [c for c in ["F/NF", col_rep_target, "Sales TT", "Front Margin", "# Colli"] if c in df_rep.columns]
-            if not match_bmpl.empty:
-                st.dataframe(match_bmpl[cols_to_show], use_container_width=True, hide_index=True)
+        with st.container(border=True):
+            st.markdown("#### 📈 Sintesi Totale BMPL Reparti")
+            col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+            
+            if col_rep_bmpl:
+                col_rep_target = col_rep_bmpl[0]
+                match_bmpl = df_rep[df_rep[col_rep_target].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_rep.copy()
+                
+                if not match_bmpl.empty:
+                    # Somma aggregata delle metriche correnti e PY
+                    bmpl_sales = float(match_bmpl['Sales TT'].sum()) if 'Sales TT' in match_bmpl.columns else 0.0
+                    bmpl_sales_py = float(match_bmpl['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in match_bmpl.columns else 0.0
+                    bmpl_margin = float(match_bmpl['Front Margin'].sum()) if 'Front Margin' in match_bmpl.columns else 0.0
+                    bmpl_margin_py = float(match_bmpl['Front Margin PY Custom Cal'].sum()) if 'Front Margin PY Custom Cal' in match_bmpl.columns else 0.0
+                    bmpl_colli = float(match_bmpl['# Colli'].sum()) if '# Colli' in match_bmpl.columns else 0.0
+                    bmpl_colli_py = float(match_bmpl['# Colli PY Custom Cal'].sum()) if '# Colli PY Custom Cal' in match_bmpl.columns else 0.0
+                    
+                    # Calcolo ed esposizione delle card HTML colorate
+                    st.markdown(get_mini_kpi_block("Sales TT (BMPL)", bmpl_sales, bmpl_sales_py, is_currency=True), unsafe_allow_html=True)
+                    st.markdown(get_mini_kpi_block("Front Margin (BMPL)", bmpl_margin, bmpl_margin_py, is_currency=True), unsafe_allow_html=True)
+                    st.markdown(get_mini_kpi_block("Volume # Colli (BMPL)", bmpl_colli, bmpl_colli_py, is_currency=False), unsafe_allow_html=True)
+                else:
+                    st.caption("Nessun dato BMPL disponibile per la selezione corrente.")
             else:
-                st.caption(f"Nessuna corrispondenza BMPL trovata per il codice reparto '{rep_filter_code}'.")
-        else:
-            st.caption("Colonna del Reparto non identificata nel file BMPL.")
+                st.caption("Struttura reparto non identificata nel file BMPL.")
 
+    # --- BOX DESTRO: AGGREGAZIONE DATI ARTICOLI INDISPENSABILI ---
     with col_c2:
-        st.markdown("#### 📌 Monitoraggio Articoli Indispensabili (Focus Selezione)")
-        col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-        if col_rep_ind:
-            col_rep_target_ind = col_rep_ind[0]
-            match_indisp = df_ind[df_ind[col_rep_target_ind].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_ind.copy()
-            cols_to_show_ind = [c for c in ["G2", "Article", "DA - Sales TT", "DA - #Colli"] if c in df_ind.columns]
-            if not match_indisp.empty:
-                st.dataframe(match_indisp[cols_to_show_ind], use_container_width=True, hide_index=True)
+        with st.container(border=True):
+            st.markdown("#### 📌 Sintesi Totale Articoli Indispensabili")
+            col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+            
+            if col_rep_ind:
+                col_rep_target_ind = col_rep_ind[0]
+                match_indisp = df_ind[df_ind[col_rep_target_ind].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_ind.copy()
+                
+                if not match_indisp.empty:
+                    # Somma aggregata delle metriche correnti e PY
+                    ind_sales = float(match_indisp['DA - Sales TT'].sum()) if 'DA - Sales TT' in match_indisp.columns else 0.0
+                    ind_sales_py = float(match_indisp['DA - Sales TT PY Custom Cal'].sum()) if 'DA - Sales TT PY Custom Cal' in match_indisp.columns else 0.0
+                    ind_colli = float(match_indisp['DA - #Colli'].sum()) if 'DA - #Colli' in match_indisp.columns else 0.0
+                    ind_colli_py = float(match_indisp['DA - #Colli PY Custom Cal'].sum()) if 'DA - #Colli PY Custom Cal' in match_indisp.columns else 0.0
+                    
+                    # Esposizione delle card HTML colorate
+                    st.markdown(get_mini_kpi_block("Sales TT (Indispensabili)", ind_sales, ind_sales_py, is_currency=True), unsafe_allow_html=True)
+                    st.markdown(get_mini_kpi_block("Volume # Colli (Indispensabili)", ind_colli, ind_colli_py, is_currency=False), unsafe_allow_html=True)
+                    
+                    # Piccolo indicatore sul numero di articoli unici tracciati nel mix
+                    n_articoli = match_indisp['Article'].nunique() if 'Article' in match_indisp.columns else 0
+                    st.markdown(f"""
+                    <div style="background-color: #232936; padding: 8px; border-radius: 4px; text-align: center; border: 1px dashed #4a5568; margin-top: 12px;">
+                        <span style="color: #cbd5e0; font-size: 0.85rem;">Articoli Indispensabili Movimentati: <b>{n_articoli}</b></span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.caption("Nessun articolo indispensabile rilevato per la selezione corrente.")
             else:
-                st.caption(f"Nessun articolo indispensabile censito per il codice reparto '{rep_filter_code}'.")
-        else:
-            st.caption("Colonna del Reparto non identificata nel file Indispensabili.")
+                st.caption("Struttura reparto non identificata nel file Indispensabili.")
 
+    # Inizio blocco successivo per il report CTG (già integrato nella logica del file)
     st.markdown("---")
     st.subheader("👥 Vista Canale e Categoria Cliente (Dati Report CTG)")
     
@@ -245,7 +293,6 @@ with tab1:
                 st.dataframe(pivot_ctg.sort_values(by="Sales TT", ascending=False), use_container_width=True, hide_index=True)
         else:
             st.info("Nessun dato di profilazione canali/clienti (CTG) disponibile.")
-
 
 with tab2:
     st.header("👥 Analisi Granulare del Portafoglio Clienti (Sellout)")
