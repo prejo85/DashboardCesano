@@ -70,38 +70,37 @@ with tab1:
     # Generazione dei selettori a cascata
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
-        lista_store = sorted(df_men["Store"].unique())
+        lista_store = sorted(df_men["Store"].unique()) if "Store" in df_men.columns else []
         selected_store = st.selectbox("Seleziona Store:", lista_store)
     with col_f2:
-        df_filtrato_men = df_men[df_men["Store"] == selected_store]
-        lista_aree = sorted(df_filtrato_men["Sales Area Deparment"].unique())
+        df_filtrato_men = df_men[df_men["Store"] == selected_store] if "Store" in df_men.columns else df_men.copy()
+        lista_aree = sorted(df_filtrato_men["Sales Area Deparment"].unique()) if "Sales Area Deparment" in df_filtrato_men.columns else []
         selected_area = st.selectbox("Seleziona Area di Vendita:", lista_aree)
     with col_f3:
-        df_filtrato_men = df_filtrato_men[df_filtrato_men["Sales Area Deparment"] == selected_area]
-        lista_reparti = sorted(df_filtrato_men["Sales Department"].unique())
+        if "Sales Area Deparment" in df_filtrato_men.columns:
+            df_filtrato_men = df_filtrato_men[df_filtrato_men["Sales Area Deparment"] == selected_area]
+        lista_reparti = sorted(df_filtrato_men["Sales Department"].unique()) if "Sales Department" in df_filtrato_men.columns else []
         selected_reparto = st.selectbox("Seleziona Reparto:", lista_reparti)
 
-    dati_mensili_reparto = df_filtrato_men[df_filtrato_men["Sales Department"] == selected_reparto]
+    dati_mensili_reparto = df_filtrato_men[df_filtrato_men["Sales Department"] == selected_reparto] if "Sales Department" in df_filtrato_men.columns else pd.DataFrame()
 
     if not dati_mensili_reparto.empty:
         row = dati_mensili_reparto.iloc[0]
         st.markdown(f"### 🎯 KPI Mensilizzazione - Reparto: **{selected_reparto}**")
         
-        # Gestione float sicura per dati di stock e visualizzazione card metriche
-        val_stock_days = float(row['DA - Stock Days']) if pd.notna(row['DA - Stock Days']) else 0.0
-        val_stock_days_py = float(row['DA - Stock Days PY Custom Cal']) if pd.notna(row['DA - Stock Days PY Custom Cal']) else 0.0
+        val_stock_days = float(row['DA - Stock Days']) if ('DA - Stock Days' in row and pd.notna(row['DA - Stock Days'])) else 0.0
+        val_stock_days_py = float(row['DA - Stock Days PY Custom Cal']) if ('DA - Stock Days PY Custom Cal' in row and pd.notna(row['DA - Stock Days PY Custom Cal'])) else 0.0
         
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Sales TT", f"€ {row['DA - Sales TT']:,.2f}", f"vs PY: € {row['DA - Sales TT PY Custom Cal']:,.2f}")
-        m2.metric("Front Margin", f"€ {row['DA - Front Margin']:,.2f}", str(row['DA - %Front Margin']))
-        m3.metric("Stock Days", f"{val_stock_days:.1f} Giorni", f"Avg Stock: € {row['DA - Avg Stock']:,.2f}")
-        m4.metric("Shrinkage NNBP (Sfrido)", f"€ {row['DA - Shrinkage NNBP']:,.2f}")
+        m1.metric("Sales TT", f"€ {row.get('DA - Sales TT', 0):,.2f}", f"vs PY: € {row.get('DA - Sales TT PY Custom Cal', 0):,.2f}")
+        m2.metric("Front Margin", f"€ {row.get('DA - Front Margin', 0):,.2f}", str(row.get('DA - %Front Margin', 'N/D')))
+        m3.metric("Stock Days", f"{val_stock_days:.1f} Giorni", f"Avg Stock: € {row.get('DA - Avg Stock', 0):,.2f}")
+        m4.metric("Shrinkage NNBP (Sfrido)", f"€ {row.get('DA - Shrinkage NNBP', 0):,.2f}")
         
-        # Tabella nativa per le rotazioni di magazzino
         st.markdown("#### 📦 Dettaglio Giacenze e Rotazioni")
         df_stock_kpi = pd.DataFrame({
             "Metrica": ["Giorni di Giacenza Correnti", "Giorni di Giacenza Anno Prec. (PY)", "Stock Medio Corrente"],
-            "Valore": [f"{val_stock_days:.1f} Giorni", f"{val_stock_days_py:.1f} Giorni", f"€ {row['DA - Avg Stock']:,.2f}"]
+            "Valore": [f"{val_stock_days:.1f} Giorni", f"{val_stock_days_py:.1f} Giorni", f"€ {row.get('DA - Avg Stock', 0):,.2f}"]
         })
         st.dataframe(df_stock_kpi, use_container_width=True, hide_index=True)
     else:
@@ -113,31 +112,54 @@ with tab1:
     col_c1, col_c2 = st.columns(2)
     with col_c1:
         st.markdown("#### 📈 Indicatori BMPL Reparti")
-        match_bmpl = df_rep[df_rep["Sales Department"].astype(str).str.contains(selected_reparto[:3], na=False)]
-        if not match_bmpl.empty:
-            st.dataframe(match_bmpl[["F/NF", "Sales Department", "Sales TT", "Front Margin", "# Colli"]], use_container_width=True, hide_index=True)
+        # Trova dinamicamente la colonna dei reparti nel file BMPL per evitare il KeyError
+        col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+        if col_rep_bmpl:
+            match_bmpl = df_rep[df_rep[col_rep_bmpl[0]].astype(str).str.contains(str(selected_reparto)[:3], na=False)]
+            cols_to_show = [c for c in ["F/NF", col_rep_bmpl[0], "Sales TT", "Front Margin", "# Colli"] if c in df_rep.columns]
+            if not match_bmpl.empty:
+                st.dataframe(match_bmpl[cols_to_show], use_container_width=True, hide_index=True)
+            else:
+                st.caption("Nessuna corrispondenza BMPL trovata per questo reparto.")
         else:
-            st.caption("Nessuna corrispondenza BMPL trovata per questo reparto.")
+            st.caption("Colonna del Reparto non identificata nel file BMPL.")
 
     with col_c2:
         st.markdown("#### 📌 Monitoraggio Articoli Indispensabili (Focus Reparto)")
-        match_indisp = df_ind[df_ind["Sales Department"].astype(str).str.contains(selected_reparto[:3], na=False)]
-        if not match_indisp.empty:
-            st.dataframe(match_indisp[["G2", "Article", "DA - Sales TT", "DA - #Colli"]], use_container_width=True, hide_index=True)
+        # Trova dinamicamente la colonna dei reparti nel file Indispensabili
+        col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+        if col_rep_ind:
+            match_indisp = df_ind[df_ind[col_rep_ind[0]].astype(str).str.contains(str(selected_reparto)[:3], na=False)]
+            cols_to_show_ind = [c for c in ["G2", "Article", "DA - Sales TT", "DA - #Colli"] if c in df_ind.columns]
+            if not match_indisp.empty:
+                st.dataframe(match_indisp[cols_to_show_ind], use_container_width=True, hide_index=True)
+            else:
+                st.caption("Nessun articolo indispensabile censito per questo reparto.")
         else:
-            st.caption("Nessun articolo indispensabile censito per questo reparto.")
+            st.caption("Colonna del Reparto non identificata nel file Indispensabili.")
 
     st.markdown("---")
     st.subheader("👥 Vista Canale e Categoria Cliente (Dati Report CTG)")
     
-    dati_ctg_filtrati = df_ctg[df_ctg["Sales Department"].astype(str).str.contains(selected_reparto[:3], na=False)]
-    if not dati_ctg_filtrati.empty:
-        pivot_ctg = dati_ctg_filtrati.groupby(["Channel Detail", "Customer Category", "CTG"])[["Sales TT", "# Visits", "Sales per Visit"]].sum().reset_index()
-        fig_ctg_bar = px.bar(pivot_ctg, x="Customer Category", y="Sales TT", color="CTG", barmode="group", title="Fatturato per Canale/Categoria Cliente nel Reparto")
-        st.plotly_chart(fig_ctg_bar, use_container_width=True)
-        st.dataframe(pivot_ctg.sort_values(by="Sales TT", ascending=False), use_container_width=True, hide_index=True)
+    col_rep_ctg = [c for c in df_ctg.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+    if col_rep_ctg:
+        dati_ctg_filtrati = df_ctg[df_ctg[col_rep_ctg[0]].astype(str).str.contains(str(selected_reparto)[:3], na=False)]
+        if not dati_ctg_filtrati.empty:
+            groupby_cols = [c for c in ["Channel Detail", "Customer Category", "CTG"] if c in df_ctg.columns]
+            if groupby_cols:
+                metrics_cols = [c for c in ["Sales TT", "# Visits", "Sales per Visit"] if c in df_ctg.columns]
+                pivot_ctg = dati_ctg_filtrati.groupby(groupby_cols)[metrics_cols].sum().reset_index()
+                
+                if "Customer Category" in pivot_ctg.columns and "Sales TT" in pivot_ctg.columns:
+                    color_col = "CTG" if "CTG" in pivot_ctg.columns else None
+                    fig_ctg_bar = px.bar(pivot_ctg, x="Customer Category", y="Sales TT", color=color_col, barmode="group", title="Fatturato per Canale/Categoria Cliente nel Reparto")
+                    st.plotly_chart(fig_ctg_bar, use_container_width=True)
+                st.dataframe(pivot_ctg.sort_values(by=pivot_ctg.columns[-1], ascending=False), use_container_width=True, hide_index=True)
+        else:
+            st.info("Nessun dato di profilazione canali/clienti (CTG) disponibile per il reparto selezionato.")
     else:
-        st.info("Nessun dato di profilazione canali/clienti (CTG) disponibile per il reparto selezionato.")
+        st.info("Colonna del Reparto non identificata nel file CTG.")
+
 with tab2:
     st.header("👥 Analisi Granulare del Portafoglio Clienti (Sellout)")
     
