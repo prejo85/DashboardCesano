@@ -111,24 +111,28 @@ with tab1:
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
         
-        # Somma complessiva dei KPI correnti e PY
-        sales_tot = dati_vista['DA - Sales TT'].sum()
-        sales_py_tot = dati_vista['DA - Sales TT PY Custom Cal'].sum()
-        margin_tot = dati_vista['DA - Front Margin'].sum()
-        margin_py_tot = dati_vista['DA - Front Margin PY Custom Cal'].sum()
-        shrink_tot = dati_vista['DA - Shrinkage NNBP'].sum()
-        shrink_py_tot = dati_vista['DA - Shrinkage NNBP PY Custom Cal'].sum() if 'DA - Shrinkage NNBP PY Custom Cal' in dati_vista.columns else 0.0
+        # Somma complessiva dei KPI correnti e PY assicurando la conversione numerica al volo
+        sales_tot = float(dati_vista['DA - Sales TT'].sum())
+        sales_py_tot = float(dati_vista['DA - Sales TT PY Custom Cal'].sum())
+        margin_tot = float(dati_vista['DA - Front Margin'].sum())
+        margin_py_tot = float(dati_vista['DA - Front Margin PY Custom Cal'].sum())
+        shrink_tot = float(dati_vista['DA - Shrinkage NNBP'].sum())
+        
+        if 'DA - Shrinkage NNBP PY Custom Cal' in dati_vista.columns:
+            shrink_py_tot = float(dati_vista['DA - Shrinkage NNBP PY Custom Cal'].sum())
+        else:
+            shrink_py_tot = 0.0
         
         # Medie per la gestione dei giorni di stock
-        val_stock_days = dati_vista['DA - Stock Days'].mean()
-        val_stock_days_py = dati_vista['DA - Stock Days PY Custom Cal'].mean()
-        avg_stock_tot = dati_vista['DA - Avg Stock'].sum()
+        val_stock_days = float(dati_vista['DA - Stock Days'].mean())
+        val_stock_days_py = float(dati_vista['DA - Stock Days PY Custom Cal'].mean())
+        avg_stock_tot = float(dati_vista['DA - Avg Stock'].sum())
         
         # Formule specifiche richieste: Front Margin e Shrinkage espresse solo su Sales
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         
-        # Calcolo scostamenti percentuali vs Anno Precedente (PY)
+        # Calcolo protetto degli scostamenti percentuali vs Anno Precedente (PY) per evitare l'UFuncNoLoopError
         delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
         delta_margin_pct = ((margin_tot - margin_py_tot) / margin_py_tot * 100) if margin_py_tot != 0 else 0.0
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
@@ -144,6 +148,7 @@ with tab1:
                 <span style="color: {color}; font-size: 0.9rem; font-weight: 600;">{subtext}</span>
             </div>
             """
+
         # Creazione del layout a 4 colonne per i riquadri commerciali
         m1, m2, m3, m4 = st.columns(4)
         
