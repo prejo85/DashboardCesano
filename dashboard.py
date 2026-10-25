@@ -23,20 +23,19 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
         return df
 
     def parse_numeric(series):
-        # Converte in stringa pulita
         series_clean = series.astype(str).str.replace(r'\s+', '', regex=True)
         series_clean = series_clean.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
         series_clean = series_clean.replace(['-', '--', 'nan', 'NaN', ''], '0')
         return pd.to_numeric(series_clean, errors='coerce').fillna(0.0)
 
-    df_rep = clean_df(file_reparti, skip_rows=5)
-    df_ctg = clean_df(file_ctg, skip_rows=5)
+    # LETTURA ALLINEATA ALLA STRUTTURA REALE DEI FILE EXCEL
+    df_rep = clean_df(file_reparti, skip_rows=8)  # Salta 8 righe per leggere la riga 9 (F/NF, Sales Department)
+    df_ctg = clean_df(file_ctg, skip_rows=5)      # Salta 5 righe per leggere la riga 6
     df_sel = clean_df(file_sellout, skip_rows=5)
     df_ind = clean_df(file_indispensabili, skip_rows=5)
     df_men = clean_df(file_mensile, skip_rows=5)
 
-    # --- APPLICAZIONE SELETTIVA SOLO SUI VALORI ECONOMICI E QUANTITATIVI ---
-    # Evitiamo accuratamente colonne chiave come Store, Department, Area, CTG, Customer, Article
+    # Pulizia colonne monetarie e quantitative dei dataset
     colonne_valori = ["sales", "margin", "colli", "visite", "visit", "stock", "shrinkage", "sfrido"]
 
     for col in df_rep.columns:
@@ -60,6 +59,7 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
             df_men[col] = parse_numeric(df_men[col])
 
     return df_rep, df_ctg, df_sel, df_ind, df_men
+
 
 # Pannello laterale per l'inserimento manuale dei CSV
 st.sidebar.header("📁 Caricamento File Sorgente")
@@ -184,27 +184,30 @@ with tab1:
     else:
         st.warning("Nessun dato corrispondente trovato per la selezione indicata.")
     # -----------------------------------------------------------------------------
-    # SEZIONE FILE ESTERNI AGGIORNATA (MATCH DI SICUREZZA SU STRINGHE STRIP)
+    # SEZIONE FILE ESTERNI AGGIORNATA E BLINDATA CON RICERCA DINAMICA
     # -----------------------------------------------------------------------------
     st.markdown("---")
     st.subheader("🔗 Indicatori di Reparto Integrati (File Esterni)")
     
-    # Isola le prime 3 cifre in modo pulito eliminando eventuali decimali spuri dal codice reparto
-    rep_filter_code = str(selected_reparto).split('.')[0][:3].strip() if selected_reparto not in ["--- TOTALE AREA ---", "--- DETTAGLIO RICHIESTO ---"] else ""
+    # Isola in modo sicuro i primi 3 caratteri numerici del reparto selezionato (es. "110")
+    if selected_reparto and selected_reparto not in ["--- TOTALE AREA ---", "--- DETTAGLIO RICHIESTO ---"]:
+        rep_filter_code = str(selected_reparto)[:3].strip()
+    else:
+        rep_filter_code = ""
     
     col_c1, col_c2 = st.columns(2)
     with col_c1:
         st.markdown("#### 📈 Indicatori BMPL Reparti")
         col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
         if col_rep_bmpl:
-            col_rep_bmpl = col_rep_bmpl[0]
-            # Ricerca flessibile indipendente dal tipo stringa o numero
-            match_bmpl = df_rep[df_rep[col_rep_bmpl].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_rep.copy()
-            cols_to_show = [c for c in ["F/NF", col_rep_bmpl, "Sales TT", "Front Margin", "# Colli"] if c in df_rep.columns]
+            col_rep_target = col_rep_bmpl[0]
+            # Se viene selezionato un reparto specifico esegue il filtro, altrimenti mostra l'aggregato completo
+            match_bmpl = df_rep[df_rep[col_rep_target].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_rep.copy()
+            cols_to_show = [c for c in ["F/NF", col_rep_target, "Sales TT", "Front Margin", "# Colli"] if c in df_rep.columns]
             if not match_bmpl.empty:
                 st.dataframe(match_bmpl[cols_to_show], use_container_width=True, hide_index=True)
             else:
-                st.caption("Nessuna corrispondenza BMPL trovata per questo codice.")
+                st.caption(f"Nessuna corrispondenza BMPL trovata per il codice reparto '{rep_filter_code}'.")
         else:
             st.caption("Colonna del Reparto non identificata nel file BMPL.")
 
@@ -212,13 +215,13 @@ with tab1:
         st.markdown("#### 📌 Monitoraggio Articoli Indispensabili (Focus Selezione)")
         col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
         if col_rep_ind:
-            col_rep_ind = col_rep_ind[0]
-            match_indisp = df_ind[df_ind[col_rep_ind].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_ind.copy()
+            col_rep_target_ind = col_rep_ind[0]
+            match_indisp = df_ind[df_ind[col_rep_target_ind].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_ind.copy()
             cols_to_show_ind = [c for c in ["G2", "Article", "DA - Sales TT", "DA - #Colli"] if c in df_ind.columns]
             if not match_indisp.empty:
                 st.dataframe(match_indisp[cols_to_show_ind], use_container_width=True, hide_index=True)
             else:
-                st.caption("Nessun articolo indispensabile censito per questa selezione.")
+                st.caption(f"Nessun articolo indispensabile censito per il codice reparto '{rep_filter_code}'.")
         else:
             st.caption("Colonna del Reparto non identificata nel file Indispensabili.")
 
@@ -227,8 +230,8 @@ with tab1:
     
     col_rep_ctg = [c for c in df_ctg.columns if 'department' in c.lower() or 'reparto' in c.lower()]
     if col_rep_ctg:
-        col_rep_ctg = col_rep_ctg[0]
-        dati_ctg_filtrati = df_ctg[df_ctg[col_rep_ctg].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_ctg.copy()
+        col_rep_target_ctg = col_rep_ctg[0]
+        dati_ctg_filtrati = df_ctg[df_ctg[col_rep_target_ctg].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_ctg.copy()
         if not dati_ctg_filtrati.empty:
             groupby_cols = [c for c in ["Channel Detail", "Customer Category", "CTG"] if c in df_ctg.columns]
             if groupby_cols:
@@ -242,6 +245,7 @@ with tab1:
                 st.dataframe(pivot_ctg.sort_values(by="Sales TT", ascending=False), use_container_width=True, hide_index=True)
         else:
             st.info("Nessun dato di profilazione canali/clienti (CTG) disponibile.")
+
 
 with tab2:
     st.header("👥 Analisi Granulare del Portafoglio Clienti (Sellout)")
