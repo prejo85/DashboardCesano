@@ -11,30 +11,39 @@ st.markdown("### Analisi Multilivello: Store, Reparti, Clienti e Indicatori di P
 @st.cache_data
 def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabili, file_mensile):
     def clean_df(file_path, skip_rows=5):
+        # Legge il file rilevando e correggendo al volo il separatore corretto (, o ;)
         try:
             df = pd.read_csv(file_path, sep=";", skiprows=skip_rows, skip_blank_lines=True)
-            if df.shape <= 1:
+            # Se ha letto tutto in una sola colonna, significa che il vero separatore è la virgola
+            if len(df.columns) <= 1:
                 df = pd.read_csv(file_path, sep=",", skiprows=skip_rows, skip_blank_lines=True)
         except:
             df = pd.read_csv(file_path, sep=",", skiprows=skip_rows, skip_blank_lines=True)
             
+        # Rimuove spazi vuoti nascosti nei nomi delle colonne
         df.columns = df.columns.str.strip()
-        df = df[df.iloc[:, 0].notna() & ~df.iloc[:, 0].astype(str).str.contains("Report Filter|View Filter|^$|bmplreparti", case=False)]
+        
+        # Elimina le righe nulle iniziali o finali e i commenti di sistema
+        if len(df) > 0:
+            df = df[df.iloc[:, 0].notna()]
+            df = df[~df.iloc[:, 0].astype(str).str.contains("Report Filter|View Filter|^$|bmplreparti", case=False, na=False)]
         return df
 
     def parse_numeric(series):
+        # Pulisce i dati rimuovendo spazi e formattando i separatori decimali europei
         series_clean = series.astype(str).str.replace(r'\s+', '', regex=True)
         series_clean = series_clean.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
         series_clean = series_clean.replace(['-', '--', 'nan', 'NaN', ''], '0')
         return pd.to_numeric(series_clean, errors='coerce').fillna(0.0)
 
+    # Caricamento con saltariga allineato alla struttura dei tuoi report reali
     df_rep = clean_df(file_reparti, skip_rows=8)
     df_ctg = clean_df(file_ctg, skip_rows=5)
     df_sel = clean_df(file_sellout, skip_rows=5)
     df_ind = clean_df(file_indispensabili, skip_rows=5)
     df_men = clean_df(file_mensile, skip_rows=5)
 
-    # Escludiamo esplicitamente 'flag' dalla pulizia numerica per salvare il testo HVS
+    # Filtro selettivo per pulire solo i valori numerici ed economici (lasciando stare i testi HVS, Store, Reparti)
     colonne_valori = ["sales", "margin", "colli", "visite", "visit", "stock", "shrinkage", "sfrido", "accrediti"]
 
     for col in df_rep.columns:
@@ -58,6 +67,7 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
             df_men[col] = parse_numeric(df_men[col])
 
     return df_rep, df_ctg, df_sel, df_ind, df_men
+
 
 # Pannello laterale per l'inserimento manuale dei CSV
 st.sidebar.header("📁 Caricamento File Sorgente")
