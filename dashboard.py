@@ -104,7 +104,7 @@ with tab1:
         m3.metric("Stock Days", f"{row['DA - Stock Days']:.1f} Giorni", f"Avg Stock: € {row['DA - Avg Stock']:,.2f}")
         m4.metric("Shrinkage NNBP (Sfrido)", f"€ {row['DA - Shrinkage NNBP']:,.2f}")
         
-        # Grafico Gauge per i giorni di giacenza
+        # Grafico Gauge per i giorni di giacenza (CORRETTO)
         st.markdown("#### 📦 Efficienza Stock e Rotazioni")
         fig_stock = go.Figure(go.Indicator(
             mode = "gauge+number+delta",
