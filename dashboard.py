@@ -109,7 +109,7 @@ with tab1:
         fig_stock = go.Figure(go.Indicator(
             mode = "gauge+number+delta",
             value = row['DA - Stock Days'],
-            domain = {'x':, 'y': [0, 1]},
+            domain = {'x', 'y', [0, 1]},
             title = {'text': "Giorni di Giacenza (Giacenza Media / Vendite)"},
             delta = {'reference': row['DA - Stock Days PY Custom Cal'], 'inverse': True},
             gauge = {'axis': {'range': [None, 100]}, 'bar': {'color': "royalblue"}}
