@@ -156,10 +156,12 @@ with tab1:
         
         col_rep_ctg_check = [c for c in df_ctg.columns if 'department' in c.lower() or 'reparto' in c.lower()]
         if col_rep_ctg_check:
-            dati_ctg_macro = df_ctg[df_ctg[col_rep_ctg_check].astype(str).str[:3].str.strip().isin(lista_codici_target)]
+            col_ctg_singola = col_rep_ctg_check[0] # FISSA: Estrae il nome come stringa singola per evitare l'AttributeError
+            dati_ctg_macro = df_ctg[df_ctg[col_ctg_singola].astype(str).str[:3].str.strip().isin(lista_codici_target)]
         else:
             dati_ctg_macro = pd.DataFrame()
             
+        # Calcolo dei totali per Accrediti e HVS dal file CTG
         if not dati_ctg_macro.empty:
             ctg_sales = float(dati_ctg_macro['Sales TT'].sum()) if 'Sales TT' in dati_ctg_macro.columns else 0.0
             ctg_sales_py = float(dati_ctg_macro['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in dati_ctg_macro.columns else 0.0
@@ -176,7 +178,8 @@ with tab1:
             # Ripristino del filtro testuale corretto per il fatturato HVS (Bulk)
             col_hvs = [c for c in dati_ctg_macro.columns if 'hvs' in c.lower()]
             if col_hvs:
-                match_hvs = dati_ctg_macro[dati_ctg_macro[col_hvs[0]].astype(str).str.upper().str.contains('HVS', na=False) & ~dati_ctg_macro[col_hvs[0]].astype(str).str.upper().str.contains('NO', na=False)]
+                col_hvs_singola = col_hvs[0] # FISSA: Estrae come stringa singola
+                match_hvs = dati_ctg_macro[dati_ctg_macro[col_hvs_singola].astype(str).str.upper().str.contains('HVS', na=False) & ~dati_ctg_macro[col_hvs_singola].astype(str).str.upper().str.contains('NO', na=False)]
                 hvs_sales_tot = float(match_hvs['Sales TT'].sum()) if 'Sales TT' in match_hvs.columns else 0.0
                 hvs_sales_py = float(match_hvs['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in match_hvs.columns else 0.0
                 delta_hvs_pct = ((hvs_sales_tot - hvs_sales_py) / hvs_sales_py * 100) if hvs_sales_py != 0 else 0.0
@@ -202,6 +205,7 @@ with tab1:
                 <span style="color: {color}; font-size: 0.9rem; font-weight: 600;">{subtext}</span>
             </div>
             """
+
         # RIGA 1: Riquadri Standard
         m1, m2, m3, m4 = st.columns(4)
         with m1:
