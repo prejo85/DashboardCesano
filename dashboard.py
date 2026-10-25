@@ -98,9 +98,7 @@ with tab1:
             lista_reparti = ["--- DETTAGLIO RICHIESTO ---"]
         selected_reparto = st.selectbox("Seleziona Reparto:", lista_reparti)
 
-    # -----------------------------------------------------------------------------
-    # LOGICA DI AGGREGAZIONE DATI (STORE / AREA / REPARTO)
-    # -----------------------------------------------------------------------------
+    # Identificazione della granularità dei dati da mostrare
     if selected_area == "--- TOTALE STORE ---":
         dati_vista = df_filtrato_store.copy()
         titolo_vista = f"Visualizzazione: TOTALE STORE {selected_store}"
@@ -110,55 +108,64 @@ with tab1:
     else:
         dati_vista = df_filtrato_area[df_filtrato_area["Sales Department"] == selected_reparto] if "Sales Department" in df_filtrato_area.columns else pd.DataFrame()
         titolo_vista = f"Visualizzazione REPARTO: {selected_reparto} ({selected_store})"
-
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
         
-        # Calcolo dei totali aggregati per le metriche correnti e PY
+        # Somma complessiva dei KPI correnti e PY
         sales_tot = dati_vista['DA - Sales TT'].sum()
         sales_py_tot = dati_vista['DA - Sales TT PY Custom Cal'].sum()
         margin_tot = dati_vista['DA - Front Margin'].sum()
+        margin_py_tot = dati_vista['DA - Front Margin PY Custom Cal'].sum()
         shrink_tot = dati_vista['DA - Shrinkage NNBP'].sum()
+        shrink_py_tot = dati_vista['DA - Shrinkage NNBP PY Custom Cal'].sum() if 'DA - Shrinkage NNBP PY Custom Cal' in dati_vista.columns else 0.0
         
-        # Medie ponderate o semplici per i giorni di stock e stock medio
+        # Medie per la gestione dei giorni di stock
         val_stock_days = dati_vista['DA - Stock Days'].mean()
         val_stock_days_py = dati_vista['DA - Stock Days PY Custom Cal'].mean()
         avg_stock_tot = dati_vista['DA - Avg Stock'].sum()
         
-        # Calcolo dei delta percentuali richiesti
-        delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
-        delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
-        
+        # Formule specifiche richieste: Front Margin e Shrinkage espresse solo su Sales
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
+        
+        # Calcolo scostamenti percentuali vs Anno Precedente (PY)
+        delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
+        delta_margin_pct = ((margin_tot - margin_py_tot) / margin_py_tot * 100) if margin_py_tot != 0 else 0.0
+        delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
+        delta_shrink_pct = ((shrink_tot - shrink_py_tot) / shrink_py_tot * 100) if shrink_py_tot != 0 else 0.0
 
-        # --- BLOCCO VISIVO CARD CON RIQUADRI CARINI ---
+        # Funzione integrata per la formattazione dei riquadri colorati condizionali
+        def get_colored_text(label, value_str, subtext, is_positive_good=True, check_val=0.0):
+            color = "#2ecc71" if (check_val >= 0 if is_positive_good else check_val <= 0) else "#e74c3c"
+            return f"""
+            <div style="background-color: #1e2430; padding: 15px; border-radius: 8px; border: 1px solid #2d3748; min-height: 120px;">
+                <span style="color: #a0aec0; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">{label}</span>
+                <h2 style="margin: 5px 0; font-size: 1.8rem; font-weight: 700; color: #ffffff;">{value_str}</h2>
+                <span style="color: {color}; font-size: 0.9rem; font-weight: 600;">{subtext}</span>
+            </div>
+            """
+        # Creazione del layout a 4 colonne per i riquadri commerciali
         m1, m2, m3, m4 = st.columns(4)
         
         with m1:
-            with st.container(border=True):
-                st.markdown("**SALES TT**")
-                st.markdown(f"## € {sales_tot:,.2f}")
-                st.markdown(f"PY: € {sales_py_tot:,.2f} ({delta_sales_pct:+.2f}%)")
+            sub_sales = f"{delta_sales_pct:+.2f}% vs PY (ex € {sales_py_tot:,.2f})"
+            st.markdown(get_colored_text("Sales TT", f"€ {sales_tot:,.2f}", sub_sales, is_positive_good=True, check_val=delta_sales_pct), unsafe_allow_html=True)
                 
         with m2:
-            with st.container(border=True):
-                st.markdown("**FRONT MARGIN**")
-                st.markdown(f"## € {margin_tot:,.2f}")
-                st.markdown(f"**{margin_on_sales:.2f}%** su Sales")
+            sub_margin = f"{delta_margin_pct:+.2f}% vs PY" if margin_py_tot != 0 else "vs PY: N/D"
+            st.markdown(get_colored_text("Front Margin %", f"{margin_on_sales:.2f}%", sub_margin, is_positive_good=True, check_val=delta_margin_pct), unsafe_allow_html=True)
                 
         with m3:
-            with st.container(border=True):
-                st.markdown("**STOCK DAYS**")
-                st.markdown(f"## {val_stock_days:.1f} gg")
-                st.markdown(f"PY: {val_stock_days_py:.1f} gg ({delta_stock_pct:+.1f}%)")
+            sub_stock = f"{delta_stock_pct:+.1f}% vs PY (ex {val_stock_days_py:.1f} gg)"
+            # Per le giacenze, un aumento dei giorni è un fattore negativo, quindi is_positive_good=False
+            st.markdown(get_colored_text("Stock Days", f"{val_stock_days:.1f} gg", sub_stock, is_positive_good=False, check_val=delta_stock_pct), unsafe_allow_html=True)
                 
         with m4:
-            with st.container(border=True):
-                st.markdown("**SHRINKAGE NNBP (Sfrido)**")
-                st.markdown(f"## € {shrink_tot:,.2f}")
-                st.markdown(f"**{shrink_on_sales:+.2f}%** su Sales")
+            sub_shrink = f"{delta_shrink_pct:+.2f}% vs PY" if shrink_py_tot != 0 else "vs PY: N/D"
+            # Per lo sfrido (shrinkage), una riduzione o valore negativo è un fattore positivo
+            st.markdown(get_colored_text("Shrinkage NNBP", f"{shrink_on_sales:.2f}% su Sales", sub_shrink, is_positive_good=False, check_val=shrink_tot), unsafe_allow_html=True)
         
+        st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("#### 📦 Dettaglio Giacenze e Rotazioni")
         df_stock_kpi = pd.DataFrame({
             "Metrica": ["Giorni di Giacenza Correnti", "Giorni di Giacenza Anno Prec. (PY)", "Stock Medio Corrente Complessivo"],
@@ -167,67 +174,6 @@ with tab1:
         st.dataframe(df_stock_kpi, use_container_width=True, hide_index=True)
     else:
         st.warning("Nessun dato corrispondente trovato per la selezione indicata.")
-
-    # -----------------------------------------------------------------------------
-    # SEZIONE FILE ESTERNI (BMPL / INDISPENSABILI / CTG)
-    # -----------------------------------------------------------------------------
-    st.markdown("---")
-    st.subheader("🔗 Indicatori di Reparto Integrati (File Esterni)")
-    
-    # Determiniamo il codice reparto per fare i match (usiamo le prime 3 cifre se siamo a livello reparto)
-    rep_filter_code = str(selected_reparto)[:3] if selected_reparto not in ["--- TOTALE AREA ---", "--- DETTAGLIO RICHIESTO ---"] else ""
-    
-    col_c1, col_c2 = st.columns(2)
-    with col_c1:
-        st.markdown("#### 📈 Indicatori BMPL Reparti")
-        col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-        if col_rep_bmpl:
-            col_rep_bmpl = col_rep_bmpl[0]
-            # Se siamo in modalità totale mostra tutto lo store/area, altrimenti filtra per reparto
-            match_bmpl = df_rep[df_rep[col_rep_bmpl].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_rep.copy()
-            cols_to_show = [c for c in ["F/NF", col_rep_bmpl, "Sales TT", "Front Margin", "# Colli"] if c in df_rep.columns]
-            if not match_bmpl.empty:
-                st.dataframe(match_bmpl[cols_to_show], use_container_width=True, hide_index=True)
-            else:
-                st.caption("Nessuna corrispondenza BMPL trovata.")
-        else:
-            st.caption("Colonna del Reparto non identificata nel file BMPL.")
-
-    with col_c2:
-        st.markdown("#### 📌 Monitoraggio Articoli Indispensabili (Focus Selezione)")
-        col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-        if col_rep_ind:
-            col_rep_ind = col_rep_ind[0]
-            match_indisp = df_ind[df_ind[col_rep_ind].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_ind.copy()
-            cols_to_show_ind = [c for c in ["G2", "Article", "DA - Sales TT", "DA - #Colli"] if c in df_ind.columns]
-            if not match_indisp.empty:
-                st.dataframe(match_indisp[cols_to_show_ind], use_container_width=True, hide_index=True)
-            else:
-                st.caption("Nessun articolo indispensabile censito per questa selezione.")
-        else:
-            st.caption("Colonna del Reparto non identificata nel file Indispensabili.")
-
-    st.markdown("---")
-    st.subheader("👥 Vista Canale e Categoria Cliente (Dati Report CTG)")
-    
-    col_rep_ctg = [c for c in df_ctg.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-    if col_rep_ctg:
-        col_rep_ctg = col_rep_ctg[0]
-        dati_ctg_filtrati = df_ctg[df_ctg[col_rep_ctg].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_ctg.copy()
-        if not dati_ctg_filtrati.empty:
-            groupby_cols = [c for c in ["Channel Detail", "Customer Category", "CTG"] if c in df_ctg.columns]
-            if groupby_cols:
-                metrics_cols = [c for c in ["Sales TT", "# Visits", "Sales per Visit"] if c in df_ctg.columns]
-                pivot_ctg = dati_ctg_filtrati.groupby(groupby_cols)[metrics_cols].sum().reset_index()
-                
-                if "Customer Category" in pivot_ctg.columns and "Sales TT" in pivot_ctg.columns:
-                    color_col = "CTG" if "CTG" in pivot_ctg.columns else None
-                    fig_ctg_bar = px.bar(pivot_ctg, x="Customer Category", y="Sales TT", color=color_col, barmode="group", title="Fatturato per Canale/Categoria Cliente")
-                    st.plotly_chart(fig_ctg_bar, use_container_width=True)
-                st.dataframe(pivot_ctg.sort_values(by="Sales TT", ascending=False), use_container_width=True, hide_index=True)
-        else:
-            st.info("Nessun dato di profilazione canali/clienti (CTG) disponibile.")
-
 
 with tab2:
     st.header("👥 Analisi Granulare del Portafoglio Clienti (Sellout)")
