@@ -94,24 +94,29 @@ with tab1:
     dati_mensili_reparto = df_filtrato_men[df_filtrato_men["Sales Department"] == selected_reparto]
 
     if not dati_mensili_reparto.empty:
+        # Estraiamo la prima riga utile come una serie di dati pulita
         row = dati_mensili_reparto.iloc[0]
         st.markdown(f"### 🎯 KPI Mensilizzazione - Reparto: **{selected_reparto}**")
+        
+        # Estrazione e conversione sicura dei singoli valori per evitare conflitti con Plotly
+        val_stock_days = float(row['DA - Stock Days']) if pd.notna(row['DA - Stock Days']) else 0.0
+        val_stock_days_py = float(row['DA - Stock Days PY Custom Cal']) if pd.notna(row['DA - Stock Days PY Custom Cal']) else 0.0
         
         # Layout metriche principali in card
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Sales TT", f"€ {row['DA - Sales TT']:,.2f}", f"vs PY: € {row['DA - Sales TT PY Custom Cal']:,.2f}")
-        m2.metric("Front Margin", f"€ {row['DA - Front Margin']:,.2f}", f"{row['DA - %Front Margin']:.2f}%" if isinstance(row['DA - %Front Margin'], (int, float)) else str(row['DA - %Front Margin']))
-        m3.metric("Stock Days", f"{row['DA - Stock Days']:.1f} Giorni", f"Avg Stock: € {row['DA - Avg Stock']:,.2f}")
+        m2.metric("Front Margin", f"€ {row['DA - Front Margin']:,.2f}", str(row['DA - %Front Margin']))
+        m3.metric("Stock Days", f"{val_stock_days:.1f} Giorni", f"Avg Stock: € {row['DA - Avg Stock']:,.2f}")
         m4.metric("Shrinkage NNBP (Sfrido)", f"€ {row['DA - Shrinkage NNBP']:,.2f}")
         
-        # Grafico Gauge per i giorni di giacenza (CORRETTO SENZA DIZIONARI COMPLESSI)
+        # Grafico Gauge per i giorni di giacenza completamente corretto
         st.markdown("#### 📦 Efficienza Stock e Rotazioni")
         fig_stock = go.Figure(go.Indicator(
             mode = "gauge+number+delta",
-            value = row['DA - Stock Days'],
+            value = val_stock_days,
             title = {'text': "Giorni di Giacenza (Giacenza Media / Vendite)"},
-            delta = {'reference': row['DA - Stock Days PY Custom Cal'], 'inverse': True},
-            gauge = {'axis': {'range': [None, 100]}, 'bar': {'color': "royalblue"}}
+            delta = {'reference': val_stock_days_py, 'inverse': True},
+            gauge = {'axis': {'range': [None, max(100, val_stock_days * 1.2)]}, 'bar': {'color': "royalblue"}}
         ))
         fig_stock.update_layout(height=250, margin=dict(t=30, b=0, l=30, r=30))
         st.plotly_chart(fig_stock, use_container_width=True)
