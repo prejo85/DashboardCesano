@@ -23,20 +23,21 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
         return df
 
     def parse_numeric(series):
+        # Pulisce gli spazi bianchi e gestisce i separatori italiani
         series_clean = series.astype(str).str.replace(r'\s+', '', regex=True)
         series_clean = series_clean.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
         series_clean = series_clean.replace(['-', '--', 'nan', 'NaN', ''], '0')
         return pd.to_numeric(series_clean, errors='coerce').fillna(0.0)
 
-    # LETTURA ALLINEATA ALLA STRUTTURA REALE DEI FILE EXCEL
-    df_rep = clean_df(file_reparti, skip_rows=8)  # Salta 8 righe per leggere la riga 9 (F/NF, Sales Department)
-    df_ctg = clean_df(file_ctg, skip_rows=5)      # Salta 5 righe per leggere la riga 6
+    # Lettura allineata alla struttura reale dei report excel
+    df_rep = clean_df(file_reparti, skip_rows=8)
+    df_ctg = clean_df(file_ctg, skip_rows=5)
     df_sel = clean_df(file_sellout, skip_rows=5)
     df_ind = clean_df(file_indispensabili, skip_rows=5)
     df_men = clean_df(file_mensile, skip_rows=5)
 
-    # Pulizia colonne monetarie e quantitative dei dataset
-    colonne_valori = ["sales", "margin", "colli", "visite", "visit", "stock", "shrinkage", "sfrido"]
+    # Parole chiave estese per convertire in numeri puliti ed evitare ValueError (incluso Accrediti)
+    colonne_valori = ["sales", "margin", "colli", "visite", "visit", "stock", "shrinkage", "sfrido", "accrediti", "hvs"]
 
     for col in df_rep.columns:
         if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["department", "reparto"]):
