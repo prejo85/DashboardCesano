@@ -23,12 +23,10 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
         return df
 
     def parse_numeric(series):
-        # Converte in stringa, rimuove gli spazi bianchi e gestisce i trattini o i testi vuoti
+        # Converte in stringa pulita
         series_clean = series.astype(str).str.replace(r'\s+', '', regex=True)
         series_clean = series_clean.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-        # Sostituisce stringhe vuote o trattini con '0' prima della conversione
         series_clean = series_clean.replace(['-', '--', 'nan', 'NaN', ''], '0')
-        # errors='coerce' trasforma tutto ciò che non è un numero in NaN, e .fillna(0) lo converte in 0
         return pd.to_numeric(series_clean, errors='coerce').fillna(0.0)
 
     df_rep = clean_df(file_reparti, skip_rows=5)
@@ -37,29 +35,31 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
     df_ind = clean_df(file_indispensabili, skip_rows=5)
     df_men = clean_df(file_mensile, skip_rows=5)
 
-    # Pulizia profonda e forzata su tutte le colonne dei report commerciali
+    # --- APPLICAZIONE SELETTIVA SOLO SUI VALORI ECONOMICI E QUANTITATIVI ---
+    # Evitiamo accuratamente colonne chiave come Store, Department, Area, CTG, Customer, Article
+    colonne_valori = ["sales", "margin", "colli", "visite", "visit", "stock", "shrinkage", "sfrido"]
+
     for col in df_rep.columns:
-        if any(keyword in col.lower() for keyword in ["sales", "margin", "colli", "visite", "visit"]):
+        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["department", "reparto"]):
             df_rep[col] = parse_numeric(df_rep[col])
             
     for col in df_ctg.columns:
-        if any(keyword in col.lower() for keyword in ["sales", "margin", "colli", "visite", "visit"]):
+        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["department", "reparto", "detail", "category", "ctg"]):
             df_ctg[col] = parse_numeric(df_ctg[col])
     
     for col in df_sel.columns:
-        if any(keyword in col.lower() for keyword in ["sales", "margin", "colli", "visite", "visit"]):
+        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["customer", "venditore", "gestione", "club"]):
             df_sel[col] = parse_numeric(df_sel[col])
         
     for col in df_ind.columns:
-        if any(keyword in col.lower() for keyword in ["sales", "margin", "colli", "visite", "visit"]):
+        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["article", "department", "reparto"]):
             df_ind[col] = parse_numeric(df_ind[col])
 
     for col in df_men.columns:
-        if any(keyword in col.lower() for keyword in ["sales", "margin", "colli", "stock", "shrinkage", "sfrido"]):
+        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["store", "department", "area", "reparto"]):
             df_men[col] = parse_numeric(df_men[col])
 
     return df_rep, df_ctg, df_sel, df_ind, df_men
-
 
 # Pannello laterale per l'inserimento manuale dei CSV
 st.sidebar.header("📁 Caricamento File Sorgente")
