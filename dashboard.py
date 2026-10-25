@@ -138,7 +138,7 @@ with tab1:
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         
-        # Calcolo protetto degli scostamenti percentuali vs Anno Precedente (PY) per evitare l'UFuncNoLoopError
+        # Calcolo protetto degli scostamenti percentuali vs Anno Precedente (PY)
         delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
         delta_margin_pct = ((margin_tot - margin_py_tot) / margin_py_tot * 100) if margin_py_tot != 0 else 0.0
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
@@ -168,13 +168,11 @@ with tab1:
                 
         with m3:
             sub_stock = f"{delta_stock_pct:+.1f}% vs PY (ex {val_stock_days_py:.1f} gg)"
-            # Per le giacenze, un aumento dei giorni è un fattore negativo, quindi is_positive_good=False
             st.markdown(get_colored_text("Stock Days", f"{val_stock_days:.1f} gg", sub_stock, is_positive_good=False, check_val=delta_stock_pct), unsafe_allow_html=True)
                 
         with m4:
             sub_shrink = f"{delta_shrink_pct:+.2f}% vs PY" if shrink_py_tot != 0 else "vs PY: N/D"
-            # Per lo sfrido (shrinkage), una riduzione o valore negativo è un fattore positivo
-            st.markdown(get_colored_text("Shrinkage NNBP", f"{shrink_on_sales:.2f}% su Sales", sub_shrink, is_positive_good=False, check_val=shrink_tot), unsafe_allow_html=True)
+            st.markdown(get_colored_text("Shrinkage NNBP", f"{shrink_on_sales:.2f}% su Sales", sub_shrink, is_positive_good=False, check_val=delta_shrink_pct), unsafe_allow_html=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("#### 📦 Dettaglio Giacenze e Rotazioni")
@@ -185,6 +183,65 @@ with tab1:
         st.dataframe(df_stock_kpi, use_container_width=True, hide_index=True)
     else:
         st.warning("Nessun dato corrispondente trovato per la selezione indicata.")
+    # -----------------------------------------------------------------------------
+    # SEZIONE FILE ESTERNI AGGIORNATA (MATCH DI SICUREZZA SU STRINGHE STRIP)
+    # -----------------------------------------------------------------------------
+    st.markdown("---")
+    st.subheader("🔗 Indicatori di Reparto Integrati (File Esterni)")
+    
+    # Isola le prime 3 cifre in modo pulito eliminando eventuali decimali spuri dal codice reparto
+    rep_filter_code = str(selected_reparto).split('.')[0][:3].strip() if selected_reparto not in ["--- TOTALE AREA ---", "--- DETTAGLIO RICHIESTO ---"] else ""
+    
+    col_c1, col_c2 = st.columns(2)
+    with col_c1:
+        st.markdown("#### 📈 Indicatori BMPL Reparti")
+        col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+        if col_rep_bmpl:
+            col_rep_bmpl = col_rep_bmpl[0]
+            # Ricerca flessibile indipendente dal tipo stringa o numero
+            match_bmpl = df_rep[df_rep[col_rep_bmpl].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_rep.copy()
+            cols_to_show = [c for c in ["F/NF", col_rep_bmpl, "Sales TT", "Front Margin", "# Colli"] if c in df_rep.columns]
+            if not match_bmpl.empty:
+                st.dataframe(match_bmpl[cols_to_show], use_container_width=True, hide_index=True)
+            else:
+                st.caption("Nessuna corrispondenza BMPL trovata per questo codice.")
+        else:
+            st.caption("Colonna del Reparto non identificata nel file BMPL.")
+
+    with col_c2:
+        st.markdown("#### 📌 Monitoraggio Articoli Indispensabili (Focus Selezione)")
+        col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+        if col_rep_ind:
+            col_rep_ind = col_rep_ind[0]
+            match_indisp = df_ind[df_ind[col_rep_ind].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_ind.copy()
+            cols_to_show_ind = [c for c in ["G2", "Article", "DA - Sales TT", "DA - #Colli"] if c in df_ind.columns]
+            if not match_indisp.empty:
+                st.dataframe(match_indisp[cols_to_show_ind], use_container_width=True, hide_index=True)
+            else:
+                st.caption("Nessun articolo indispensabile censito per questa selezione.")
+        else:
+            st.caption("Colonna del Reparto non identificata nel file Indispensabili.")
+
+    st.markdown("---")
+    st.subheader("👥 Vista Canale e Categoria Cliente (Dati Report CTG)")
+    
+    col_rep_ctg = [c for c in df_ctg.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+    if col_rep_ctg:
+        col_rep_ctg = col_rep_ctg[0]
+        dati_ctg_filtrati = df_ctg[df_ctg[col_rep_ctg].astype(str).str.contains(rep_filter_code, na=False)] if rep_filter_code else df_ctg.copy()
+        if not dati_ctg_filtrati.empty:
+            groupby_cols = [c for c in ["Channel Detail", "Customer Category", "CTG"] if c in df_ctg.columns]
+            if groupby_cols:
+                metrics_cols = [c for c in ["Sales TT", "# Visits", "Sales per Visit"] if c in df_ctg.columns]
+                pivot_ctg = dati_ctg_filtrati.groupby(groupby_cols)[metrics_cols].sum().reset_index()
+                
+                if "Customer Category" in pivot_ctg.columns and "Sales TT" in pivot_ctg.columns:
+                    color_col = "CTG" if "CTG" in pivot_ctg.columns else None
+                    fig_ctg_bar = px.bar(pivot_ctg, x="Customer Category", y="Sales TT", color=color_col, barmode="group", title="Fatturato per Canale/Categoria Cliente")
+                    st.plotly_chart(fig_ctg_bar, use_container_width=True)
+                st.dataframe(pivot_ctg.sort_values(by="Sales TT", ascending=False), use_container_width=True, hide_index=True)
+        else:
+            st.info("Nessun dato di profilazione canali/clienti (CTG) disponibile.")
 
 with tab2:
     st.header("👥 Analisi Granulare del Portafoglio Clienti (Sellout)")
