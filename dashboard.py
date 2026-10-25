@@ -11,49 +11,55 @@ st.markdown("### Analisi Multilivello: Store, Reparti, Clienti e Indicatori di P
 @st.cache_data
 def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabili, file_mensile):
     def clean_df(file_path, skip_rows=5):
-        # Legge il file rilevando automaticamente se il separatore è la virgola o il punto e virgola
         try:
             df = pd.read_csv(file_path, sep=";", skiprows=skip_rows, skip_blank_lines=True)
-            if df.shape[1] <= 1: # Se ha letto tutto in una sola colonna, riprova con la virgola
+            if df.shape[1] <= 1:
                 df = pd.read_csv(file_path, sep=",", skiprows=skip_rows, skip_blank_lines=True)
         except:
             df = pd.read_csv(file_path, sep=",", skiprows=skip_rows, skip_blank_lines=True)
             
-        # Pulisce gli spazi bianchi dai nomi delle colonne per evitare mancate corrispondenze
         df.columns = df.columns.str.strip()
-        
-        # Rimuove righe di commento, filtri iniziali o stringhe vuote
         df = df[df.iloc[:, 0].notna() & ~df.iloc[:, 0].astype(str).str.contains("Report Filter|View Filter|^$|bmplreparti", case=False)]
         return df
 
     def parse_numeric(series):
-        # Rimuove gli spazi e sistema la formattazione dei numeri italiani
+        # Converte in stringa, rimuove gli spazi bianchi e gestisce i trattini o i testi vuoti
         series_clean = series.astype(str).str.replace(r'\s+', '', regex=True)
         series_clean = series_clean.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-        return pd.to_numeric(series_clean, errors='coerce').fillna(0)
+        # Sostituisce stringhe vuote o trattini con '0' prima della conversione
+        series_clean = series_clean.replace(['-', '--', 'nan', 'NaN', ''], '0')
+        # errors='coerce' trasforma tutto ciò che non è un numero in NaN, e .fillna(0) lo converte in 0
+        return pd.to_numeric(series_clean, errors='coerce').fillna(0.0)
 
-    # Allineamento perfetto del salto righe (skip_rows=5 per leggere la riga 6 di Excel)
     df_rep = clean_df(file_reparti, skip_rows=5)
     df_ctg = clean_df(file_ctg, skip_rows=5)
     df_sel = clean_df(file_sellout, skip_rows=5)
     df_ind = clean_df(file_indispensabili, skip_rows=5)
     df_men = clean_df(file_mensile, skip_rows=5)
 
-    # Pulizia colonne numeriche se presenti nei file
-    for col in ["Sales TT", "Sales TT PY Custom Cal", "Front Margin", "Front Margin PY Custom Cal"]:
-        if col in df_rep.columns: df_rep[col] = parse_numeric(df_rep[col])
-        if col in df_ctg.columns: df_ctg[col] = parse_numeric(df_ctg[col])
+    # Pulizia profonda e forzata su tutte le colonne dei report commerciali
+    for col in df_rep.columns:
+        if any(keyword in col.lower() for keyword in ["sales", "margin", "colli", "visite", "visit"]):
+            df_rep[col] = parse_numeric(df_rep[col])
+            
+    for col in df_ctg.columns:
+        if any(keyword in col.lower() for keyword in ["sales", "margin", "colli", "visite", "visit"]):
+            df_ctg[col] = parse_numeric(df_ctg[col])
     
-    if "Sales TT" in df_sel.columns: df_sel["Sales TT"] = parse_numeric(df_sel["Sales TT"])
-    if "Front Margin" in df_sel.columns: df_sel["Front Margin"] = parse_numeric(df_sel["Front Margin"])
+    for col in df_sel.columns:
+        if any(keyword in col.lower() for keyword in ["sales", "margin", "colli", "visite", "visit"]):
+            df_sel[col] = parse_numeric(df_sel[col])
         
-    for col in ["DA - Sales TT", "DA - Sales TT PY Custom Cal", "DA - #Colli", "DA - #Colli PY Custom Cal"]:
-        if col in df_ind.columns: df_ind[col] = parse_numeric(df_ind[col])
+    for col in df_ind.columns:
+        if any(keyword in col.lower() for keyword in ["sales", "margin", "colli", "visite", "visit"]):
+            df_ind[col] = parse_numeric(df_ind[col])
 
-    for col in ["DA - Sales TT", "DA - Sales TT PY Custom Cal", "DA - Front Margin", "DA - Front Margin PY Custom Cal", "DA - #Colli", "DA - Stock Days", "DA - Stock Days PY Custom Cal", "DA - Avg Stock", "DA - Shrinkage NNBP"]:
-        if col in df_men.columns: df_men[col] = parse_numeric(df_men[col])
+    for col in df_men.columns:
+        if any(keyword in col.lower() for keyword in ["sales", "margin", "colli", "stock", "shrinkage", "sfrido"]):
+            df_men[col] = parse_numeric(df_men[col])
 
     return df_rep, df_ctg, df_sel, df_ind, df_men
+
 
 # Pannello laterale per l'inserimento manuale dei CSV
 st.sidebar.header("📁 Caricamento File Sorgente")
