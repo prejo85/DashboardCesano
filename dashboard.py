@@ -104,12 +104,11 @@ with tab1:
         m3.metric("Stock Days", f"{row['DA - Stock Days']:.1f} Giorni", f"Avg Stock: € {row['DA - Avg Stock']:,.2f}")
         m4.metric("Shrinkage NNBP (Sfrido)", f"€ {row['DA - Shrinkage NNBP']:,.2f}")
         
-        # Grafico Gauge per i giorni di giacenza (CORRETTO)
+        # Grafico Gauge per i giorni di giacenza (CORRETTO SENZA DIZIONARI COMPLESSI)
         st.markdown("#### 📦 Efficienza Stock e Rotazioni")
         fig_stock = go.Figure(go.Indicator(
             mode = "gauge+number+delta",
             value = row['DA - Stock Days'],
-            domain = {'x', 'y', [0, 1]},
             title = {'text': "Giorni di Giacenza (Giacenza Media / Vendite)"},
             delta = {'reference': row['DA - Stock Days PY Custom Cal'], 'inverse': True},
             gauge = {'axis': {'range': [None, 100]}, 'bar': {'color': "royalblue"}}
