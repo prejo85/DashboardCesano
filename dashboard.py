@@ -184,13 +184,12 @@ with tab1:
     else:
         st.warning("Nessun dato corrispondente trovato per la selezione indicata.")
     # -----------------------------------------------------------------------------
-    # SEZIONE FILE ESTERNI COMPLETAMENTE INTERATTIVA E CONCATENATA AI FILTRI
+    # SEZIONE FILE ESTERNI COMPLETAMENTE INTERATTIVA E CONCATENATA AI FILTRI (FIXED)
     # -----------------------------------------------------------------------------
     st.markdown("---")
     st.subheader("🔗 Indicatori di Performance dai File Esterni (BMPL & Indispensabili)")
 
-    # 1. Identifichiamo dinamicamente la lista dei codici reparto inclusi nella selezione corrente
-    # Questo garantisce l'aggiornamento immediato sia a livello Store, sia Area, sia Reparto
+    # Identifichiamo dinamicamente la lista dei codici reparto inclusi nella selezione corrente
     if selected_area == "--- TOTALE STORE ---":
         reparti_inclusi = df_men[df_men["Store"] == selected_store]["Sales Department"].dropna().unique()
     elif selected_reparto == "--- TOTALE AREA ---":
@@ -217,24 +216,23 @@ with tab1:
 
     col_c1, col_c2 = st.columns(2)
     
-    # --- BOX SINISTRO: AGGREGAZIONE AGGIORNATA DATI BMPL REPARTI ---
+    # --- BOX SINISTRO: AGGREGAZIONE DATI BMPL REPARTI ---
     with col_c1:
         with st.container(border=True):
             st.markdown("#### 📈 Sintesi Totale BMPL Reparti")
             col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
             
             if col_rep_bmpl:
-                col_rep_target = col_rep_bmpl
-                # Il filtro controlla se il reparto del file BMPL inizia con uno dei codici dell'area selezionata
+                col_rep_target = col_rep_bmpl[0] # Estrae la singola stringa per evitare l'AttributeError
                 match_bmpl = df_rep[df_rep[col_rep_target].astype(str).str[:3].str.strip().isin(lista_codici_target)]
                 
                 if not match_bmpl.empty:
-                    bmpl_sales = float(match_bmpl['Sales TT'].sum())
-                    bmpl_sales_py = float(match_bmpl['Sales TT PY Custom Cal'].sum())
-                    bmpl_margin = float(match_bmpl['Front Margin'].sum())
-                    bmpl_margin_py = float(match_bmpl['Front Margin PY Custom Cal'].sum())
-                    bmpl_colli = float(match_bmpl['# Colli'].sum())
-                    bmpl_colli_py = float(match_bmpl['# Colli PY Custom Cal'].sum())
+                    bmpl_sales = float(match_bmpl['Sales TT'].sum()) if 'Sales TT' in match_bmpl.columns else 0.0
+                    bmpl_sales_py = float(match_bmpl['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in match_bmpl.columns else 0.0
+                    bmpl_margin = float(match_bmpl['Front Margin'].sum()) if 'Front Margin' in match_bmpl.columns else 0.0
+                    bmpl_margin_py = float(match_bmpl['Front Margin PY Custom Cal'].sum()) if 'Front Margin PY Custom Cal' in match_bmpl.columns else 0.0
+                    bmpl_colli = float(match_bmpl['# Colli'].sum()) if '# Colli' in match_bmpl.columns else 0.0
+                    bmpl_colli_py = float(match_bmpl['# Colli PY Custom Cal'].sum()) if '# Colli PY Custom Cal' in match_bmpl.columns else 0.0
                     
                     st.markdown(get_mini_kpi_block("Sales TT (BMPL)", bmpl_sales, bmpl_sales_py, is_currency=True), unsafe_allow_html=True)
                     st.markdown(get_mini_kpi_block("Front Margin (BMPL)", bmpl_margin, bmpl_margin_py, is_currency=True), unsafe_allow_html=True)
@@ -244,22 +242,21 @@ with tab1:
             else:
                 st.caption("Struttura reparto non identificata nel file BMPL.")
 
-    # --- BOX DESTRO: AGGREGAZIONE AGGIORNATA DATI ARTICOLI INDISPENSABILI ---
+    # --- BOX DESTRO: AGGREGAZIONE DATI ARTICOLI INDISPENSABILI ---
     with col_c2:
         with st.container(border=True):
             st.markdown("#### 📌 Sintesi Totale Articoli Indispensabili")
             col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
             
             if col_rep_ind:
-                col_rep_target_ind = col_rep_ind
-                # Filtro dinamico concatenato per gli articoli indispensabili
+                col_rep_target_ind = col_rep_ind[0] # Estrae la singola stringa per evitare l'AttributeError
                 match_indisp = df_ind[df_ind[col_rep_target_ind].astype(str).str[:3].str.strip().isin(lista_codici_target)]
                 
                 if not match_indisp.empty:
-                    ind_sales = float(match_indisp['DA - Sales TT'].sum())
-                    ind_sales_py = float(match_indisp['DA - Sales TT PY Custom Cal'].sum())
-                    ind_colli = float(match_indisp['DA - #Colli'].sum())
-                    ind_colli_py = float(match_indisp['DA - #Colli PY Custom Cal'].sum())
+                    ind_sales = float(match_indisp['DA - Sales TT'].sum()) if 'DA - Sales TT' in match_indisp.columns else 0.0
+                    ind_sales_py = float(match_indisp['DA - Sales TT PY Custom Cal'].sum()) if 'DA - Sales TT PY Custom Cal' in match_indisp.columns else 0.0
+                    ind_colli = float(match_indisp['DA - #Colli'].sum()) if 'DA - #Colli' in match_indisp.columns else 0.0
+                    ind_colli_py = float(match_indisp['DA - #Colli PY Custom Cal'].sum()) if 'DA - #Colli PY Custom Cal' in match_indisp.columns else 0.0
                     
                     st.markdown(get_mini_kpi_block("Sales TT (Indispensabili)", ind_sales, ind_sales_py, is_currency=True), unsafe_allow_html=True)
                     st.markdown(get_mini_kpi_block("Volume # Colli (Indispensabili)", ind_colli, ind_colli_py, is_currency=False), unsafe_allow_html=True)
@@ -267,7 +264,7 @@ with tab1:
                     n_articoli = match_indisp['Article'].nunique() if 'Article' in match_indisp.columns else 0
                     st.markdown(f"""
                     <div style="background-color: #232936; padding: 8px; border-radius: 4px; text-align: center; border: 1px dashed #4a5568; margin-top: 12px;">
-                        <span style="color: #cbd5e0; font-size: 0.85rem;">Articoli Indispensabili Movimentati nel Mix: <b>{n_articoli}</b></span>
+                        <span style="color: #cbd5e0; font-size: 0.85rem;">Articoli Indispensabili Movimentati: <b>{n_articoli}</b></span>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
@@ -275,13 +272,13 @@ with tab1:
             else:
                 st.caption("Struttura reparto non identificata nel file Indispensabili.")
 
-    # Mantenimento coerente e dinamico anche per l'aggiornamento del grafico e della tabella pivot CTG sotto
+    # Sezione finale per il report CTG
     st.markdown("---")
     st.subheader("👥 Vista Canale e Categoria Cliente (Dati Report CTG)")
     
     col_rep_ctg = [c for c in df_ctg.columns if 'department' in c.lower() or 'reparto' in c.lower()]
     if col_rep_ctg:
-        col_rep_target_ctg = col_rep_ctg
+        col_rep_target_ctg = col_rep_ctg[0] # Estrae la singola stringa per evitare l'AttributeError
         dati_ctg_filtrati = df_ctg[df_ctg[col_rep_target_ctg].astype(str).str[:3].str.strip().isin(lista_codici_target)]
         if not dati_ctg_filtrati.empty:
             groupby_cols = [c for c in ["Channel Detail", "Customer Category", "CTG"] if c in df_ctg.columns]
@@ -296,6 +293,7 @@ with tab1:
                 st.dataframe(pivot_ctg.sort_values(by="Sales TT", ascending=False), use_container_width=True, hide_index=True)
         else:
             st.info("Nessun dato di profilazione canali/clienti (CTG) disponibile per i filtri correnti.")
+
 
 with tab2:
     st.header("👥 Analisi Granulare del Portafoglio Clienti (Sellout)")
