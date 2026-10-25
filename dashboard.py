@@ -156,29 +156,28 @@ with tab1:
         
         col_rep_ctg_check = [c for c in df_ctg.columns if 'department' in c.lower() or 'reparto' in c.lower()]
         if col_rep_ctg_check:
-            col_ctg_singola = col_rep_ctg_check[0] # FISSA: Estrae il nome come stringa singola per evitare l'AttributeError
+            col_ctg_singola = col_rep_ctg_check[0]
             dati_ctg_macro = df_ctg[df_ctg[col_ctg_singola].astype(str).str[:3].str.strip().isin(lista_codici_target)]
         else:
             dati_ctg_macro = pd.DataFrame()
             
-        # Calcolo dei totali per Accrediti e HVS dal file CTG
         if not dati_ctg_macro.empty:
             ctg_sales = float(dati_ctg_macro['Sales TT'].sum()) if 'Sales TT' in dati_ctg_macro.columns else 0.0
             ctg_sales_py = float(dati_ctg_macro['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in dati_ctg_macro.columns else 0.0
             
-            # Somma algebrica mantenendo il valore nativo negativo degli accrediti
+            # Somma algebrica degli accrediti negativi
             accrediti_tot = float(dati_ctg_macro['Accrediti'].sum()) if 'Accrediti' in dati_ctg_macro.columns else 0.0
             accrediti_py_tot = float(dati_ctg_macro['Accrediti PY Custom Cal'].sum()) if 'Accrediti PY Custom Cal' in dati_ctg_macro.columns else 0.0
             
-            # Calcolo percentuale reale con segno negativo
             accrediti_pct = (accrediti_tot / ctg_sales * 100) if ctg_sales != 0 else 0.0
             accrediti_py_pct = (accrediti_py_tot / ctg_sales_py * 100) if ctg_sales_py != 0 else 0.0
             delta_accrediti_pct = accrediti_pct - accrediti_py_pct
             
-            # Ripristino del filtro testuale corretto per il fatturato HVS (Bulk)
+            # CALCOLO AGGIORNATO BULK/HVS: include tutte le righe che hanno valore HVS (non NO HVS)
             col_hvs = [c for c in dati_ctg_macro.columns if 'hvs' in c.lower()]
             if col_hvs:
-                col_hvs_singola = col_hvs[0] # FISSA: Estrae come stringa singola
+                col_hvs_singola = col_hvs[0]
+                # Conta tutte le righe contenenti HVS, escludendo esplicitamente quelle contrassegnate come NO HVS
                 match_hvs = dati_ctg_macro[dati_ctg_macro[col_hvs_singola].astype(str).str.upper().str.contains('HVS', na=False) & ~dati_ctg_macro[col_hvs_singola].astype(str).str.upper().str.contains('NO', na=False)]
                 hvs_sales_tot = float(match_hvs['Sales TT'].sum()) if 'Sales TT' in match_hvs.columns else 0.0
                 hvs_sales_py = float(match_hvs['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in match_hvs.columns else 0.0
@@ -196,6 +195,7 @@ with tab1:
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
         delta_shrink_pct = ((shrink_tot - shrink_py_tot) / shrink_py_tot * 100) if shrink_py_tot != 0 else 0.0
 
+        # Definizione delle funzioni di riquadro a livello globale della vista per evitare NameError
         def get_colored_text(label, value_str, subtext, is_positive_good=True, check_val=0.0):
             color = "#2ecc71" if (check_val >= 0 if is_positive_good else check_val <= 0) else "#e74c3c"
             return f"""
@@ -206,7 +206,19 @@ with tab1:
             </div>
             """
 
-        # RIGA 1: Riquadri Standard
+        def get_mini_kpi_block(label, current_val, py_val, is_currency=True, is_positive_good=True):
+            delta_pct = ((current_val - py_val) / py_val * 100) if py_val != 0 else 0.0
+            color = "#2ecc71" if (delta_pct >= 0 if is_positive_good else delta_pct <= 0) else "#e74c3c"
+            val_str = f"€ {current_val:,.2f}" if is_currency else f"{int(current_val):,}"
+            py_str = f"€ {py_val:,.2f}" if is_currency else f"{int(py_val):,}"
+            return f"""
+            <div style="background-color: #1e2430; padding: 12px; border-radius: 6px; border: 1px solid #2d3748; margin-bottom: 8px;">
+                <span style="color: #a0aec0; font-size: 0.8rem; font-weight: bold; text-transform: uppercase;">{label}</span>
+                <h3 style="margin: 2px 0; font-size: 1.4rem; font-weight: 700; color: #ffffff;">{val_str}</h3>
+                <span style="color: {color}; font-size: 0.85rem; font-weight: 600;">{delta_pct:+.2f}% vs PY <span style="color: #718096; font-size: 0.75rem;">(ex {py_str})</span></span>
+            </div>
+            """
+        # RIGA 1: Riquadri Principali
         m1, m2, m3, m4 = st.columns(4)
         with m1:
             sub_sales = f"{delta_sales_pct:+.2f}% vs PY (ex € {sales_py_tot:,.2f})"
@@ -223,12 +235,11 @@ with tab1:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # RIGA 2: Nuovi Riquadri CTG (Accrediti negativi e HVS alimentato)
+        # RIGA 2: Focus CTG
         st.markdown("##### 👥 Focus Canali & Qualità Vendite (Dati Report CTG)")
         m_extra1, m_extra2 = st.columns(2)
         with m_extra1:
             sub_acc = f"{delta_accrediti_pct:+.2f}% scostamento vs PY"
-            # Esibisce la percentuale con segno negativo appropriato (es. -0.08%)
             st.markdown(get_colored_text("Accrediti % su Sales", f"{accrediti_pct:.2f}%", sub_acc, is_positive_good=False, check_val=delta_accrediti_pct), unsafe_allow_html=True)
         with m_extra2:
             sub_hvs = f"{delta_hvs_pct:+.2f}% vs PY (ex € {hvs_sales_py:,.2f})"
@@ -245,7 +256,7 @@ with tab1:
         st.warning("Nessun dato corrispondente trovato per la selezione indicata.")
 
     # -----------------------------------------------------------------------------
-    # SEZIONE KPI FILE ESTERNI (BMPL & INDISPENSABILI)
+    # SEZIONE KPI FILE ESTERNI ORA PROTETTA DA NAMEERROR
     # -----------------------------------------------------------------------------
     st.markdown("---")
     st.subheader("🔗 Indicatori di Performance dai File Esterni (BMPL & Indispensabili)")
@@ -256,7 +267,8 @@ with tab1:
             st.markdown("#### 📈 Sintesi Totale BMPL Reparti")
             col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
             if col_rep_bmpl:
-                match_bmpl = df_rep[df_rep[col_rep_bmpl[0]].astype(str).str[:3].str.strip().isin(lista_codici_target)]
+                col_rep_target = col_rep_bmpl[0]
+                match_bmpl = df_rep[df_rep[col_rep_target].astype(str).str[:3].str.strip().isin(lista_codici_target)]
                 if not match_bmpl.empty:
                     bmpl_sales = float(match_bmpl['Sales TT'].sum())
                     bmpl_sales_py = float(match_bmpl['Sales TT PY Custom Cal'].sum())
@@ -276,7 +288,8 @@ with tab1:
             st.markdown("#### 📌 Sintesi Totale Articoli Indispensabili")
             col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
             if col_rep_ind:
-                match_indisp = df_ind[df_ind[col_rep_ind[0]].astype(str).str[:3].str.strip().isin(lista_codici_target)]
+                col_rep_target_ind = col_rep_ind[0]
+                match_indisp = df_ind[df_ind[col_rep_target_ind].astype(str).str[:3].str.strip().isin(lista_codici_target)]
                 if not match_indisp.empty:
                     ind_sales = float(match_indisp['DA - Sales TT'].sum())
                     ind_sales_py = float(match_indisp['DA - Sales TT PY Custom Cal'].sum())
