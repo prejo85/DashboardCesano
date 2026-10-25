@@ -165,11 +165,10 @@ with tab1:
             ctg_sales = float(dati_ctg_macro['Sales TT'].sum()) if 'Sales TT' in dati_ctg_macro.columns else 0.0
             ctg_sales_py = float(dati_ctg_macro['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in dati_ctg_macro.columns else 0.0
             
-            # 1. ACCREDITI NATIIVI NEGATIVI
+            # Accrediti nativi con segno negativo
             accrediti_tot = float(dati_ctg_macro['Accrediti'].sum()) if 'Accrediti' in dati_ctg_macro.columns else 0.0
             accrediti_py_tot = float(dati_ctg_macro['Accrediti PY Custom Cal'].sum()) if 'Accrediti PY Custom Cal' in dati_ctg_macro.columns else 0.0
             
-            # Assicuriamo la presenza del segno contabile negativo (-) richiesto
             if accrediti_tot > 0: accrediti_tot = -accrediti_tot
             if accrediti_py_tot > 0: accrediti_py_tot = -accrediti_py_tot
             
@@ -177,15 +176,17 @@ with tab1:
             accrediti_py_pct = (accrediti_py_tot / ctg_sales_py * 100) if ctg_sales_py != 0 else 0.0
             delta_accrediti_pct = accrediti_pct - accrediti_py_pct
             
-            # 2. ESTRAZIONE DINAMICA BULK/HVS SENZA VALORI FISSI (Risolto bug spazi nascosti)
+            # FILTRO DINAMICO E COMPLETO PER LE HVS (BULK):
+            # Intercetta qualsiasi colonna che contenga 'hvs' nel nome e cerca la riga valorizzata ad HVS
             col_flag_hvs = [c for c in dati_ctg_macro.columns if 'hvs' in c.lower()]
             if col_flag_hvs:
                 col_hvs_singola = col_flag_hvs[0]
-                # Pulizia totale degli spazi bianchi all'interno della colonna HVS prima del confronto
-                hvs_pulito = dati_ctg_macro[col_hvs_singola].astype(str).str.upper().str.replace(r'\s+', '', regex=True)
+                # Confronto stringa insensibile a maiuscole/minuscole e privo di spazi per intercettare il 100% dei record HVS
+                hvs_mask = dati_ctg_macro[col_hvs_singola].astype(str).str.upper().str.replace(r'\s+', '', regex=True).str.contains('HVS', na=False)
+                # Esclude esplicitamente i record 'NO HVS'
+                nohvs_mask = dati_ctg_macro[col_hvs_singola].astype(str).str.upper().str.replace(r'\s+', '', regex=True).str.contains('NOHVS', na=False)
                 
-                # Seleziona tutte le righe che sono esattamente uguali a 'HVS' (escludendo 'NOHVS')
-                match_hvs = dati_ctg_macro[hvs_pulito == 'HVS']
+                match_hvs = dati_ctg_macro[hvs_mask & ~nohvs_mask]
                 
                 hvs_sales_tot = float(match_hvs['Sales TT'].sum()) if 'Sales TT' in match_hvs.columns else 0.0
                 hvs_sales_py = float(match_hvs['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in match_hvs.columns else 0.0
@@ -203,6 +204,7 @@ with tab1:
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
         delta_shrink_pct = ((shrink_tot - shrink_py_tot) / shrink_py_tot * 100) if shrink_py_tot != 0 else 0.0
 
+        # Definizione delle funzioni di riquadro a livello globale per renderle visibili alle sotto-parti successive
         def get_colored_text(label, value_str, subtext, is_positive_good=True, check_val=0.0):
             color = "#2ecc71" if (check_val >= 0 if is_positive_good else check_val <= 0) else "#e74c3c"
             return f"""
@@ -213,7 +215,19 @@ with tab1:
             </div>
             """
 
-        # RIGA 1: Riquadri Principali
+        def get_mini_kpi_block(label, current_val, py_val, is_currency=True, is_positive_good=True):
+            delta_pct = ((current_val - py_val) / py_val * 100) if py_val != 0 else 0.0
+            color = "#2ecc71" if (delta_pct >= 0 if is_positive_good else delta_pct <= 0) else "#e74c3c"
+            val_str = f"€ {current_val:,.2f}" if is_currency else f"{int(current_val):,}"
+            py_str = f"€ {py_val:,.2f}" if is_currency else f"{int(py_val):,}"
+            return f"""
+            <div style="background-color: #1e2430; padding: 12px; border-radius: 6px; border: 1px solid #2d3748; margin-bottom: 8px;">
+                <span style="color: #a0aec0; font-size: 0.8rem; font-weight: bold; text-transform: uppercase;">{label}</span>
+                <h3 style="margin: 2px 0; font-size: 1.4rem; font-weight: 700; color: #ffffff;">{val_str}</h3>
+                <span style="color: {color}; font-size: 0.85rem; font-weight: 600;">{delta_pct:+.2f}% vs PY <span style="color: #718096; font-size: 0.75rem;">(ex {py_str})</span></span>
+            </div>
+            """
+        # RIGA 1: Riquadri Standard
         m1, m2, m3, m4 = st.columns(4)
         with m1:
             sub_sales = f"{delta_sales_pct:+.2f}% vs PY (ex € {sales_py_tot:,.2f})"
@@ -230,11 +244,11 @@ with tab1:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # RIGA 2: Focus CTG
+        # RIGA 2: Focus CTG con Accrediti Negativi e HVS
         st.markdown("##### 👥 Focus Canali & Qualità Vendite (Dati Report CTG)")
         m_extra1, m_extra2 = st.columns(2)
         with m_extra1:
-            sub_acc = f"{delta_accrediti_pct:+.2f}% scostamento vs PY"
+            sub_acc = f"{delta_accrediti_pct:+.2f}% vs PY"
             st.markdown(get_colored_text("Accrediti % su Sales", f"{accrediti_pct:.2f}%", sub_acc, is_positive_good=False, check_val=delta_accrediti_pct), unsafe_allow_html=True)
         with m_extra2:
             sub_hvs = f"{delta_hvs_pct:+.2f}% vs PY (ex € {hvs_sales_py:,.2f})"
@@ -251,7 +265,7 @@ with tab1:
         st.warning("Nessun dato corrispondente trovato per la selezione indicata.")
 
     # -----------------------------------------------------------------------------
-    # SEZIONE KPI FILE ESTERNI ORA PROTETTA DA NAMEERROR
+    # SEZIONE KPI FILE ESTERNI ORA PROTETTA DA NAMEERROR E TOTALIZZATA IN MODO DINAMICO
     # -----------------------------------------------------------------------------
     st.markdown("---")
     st.subheader("🔗 Indicatori di Performance dai File Esterni (BMPL & Indispensabili)")
@@ -310,6 +324,7 @@ with tab1:
                 fig_ctg_bar = px.bar(pivot_ctg, x="Customer Category", y="Sales TT", color=color_col, barmode="group", title="Fatturato per Canale/Categoria Cliente")
                 st.plotly_chart(fig_ctg_bar, use_container_width=True)
             st.dataframe(pivot_ctg.sort_values(by="Sales TT", ascending=False), use_container_width=True, hide_index=True)
+
 
 with tab2:
     st.header("👥 Analisi Granulare del Portafoglio Clienti (Sellout)")
