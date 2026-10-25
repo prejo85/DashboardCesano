@@ -13,7 +13,7 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
     def clean_df(file_path, skip_rows=5):
         try:
             df = pd.read_csv(file_path, sep=";", skiprows=skip_rows, skip_blank_lines=True)
-            if df.shape[1] <= 1:
+            if df.shape <= 1:
                 df = pd.read_csv(file_path, sep=",", skiprows=skip_rows, skip_blank_lines=True)
         except:
             df = pd.read_csv(file_path, sep=",", skiprows=skip_rows, skip_blank_lines=True)
@@ -23,28 +23,26 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
         return df
 
     def parse_numeric(series):
-        # Pulisce gli spazi bianchi e gestisce i separatori italiani
         series_clean = series.astype(str).str.replace(r'\s+', '', regex=True)
         series_clean = series_clean.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
         series_clean = series_clean.replace(['-', '--', 'nan', 'NaN', ''], '0')
         return pd.to_numeric(series_clean, errors='coerce').fillna(0.0)
 
-    # Lettura allineata alla struttura reale dei report excel
     df_rep = clean_df(file_reparti, skip_rows=8)
     df_ctg = clean_df(file_ctg, skip_rows=5)
     df_sel = clean_df(file_sellout, skip_rows=5)
     df_ind = clean_df(file_indispensabili, skip_rows=5)
     df_men = clean_df(file_mensile, skip_rows=5)
 
-    # Parole chiave estese per convertire in numeri puliti ed evitare ValueError (incluso Accrediti)
-    colonne_valori = ["sales", "margin", "colli", "visite", "visit", "stock", "shrinkage", "sfrido", "accrediti", "hvs"]
+    # Escludiamo esplicitamente 'flag' dalla pulizia numerica per salvare il testo HVS
+    colonne_valori = ["sales", "margin", "colli", "visite", "visit", "stock", "shrinkage", "sfrido", "accrediti"]
 
     for col in df_rep.columns:
         if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["department", "reparto"]):
             df_rep[col] = parse_numeric(df_rep[col])
             
     for col in df_ctg.columns:
-        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["department", "reparto", "detail", "category", "ctg"]):
+        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["department", "reparto", "detail", "category", "ctg", "flag"]):
             df_ctg[col] = parse_numeric(df_ctg[col])
     
     for col in df_sel.columns:
@@ -60,7 +58,6 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
             df_men[col] = parse_numeric(df_men[col])
 
     return df_rep, df_ctg, df_sel, df_ind, df_men
-
 
 # Pannello laterale per l'inserimento manuale dei CSV
 st.sidebar.header("📁 Caricamento File Sorgente")
@@ -149,28 +146,27 @@ with tab1:
         
         col_rep_ctg_check = [c for c in df_ctg.columns if 'department' in c.lower() or 'reparto' in c.lower()]
         if col_rep_ctg_check:
-            dati_ctg_macro = df_ctg[df_ctg[col_rep_ctg_check[0]].astype(str).str[:3].str.strip().isin(lista_codici_target)]
+            dati_ctg_macro = df_ctg[df_ctg[col_rep_ctg_check].astype(str).str[:3].str.strip().isin(lista_codici_target)]
         else:
             dati_ctg_macro = pd.DataFrame()
             
-        # Calcolo dei totali per Accrediti e HVS dal file CTG
         if not dati_ctg_macro.empty:
             ctg_sales = float(dati_ctg_macro['Sales TT'].sum()) if 'Sales TT' in dati_ctg_macro.columns else 0.0
             ctg_sales_py = float(dati_ctg_macro['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in dati_ctg_macro.columns else 0.0
             
-            # Somma Accrediti (di solito estratti come valori negativi, usiamo il valore assoluto o somma algebrica)
+            # Somma algebrica mantenendo il valore nativo negativo degli accrediti
             accrediti_tot = float(dati_ctg_macro['Accrediti'].sum()) if 'Accrediti' in dati_ctg_macro.columns else 0.0
             accrediti_py_tot = float(dati_ctg_macro['Accrediti PY Custom Cal'].sum()) if 'Accrediti PY Custom Cal' in dati_ctg_macro.columns else 0.0
             
-            # Incidenza degli accrediti sulle Sales del file CTG
-            accrediti_pct = (abs(accrediti_tot) / ctg_sales * 100) if ctg_sales != 0 else 0.0
-            accrediti_py_pct = (abs(accrediti_py_tot) / ctg_sales_py * 100) if ctg_sales_py != 0 else 0.0
+            # Calcolo percentuale reale con segno negativo
+            accrediti_pct = (accrediti_tot / ctg_sales * 100) if ctg_sales != 0 else 0.0
+            accrediti_py_pct = (accrediti_py_tot / ctg_sales_py * 100) if ctg_sales_py != 0 else 0.0
             delta_accrediti_pct = accrediti_pct - accrediti_py_pct
             
-            # Calcolo Fatturato sviluppato su Clienti Core HVS (Bulk)
+            # Ripristino del filtro testuale corretto per il fatturato HVS (Bulk)
             col_hvs = [c for c in dati_ctg_macro.columns if 'hvs' in c.lower()]
             if col_hvs:
-                match_hvs = dati_ctg_macro[dati_ctg_macro[col_hvs[0]].astype(str).str.upper().str.contains('HVS', na=False)]
+                match_hvs = dati_ctg_macro[dati_ctg_macro[col_hvs[0]].astype(str).str.upper().str.contains('HVS', na=False) & ~dati_ctg_macro[col_hvs[0]].astype(str).str.upper().str.contains('NO', na=False)]
                 hvs_sales_tot = float(match_hvs['Sales TT'].sum()) if 'Sales TT' in match_hvs.columns else 0.0
                 hvs_sales_py = float(match_hvs['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in match_hvs.columns else 0.0
                 delta_hvs_pct = ((hvs_sales_tot - hvs_sales_py) / hvs_sales_py * 100) if hvs_sales_py != 0 else 0.0
@@ -180,7 +176,6 @@ with tab1:
             accrediti_pct, delta_accrediti_pct, accrediti_py_tot = 0.0, 0.0, 0.0
             hvs_sales_tot, hvs_sales_py, delta_hvs_pct = 0.0, 0.0, 0.0
 
-        # Formule scostamenti percentuali riga superiore vs PY
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
@@ -188,7 +183,6 @@ with tab1:
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
         delta_shrink_pct = ((shrink_tot - shrink_py_tot) / shrink_py_tot * 100) if shrink_py_tot != 0 else 0.0
 
-        # Funzione integrata per la formattazione dei riquadri colorati condizionali
         def get_colored_text(label, value_str, subtext, is_positive_good=True, check_val=0.0):
             color = "#2ecc71" if (check_val >= 0 if is_positive_good else check_val <= 0) else "#e74c3c"
             return f"""
@@ -198,7 +192,7 @@ with tab1:
                 <span style="color: {color}; font-size: 0.9rem; font-weight: 600;">{subtext}</span>
             </div>
             """
-        # RIGA 1: I 4 Riquadri Standard Richiesti
+        # RIGA 1: Riquadri Standard
         m1, m2, m3, m4 = st.columns(4)
         with m1:
             sub_sales = f"{delta_sales_pct:+.2f}% vs PY (ex € {sales_py_tot:,.2f})"
@@ -215,12 +209,12 @@ with tab1:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # RIGA 2: I 2 Nuovi Riquadri Estratti dal file CTG (Accrediti % e HVS €)
+        # RIGA 2: Nuovi Riquadri CTG (Accrediti negativi e HVS alimentato)
         st.markdown("##### 👥 Focus Canali & Qualità Vendite (Dati Report CTG)")
         m_extra1, m_extra2 = st.columns(2)
         with m_extra1:
-            # Per gli accrediti (resi/sconti concessi), un calo della percentuale è un fattore positivo
             sub_acc = f"{delta_accrediti_pct:+.2f}% scostamento vs PY"
+            # Esibisce la percentuale con segno negativo appropriato (es. -0.08%)
             st.markdown(get_colored_text("Accrediti % su Sales", f"{accrediti_pct:.2f}%", sub_acc, is_positive_good=False, check_val=delta_accrediti_pct), unsafe_allow_html=True)
         with m_extra2:
             sub_hvs = f"{delta_hvs_pct:+.2f}% vs PY (ex € {hvs_sales_py:,.2f})"
@@ -257,18 +251,6 @@ with tab1:
                     bmpl_colli = float(match_bmpl['# Colli'].sum())
                     bmpl_colli_py = float(match_bmpl['# Colli PY Custom Cal'].sum())
                     
-                    def get_mini_kpi_block(label, current_val, py_val, is_currency=True, is_positive_good=True):
-                        delta_pct = ((current_val - py_val) / py_val * 100) if py_val != 0 else 0.0
-                        color = "#2ecc71" if (delta_pct >= 0 if is_positive_good else delta_pct <= 0) else "#e74c3c"
-                        val_str = f"€ {current_val:,.2f}" if is_currency else f"{int(current_val):,}"
-                        py_str = f"€ {py_val:,.2f}" if is_currency else f"{int(py_val):,}"
-                        return f"""
-                        <div style="background-color: #1e2430; padding: 12px; border-radius: 6px; border: 1px solid #2d3748; margin-bottom: 8px;">
-                            <span style="color: #a0aec0; font-size: 0.8rem; font-weight: bold; text-transform: uppercase;">{label}</span>
-                            <h3 style="margin: 2px 0; font-size: 1.4rem; font-weight: 700; color: #ffffff;">{val_str}</h3>
-                            <span style="color: {color}; font-size: 0.85rem; font-weight: 600;">{delta_pct:+.2f}% vs PY <span style="color: #718096; font-size: 0.75rem;">(ex {py_str})</span></span>
-                        </div>
-                        """
                     st.markdown(get_mini_kpi_block("Sales TT (BMPL)", bmpl_sales, bmpl_sales_py, is_currency=True), unsafe_allow_html=True)
                     st.markdown(get_mini_kpi_block("Front Margin (BMPL)", bmpl_margin, bmpl_margin_py, is_currency=True), unsafe_allow_html=True)
                     st.markdown(get_mini_kpi_block("Volume # Colli (BMPL)", bmpl_colli, bmpl_colli_py, is_currency=False), unsafe_allow_html=True)
