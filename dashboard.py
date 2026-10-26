@@ -162,7 +162,7 @@ def get_modern_kpi_card(icon, label, value_str, delta_val, py_info_str="", is_po
         </div>
     </div>
     """
-        # RENDERING GRAFICO RIGA 1 (Stile Antracite Sfocato)
+        # RENDERING GRAFICO RIGA 1 (Stile Antracite Sfocato con Indentazione Corretta)
         m1, m2, m3, m4 = st.columns(4)
         with m1:
             st.markdown(get_modern_kpi_card("💰", "Sales TT", f"€ {sales_tot:,.2f}", delta_sales_pct, f"Prec: € {sales_py_tot:,.2f}", True), unsafe_allow_html=True)
