@@ -2,6 +2,15 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+# --- FUNZIONI DI FORMATTAZIONE VALUTA ITALIANA ---
+def fmt_valuta(valore):
+    return f"€ {valore:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
+def fmt_percentuale(valore):
+    return f"{valore:.2f}%".replace('.', ',')
+
+def fmt_giorni(valore):
+    return f"{valore:.1f} gg".replace('.', ',')
 
 # -----------------------------------------------------------------------------
 # 1. CONFIGURAZIONE DELLA PAGINA E TITOLO PRINCIPALE
@@ -78,16 +87,6 @@ tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Pr
 # -----------------------------------------------------------------------------
 # 4. MOTORE GRAFICO DI GENERAZIONE DELLE KPI CARD AD ALTA LEGGIBILITÀ
 # -----------------------------------------------------------------------------
-        # --- FUNZIONI DI FORMATTAZIONE VALUTA ITALIANA (Punto per migliaia, virgola per decimali) ---
-        def fmt_valuta(valore):
-            return f"€ {valore:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-
-        def fmt_percentuale(valore):
-            return f"{valore:.2f}%".replace('.', ',')
-
-        def fmt_giorni(valore):
-            return f"{valore:.1f} gg".replace('.', ',')
-
         # --- RENDERING DELLE CARD IN PURO PYTHON ---
         st.markdown("### 📊 Indicatori Chiave di Performance")
         m1, m2, m3, m4 = st.columns(4)
