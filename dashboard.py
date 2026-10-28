@@ -185,9 +185,8 @@ with tab1:
             pass
 
 # =============================================================================
-# BLOCCO 3 - PARTE 1: VISUALIZZAZIONE DELLE CARDS KPI SUPERIORI (6 COLONNE)
+# BLOCCO 3 - PARTE 1: VISUALIZZAZIONE DELLE CARDS KPI SUPERIORI (REVISIONE SHK)
 # =============================================================================
-        # --- LOGICA DI CALCOLO DINAMICA PER GLI ARTICOLI INDISPENSABILI (INCLUSO SHK) ---
         import re
 
         # Estrazione dinamica dei codici reparto filtrati (es. {'110', '190'})
@@ -223,8 +222,10 @@ with tab1:
                 ind_sales_py = float(parse_indisp_totals(match_indisp, 'DA - Sales TT PY Custom Cal').sum())
                 ind_colli = float(parse_indisp_totals(match_indisp, 'DA - #Colli').sum())
                 ind_colli_py = float(parse_indisp_totals(match_indisp, 'DA - #Colli PY Custom Cal').sum())
-                ind_shrink = float(parse_indisp_totals(match_indisp, 'DA - Shrinkage').sum())
-                ind_shrink_py = float(parse_indisp_totals(match_indisp, 'NNBP net PY Custo').sum() if 'NNBP net PY Custo' in match_indisp.columns else 0.0)
+                
+                # --- TRACCIAMENTO CHIRURGICO DELLE INTESTAZIONI SHK REALI ---
+                ind_shrink = float(parse_indisp_totals(match_indisp, 'DA - Shrinkage NNBP').sum())
+                ind_shrink_py = float(parse_indisp_totals(match_indisp, 'DA - Shrinkage NNBP net PY Custom Cal').sum())
 
         # Rendering grafico delle 6 metric cards native in Streamlit
         st.markdown("#### 📊 Indicatori Chiave di Performance")
@@ -247,7 +248,7 @@ with tab1:
                 value=fmt_valuta_interi(ind_shrink), 
                 delta=f"{delta_shk_ind:+.2f}% vs PY" if ind_shrink_py != 0 else None,
                 delta_color="inverse",
-                help="Valore assoluto dello Shrinkage calcolato dinamicamente sugli articoli indispensabili filtrati."
+                help="Valore totale dello Shrinkage calcolato dinamicamente sugli articoli indispensabili."
             )
 # =============================================================================
 # BLOCCO 3 - PARTE 2: INDICATORI CROSS-REPORT SUI VALORI ASSOLUTI
