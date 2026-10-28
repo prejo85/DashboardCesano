@@ -12,15 +12,28 @@ st.markdown("### Analisi Multilivello: Store, Aree, Reparti e Segmentazione Clie
 def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabili, file_mensile):
     def clean_df(file_path):
         try:
-            # Forzato encoding='latin1' per prevenire l'UnicodeDecodeError sui file CSV italiani
-            df = pd.read_csv(file_path, sep=";", skiprows=0, skip_blank_lines=True, encoding="latin1")
-            if len(df.columns) <= 1:
+            # Verifica preventiva: se l'oggetto è nullo, ritorna un df vuoto
+            if file_path is None:
+                return pd.DataFrame()
+            
+            try:
+                df = pd.read_csv(file_path, sep=";", skiprows=0, skip_blank_lines=True, encoding="latin1")
+                if len(df.columns) <= 1:
+                    df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True, encoding="latin1")
+            except:
                 df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True, encoding="latin1")
-        except:
-            df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True, encoding="latin1")
-        df.columns = df.columns.str.replace('"', '').str.strip()
-        df = df[df.iloc[:, 0].notna()]
-        return df
+                
+            # Se dopo la lettura il file non ha colonne o righe, evita il crash
+            if df.empty or len(df.columns) == 0:
+                return pd.DataFrame()
+                
+            df.columns = df.columns.str.replace('"', '').str.strip()
+            df = df[df.iloc[:, 0].notna()]
+            return df
+        except pd.errors.EmptyDataError:
+            # Cattura specifica per file vuoti o corrotti
+            return pd.DataFrame()
+
 
     def parse_numeric(series):
         # Rimozione spazi, gestione parentesi per i valori negativi e rimozione virgola delle migliaia
