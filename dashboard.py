@@ -739,107 +739,107 @@ with tab1:
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
 
 # =============================================================================
-# BLOCCO 6: INTEGRAZIONE REATTIVA DATI FILE "CTG.CSV" (SOPRA I FILTRI ATTUALI)
+# BLOCCO 6: RISOLTO - INTEGRAZIONE CHIRURGICA CON CORREZIONE PUNTI MIGLIAIA CTG
 # =============================================================================
-        st.markdown("<br>---", unsafe_allow_html=True)
-        st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
+st.markdown("<br>---", unsafe_allow_html=True)
+st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
 
-        if not df_ctg.empty:
-            df_ctg_clean = df_ctg.copy()
-            
-            df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.iloc[:, 1].astype(str).apply(
-                lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
-            )
-            
-            # Il report CTG ora si aggiorna in modo reattivo in base alla tendina in alto
-            if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
-                match_ctg = df_ctg_clean[df_ctg_clean['Codice_Reparto_CTG'].isin(codici_target)].copy()
-            else:
-                match_ctg = df_ctg_clean.copy()
-            
-            if not match_ctg.empty:
-                def parse_ctg_columns(dataframe, col_index):
-                    if len(dataframe.columns) > col_index:
-                        s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
-                        s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
-                        if s.str.count(r'\.').max() > 1:
-                            s = s.str.replace('.', '', regex=False)
-                        elif s.str.contains(r'\.').any() and s.str.contains(',').any():
-                            s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                        elif s.str.contains(',').any() and not s.str.contains(r'\.').any():
-                            s = s.str.replace(',', '.', regex=False)
-                        return pd.to_numeric(s, errors='coerce').fillna(0.0)
-                    return pd.Series(0.0, index=dataframe.index)
+if not df_ctg.empty:
+    df_ctg_clean = df_ctg.copy()
+    
+    # Isolo i codici reparto numerici a 3 cifre dalla colonna 'Sales Department' (Indice 1)
+    df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.iloc[:, 1].astype(str).apply(
+        lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
+    )
+    
+    if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
+        match_ctg = df_ctg_clean[df_ctg_clean['Codice_Reparto_CTG'].isin(codici_target)].copy()
+    else:
+        match_ctg = df_ctg_clean.copy()
+    
+    if not match_ctg.empty:
+        # FUNZIONE DI PARSING CORRETTA: Rimuove i punti delle migliaia in stile italiano prima del casting
+        def parse_ctg_columns_fixed(dataframe, col_index):
+            if len(dataframe.columns) > col_index:
+                s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
+                s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
+                # Rimuoviamo chirurgicamente il punto delle migliaia per evitare che venga visto come decimale
+                s = s.str.replace('.', '', regex=False)
+                s = s.str.replace(',', '.', regex=False)
+                return pd.to_numeric(s, errors='coerce').fillna(0.0)
+            return pd.Series(0.0, index=dataframe.index)
 
-                match_ctg['Sales_TY'] = parse_ctg_columns(match_ctg, 7)
-                match_ctg['Sales_PY'] = parse_ctg_columns(match_ctg, 8)
-                match_ctg['Visits_TY'] = parse_ctg_columns(match_ctg, 11)
-                match_ctg['Sales_Per_Visit'] = parse_ctg_columns(match_ctg, 13)
+        match_ctg['Sales_TY'] = parse_ctg_columns_fixed(match_ctg, 7)
+        match_ctg['Sales_PY'] = parse_ctg_columns_fixed(match_ctg, 8)
+        match_ctg['Visits_TY'] = parse_ctg_columns_fixed(match_ctg, 11)
+        match_ctg['Sales_Per_Visit'] = parse_ctg_columns_fixed(match_ctg, 13)
+        
+        # Pulizia testo della label per rimuovere gli apici singoli residui dal CSV originale
+        match_ctg['CTG_Label'] = match_ctg['CTG'].astype(str).str.strip().str.replace("'", "", regex=False).replace(['nan', 'None', ''], '-')
+        match_ctg['Channel_Label'] = match_ctg['Channel Detail'].astype(str).str.strip()
+
+        df_ctg_grouped = match_ctg.groupby('CTG_Label').agg({
+            'Sales_TY': 'sum',
+            'Sales_PY': 'sum',
+            'Visits_TY': 'sum'
+        }).reset_index()
+        
+        df_ctg_grouped = df_ctg_grouped.sort_values(by='Sales_TY', ascending=True)
+        df_ctg_grouped = df_ctg_grouped[df_ctg_grouped['Sales_TY'] > 0]
+
+        if not df_ctg_grouped.empty:
+            g1, g2 = st.columns(2)
+            
+            with g1:
+                st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TT)")
+                fig_sales = px.bar(
+                    df_ctg_grouped,
+                    x='Sales_TY',
+                    y='CTG_Label',
+                    orientation='h',
+                    labels={'Sales_TY': 'Fatturato Corrente (€)', 'CTG_Label': 'Categoria CTG'},
+                    template='plotly_dark',
+                    color='Sales_TY',
+                    color_continuous_scale='Blues'
+                )
+                fig_sales.update_layout(showlegend=False, coloraxis_showscale=False, height=450, margin=dict(l=20, r=20, t=20, b=20))
+                fig_sales.update_traces(hovertemplate="<b>%{y}</b><br>Fatturato: € %{x:,.0f}<extra></extra>".replace(',', '.'))
+                st.plotly_chart(fig_sales, use_container_width=True)
                 
-                match_ctg['CTG_Label'] = match_ctg['CTG'].astype(str).str.strip().replace(['nan', 'None', ''], '-')
-                match_ctg['Channel_Label'] = match_ctg['Channel Detail'].astype(str).str.strip()
+            with g2:
+                st.markdown("#### 👥 Frequenza e Mix dei Volumi delle Visite")
+                fig_visits = px.pie(
+                    df_ctg_grouped,
+                    values='Visits_TY',
+                    names='CTG_Label',
+                    template='plotly_dark',
+                    hole=0.4
+                )
+                fig_visits.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20))
+                fig_visits.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="<b>%{label}</b><br>Visite: %{value:,.0f}<br>Incidenza: %{percent}<extra></extra>".replace(',', '.'))
+                st.plotly_chart(fig_visits, use_container_width=True)
 
-                df_ctg_grouped = match_ctg.groupby('CTG_Label').agg({
-                    'Sales_TY': 'sum',
-                    'Sales_PY': 'sum',
-                    'Visits_TY': 'sum'
-                }).reset_index()
-                
-                df_ctg_grouped = df_ctg_grouped.sort_values(by='Sales_TY', ascending=True)
-                df_ctg_grouped = df_ctg_grouped[df_ctg_grouped['Sales_TY'] > 0]
-
-                if not df_ctg_grouped.empty:
-                    g1, g2 = st.columns(2)
-                    
-                    with g1:
-                        st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TT)")
-                        fig_sales = px.bar(
-                            df_ctg_grouped,
-                            x='Sales_TY',
-                            y='CTG_Label',
-                            orientation='h',
-                            labels={'Sales_TY': 'Fatturato Corrente (€)', 'CTG_Label': 'Categoria CTG'},
-                            template='plotly_dark',
-                            color='Sales_TY',
-                            color_continuous_scale='Blues'
-                        )
-                        fig_sales.update_layout(showlegend=False, coloraxis_showscale=False, height=450, margin=dict(l=20, r=20, t=20, b=20))
-                        fig_sales.update_traces(hovertemplate="<b>%{y}</b><br>Fatturato: € %{x:,.0f}<extra></extra>".replace(',', '.'))
-                        st.plotly_chart(fig_sales, use_container_width=True)
-                        
-                    with g2:
-                        st.markdown("#### 👥 Frequenza e Mix dei Volumi delle Visite")
-                        fig_visits = px.pie(
-                            df_ctg_grouped,
-                            values='Visits_TY',
-                            names='CTG_Label',
-                            template='plotly_dark',
-                            hole=0.4
-                        )
-                        fig_visits.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20))
-                        fig_visits.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="<b>%{label}</b><br>Visite: %{value:,.0f}<br>Incidenza: %{percent}<extra></extra>".replace(',', '.'))
-                        st.plotly_chart(fig_visits, use_container_width=True)
-
-                    st.markdown("<br>#### 🏪 Performance Distribuzione per Canale e Scontrino Medio (`Sales per Visit`)", unsafe_allow_html=True)
-                    df_channel_grouped = match_ctg.groupby('Channel_Label').agg({
-                        'Sales_TY': 'sum',
-                        'Visits_TY': 'sum'
-                    }).reset_index()
-                    df_channel_grouped['Scontrino_Medio'] = df_channel_grouped.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
-                    
-                    ch1, ch2 = st.columns(2)
-                    with ch1:
-                        fig_ch_sales = px.bar(df_channel_grouped, x='Channel_Label', y='Sales_TY', title="Fatturato per Canale", template="plotly_dark", color='Channel_Label')
-                        st.plotly_chart(fig_ch_sales, use_container_width=True)
-                    with ch2:
-                        fig_ch_avg = px.bar(df_channel_grouped, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio (€ per Visita)", template="plotly_dark", color='Channel_Label')
-                        st.plotly_chart(fig_ch_avg, use_container_width=True)
-                else:
-                    st.caption("⚠️ I record del file CTG per la selezione corrente contengono volumi pari a zero o vuoti.")
-            else:
-                st.caption("⚠️ Nessun dato nel file CTG corrisponde ai reparti attivi nei filtri gerarchici.")
+            st.markdown("<br>#### 🏪 Performance Distribuzione per Canale e Scontrino Medio (`Sales per Visit`)", unsafe_allow_html=True)
+            df_channel_grouped = match_ctg.groupby('Channel_Label').agg({
+                'Sales_TY': 'sum',
+                'Visits_TY': 'sum'
+            }).reset_index()
+            df_channel_grouped['Scontrino_Medio'] = df_channel_grouped.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
+            
+            ch1, ch2 = st.columns(2)
+            with ch1:
+                fig_ch_sales = px.bar(df_channel_grouped, x='Channel_Label', y='Sales_TY', title="Fatturato per Canale", template="plotly_dark", color='Channel_Label')
+                st.plotly_chart(fig_ch_sales, use_container_width=True)
+            with ch2:
+                fig_ch_avg = px.bar(df_channel_grouped, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio (€ per Visita)", template="plotly_dark", color='Channel_Label')
+                st.plotly_chart(fig_ch_avg, use_container_width=True)
         else:
-            st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'analisi grafica merceologica.")
+            st.caption("⚠️ I record del file CTG per la selezione corrente contengono volumi pari a zero o vuoti.")
+    else:
+        st.caption("⚠️ Nessun dato nel file CTG corrisponde ai reparti attivi nei filtri gerarchici.")
+else:
+    st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'analisi grafica merceologica.")
+
 
 # =============================================================================
 # TAB 2: PORTAFOGLIO FORZA VENDITE E CLIENTI (AGGANCIATO AI FILTRI SUPERIORI)
