@@ -411,49 +411,44 @@ with tab1:
             st.info("Carica i report aggiornati per popolare la griglia analitica degli articoli indispensabili.")
 
         # =============================================================================
-        # NUOVA SEZIONE GRAFICA: ANALISI MERCEOLOGICA CTG (VERSIONE CORRETTA)
+        # NUOVA SEZIONE GRAFICA: ANALISI MERCEOLOGICA CTG (VERSIONE POSIZIONALE AD ALTA AFFIDABILITÀ)
         # =============================================================================
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("📊 Analisi e Performance Mix Categorie (Report CTG)")
 
-        if not df_ctg.empty:
+        if not df_ctg.empty and len(df_ctg.columns) >= 12:
             df_ctg_clean = df_ctg.copy()
             
-            # 1. Rilevamento dinamico ed intelligente delle colonne chiave nel file CTG
-            col_rep_ctg = [c for c in df_ctg_clean.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-            col_cat_ctg = [c for c in df_ctg_clean.columns if 'category' in c.lower() or 'categoria' in c.lower() or 'ctg' in c.lower() or 'desc' in c.lower()]
-            col_sales_ctg = [c for c in df_ctg_clean.columns if 'sales' in c.lower() and 'py' not in c.lower() and '%' not in c.lower()]
-            col_margin_ctg = [c for c in df_ctg_clean.columns if 'margin' in c.lower() and 'py' not in c.lower() and '%' not in c.lower()]
-            
-            # Fallback posizionali sicuri se il rilevamento testuale fallisce o trova liste vuote
-            c_rep = col_rep_ctg[0] if col_rep_ctg else df_ctg_clean.columns[2]
-            c_cat = col_cat_ctg[0] if col_cat_ctg else df_ctg_clean.columns[3]
-            c_sales = col_sales_ctg[0] if col_sales_ctg else df_ctg_clean.columns[5]
-            c_margin = col_margin_ctg[0] if col_margin_ctg else df_ctg_clean.columns[11]
-
-            # 2. Isolamento dei codici reparto numerici a 3 cifre per il matching
-            df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean[c_rep].astype(str).apply(
+            # 1. Isola i codici reparto numerici a 3 cifre dalla colonna all'indice 2 (Terza colonna)
+            df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.iloc[:, 2].astype(str).apply(
                 lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
             )
             
-            # Se siamo sul Totale Store carichiamo tutto il file, altrimenti filtriamo per i reparti target scelti
+            # Sincronizzazione dinamica sui filtri superiori
             if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
                 match_ctg = df_ctg_clean[df_ctg_clean['Codice_Reparto_CTG'].isin(codici_target)].copy()
             else:
                 match_ctg = df_ctg_clean.copy()
             
             if not match_ctg.empty:
-                # Sottofunzione di pulizia stringhe e formati europei
-                def parse_ctg_flexible(dataframe, col_name):
-                    s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
+                # Sottofunzione di pulizia stringhe e formati europei basata sul posizionamento
+                def parse_ctg_positional_final(dataframe, col_index):
+                    s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
                     s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
-                    s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                    if s.str.count(r'\.').max() > 1:
+                        s = s.str.replace('.', '', regex=False)
+                    elif s.str.contains(r'\.').any() and s.str.contains(',').any():
+                        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                    elif s.str.contains(',').any() and not s.str.contains(r'\.').any():
+                        s = s.str.replace(',', '.', regex=False)
                     return pd.to_numeric(s, errors='coerce').fillna(0.0)
 
-                # Parsing delle metriche di fatturato e margine
-                match_ctg['Sales_Num'] = parse_ctg_flexible(match_ctg, c_sales)
-                match_ctg['Margin_Num'] = parse_ctg_flexible(match_ctg, c_margin)
-                match_ctg['Categoria_Testo'] = match_ctg[c_cat].astype(str).str.strip().replace(['nan', 'None', ''], '-')
+                # MAPPATURA POSIZIONALE CHIRURGICA DEL TRACCIATO CTG
+                match_ctg['Sales_Num'] = parse_ctg_positional_final(match_ctg, 5)   # Indice 5: Sesta colonna (Sales TT)
+                match_ctg['Margin_Num'] = parse_ctg_positional_final(match_ctg, 11) # Indice 11: Dodicesima colonna (Front Margin)
+                
+                # Descrizione Categoria merceologica (Indice 3: Quarta colonna)
+                match_ctg['Categoria_Testo'] = match_ctg.iloc[:, 3].astype(str).str.strip().replace(['nan', 'None', ''], '-')
 
                 # Raggruppamento per Categoria merceologica unica
                 df_ctg_grafici = match_ctg.groupby('Categoria_Testo').agg({
@@ -503,7 +498,7 @@ with tab1:
                 else:
                     st.caption("⚠️ I record del file CTG per la selezione corrente contengono volumi pari a zero.")
             else:
-                st.caption("⚠️ Nessuna categoria merceologica nel file CTG corrisponde ai filtri attivi.")
+                st.caption("⚠️ Nessuna categoria merceologica nel file CTG corrisponde ai filtri attivi della Mensilizzazione.")
         else:
             st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'analisi grafica merceologica.")
 
