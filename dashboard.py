@@ -408,6 +408,97 @@ with tab1:
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
         else:
             st.info("Carica i report aggiornati per popolare la griglia analitica degli articoli indispensabili.")
+        # =============================================================================
+        # NUOVA SEZIONE GRAFICA: ANALISI MERCEOLOGICA CTG (DINAMICA SU FILTRI)
+        # =============================================================================
+        st.markdown("<br>---", unsafe_allow_html=True)
+        st.subheader("📊 Analisi e Performance Mix Categorie (Report CTG)")
+
+        col_rep_ctg = [c for c in df_ctg.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+        col_cat_ctg = [c for c in df_ctg.columns if 'category' in c.lower() or 'categoria' in c.lower() or 'ctg' in c.lower()]
+        
+        if col_rep_ctg and len(codici_target) > 0 and not df_ctg.empty:
+            col_ctg_nome = col_rep_ctg[0]
+            col_cat_nome = col_cat_ctg[0] if col_cat_ctg else df_ctg.columns[1]
+            
+            df_ctg_clean = df_ctg.copy()
+            # Pulizia e isolamento del codice reparto a 3 cifre tramite Regex per il match dinamico
+            df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean[col_ctg_nome].astype(str).apply(
+                lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
+            )
+            
+            # Filtriamo le categorie legate unicamente alla selezione Store/Area/Reparto attiva
+            match_ctg = df_ctg_clean[df_ctg_clean['Codice_Reparto_CTG'].isin(codici_target)].copy()
+            
+            if not match_ctg.empty:
+                # Creiamo colonne numeriche pulite per evitare sfasamenti sui formati europei
+                def parse_ctg_cols(dataframe, col_name):
+                    if col_name in dataframe.columns:
+                        s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
+                        s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
+                        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                        return pd.to_numeric(s, errors='coerce').fillna(0.0)
+                    return pd.Series(0.0, index=dataframe.index)
+
+                # Rilevamento dinamico delle colonne chiave nel file CTG
+                c_sales_ctg = [c for c in match_ctg.columns if 'sales' in c.lower() and 'py' not in c.lower()][0]
+                c_margin_ctg = [c for c in match_ctg.columns if 'margin' in c.lower() and '%' not in c.lower() and 'py' not in c.lower()][0]
+                
+                match_ctg['Sales_Num'] = parse_ctg_cols(match_ctg, c_sales_ctg)
+                match_ctg['Margin_Num'] = parse_ctg_cols(match_ctg, c_margin_ctg)
+
+                # Aggreghiamo i dati per Categoria merceologica per ripulire il grafico da doppie righe fittizie
+                df_ctg_grafici = match_ctg.groupby(col_cat_nome).agg({
+                    'Sales_Num': 'sum',
+                    'Margin_Num': 'sum'
+                }).reset_index().sort_values(by='Sales_Num', ascending=True)
+
+                # Escludiamo eventuali aggregati a zero per non appesantire la resa visiva
+                df_ctg_grafici = df_ctg_grafici[df_ctg_grafici['Sales_Num'] > 0]
+
+                if not df_ctg_grafici.empty:
+                    g1, g2 = st.columns(2)
+                    
+                    with g1:
+                        st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TT)")
+                        fig_sales = px.bar(
+                            df_ctg_grafici,
+                            x='Sales_Num',
+                            y=col_cat_nome,
+                            orientation='h',
+                            labels={'Sales_Num': 'Fatturato (€)', col_cat_nome: 'Categoria'},
+                            template='plotly_dark',
+                            color='Sales_Num',
+                            color_continuous_scale='Blues'
+                        )
+                        fig_sales.update_layout(showlegend=False, coloraxis_showscale=False, height=450, margin=dict(l=20, r=20, t=20, b=20))
+                        fig_sales.update_traces(hovertemplate="<b>%{y}</b><br>Fatturato: € %{x:,.0f}<extra></extra>".replace(',', '.'))
+                        st.plotly_chart(fig_sales, use_container_width=True)
+                        
+                    with g2:
+                        st.markdown("#### 🎯 Mix di Incidenza del Margine Commerciale (Front Margin)")
+                        # Per il grafico a torta filtriamo solo i margini positivi coerenti
+                        df_pie = df_ctg_grafici[df_ctg_grafici['Margin_Num'] > 0]
+                        
+                        if not df_pie.empty:
+                            fig_margin = px.pie(
+                                df_pie,
+                                values='Margin_Num',
+                                names=col_cat_nome,
+                                template='plotly_dark',
+                                hole=0.4
+                            )
+                            fig_margin.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20))
+                            fig_margin.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="<b>%{label}</b><br>Margine: € %{value:,.2f}<br>Incidenza: %{percent}<extra></extra>".replace(',', 'X').replace('.', ',').replace('X', '.'))
+                            st.plotly_chart(fig_margin, use_container_width=True)
+                        else:
+                            st.info("💡 Margine commerciale non sufficiente o negativo per generare il grafico a torta del mix.")
+                else:
+                    st.caption("⚠️ I record del file CTG per la selezione corrente contengono volumi pari a zero.")
+            else:
+                st.caption("⚠️ Nessuna categoria merceologica nel file CTG corrisponde ai filtri attivi.")
+        else:
+            st.info("Carica il file CTG e imposta i filtri per sbloccare l'analisi grafica merceologica.")
 
 
 # =============================================================================
