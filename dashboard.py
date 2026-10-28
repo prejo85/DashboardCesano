@@ -408,9 +408,9 @@ with tab1:
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
         else:
             st.info("Carica i report aggiornati per popolare la griglia analitica degli articoli indispensabili.")
-        # =============================================================================
-        # NUOVA SEZIONE GRAFICA: ANALISI MERCEOLOGICA CTG (DINAMICA SU FILTRI)
-        # =============================================================================
+# =============================================================================
+# NUOVA SEZIONE GRAFICA: ANALISI MERCEOLOGICA CTG (DINAMICA SU FILTRI)
+# =============================================================================
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("📊 Analisi e Performance Mix Categorie (Report CTG)")
 
@@ -432,28 +432,28 @@ with tab1:
             
             if not match_ctg.empty:
                 # Creiamo colonne numeriche pulite per evitare sfasamenti sui formati europei
-                def parse_ctg_cols(dataframe, col_name):
-                    if col_name in dataframe.columns:
-                        s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
+                def parse_ctg_cols(dataframe, col_index):
+                    if len(dataframe.columns) > col_index:
+                        s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
                         s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
                         s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
-                # Rilevamento dinamico delle colonne chiave nel file CTG
-                c_sales_ctg = [c for c in match_ctg.columns if 'sales' in c.lower() and 'py' not in c.lower()][0]
-                c_margin_ctg = [c for c in match_ctg.columns if 'margin' in c.lower() and '%' not in c.lower() and 'py' not in c.lower()][0]
-                
-                match_ctg['Sales_Num'] = parse_ctg_cols(match_ctg, c_sales_ctg)
-                match_ctg['Margin_Num'] = parse_ctg_cols(match_ctg, c_margin_ctg)
+                # --- ASSEGNAZIONE DELLE COLONNE DEL FILE CTG VIA INDICI POSIZIONALI ---
+                # Adattiamo i numeri tra parentesi quadre se la posizione nel file CTG differisce:
+                match_ctg['Sales_Num'] = parse_ctg_cols(match_ctg, 4)   # Esempio: 5ª colonna (Fatturato TY)
+                match_ctg['Margin_Num'] = parse_ctg_cols(match_ctg, 6)  # Esempio: 7ª colonna (Front Margin Assoluto)
 
-                # Aggreghiamo i dati per Categoria merceologica per ripulire il grafico da doppie righe fittizie
-                df_ctg_grafici = match_ctg.groupby(col_cat_nome).agg({
+                # Aggreghiamo i dati per Categoria merceologica per ripulire il grafico
+                df_ctg_grafici = match_ctg.groupby(col_cat_nome[0] if col_cat_ctg else match_ctg.columns[2]).agg({
                     'Sales_Num': 'sum',
                     'Margin_Num': 'sum'
-                }).reset_index().sort_values(by='Sales_Num', ascending=True)
-
-                # Escludiamo eventuali aggregati a zero per non appesantire la resa visiva
+                }).reset_index()
+                
+                # Riassegniamo il nome corretto per l'asse Y dei grafici
+                col_asse_y = df_ctg_grafici.columns[0]
+                df_ctg_grafici = df_ctg_grafici.sort_values(by='Sales_Num', ascending=True)
                 df_ctg_grafici = df_ctg_grafici[df_ctg_grafici['Sales_Num'] > 0]
 
                 if not df_ctg_grafici.empty:
@@ -464,9 +464,9 @@ with tab1:
                         fig_sales = px.bar(
                             df_ctg_grafici,
                             x='Sales_Num',
-                            y=col_cat_nome,
+                            y=col_asse_y,
                             orientation='h',
-                            labels={'Sales_Num': 'Fatturato (€)', col_cat_nome: 'Categoria'},
+                            labels={'Sales_Num': 'Fatturato (€)', col_asse_y: 'Categoria'},
                             template='plotly_dark',
                             color='Sales_Num',
                             color_continuous_scale='Blues'
@@ -477,14 +477,13 @@ with tab1:
                         
                     with g2:
                         st.markdown("#### 🎯 Mix di Incidenza del Margine Commerciale (Front Margin)")
-                        # Per il grafico a torta filtriamo solo i margini positivi coerenti
                         df_pie = df_ctg_grafici[df_ctg_grafici['Margin_Num'] > 0]
                         
                         if not df_pie.empty:
                             fig_margin = px.pie(
                                 df_pie,
                                 values='Margin_Num',
-                                names=col_cat_nome,
+                                names=col_asse_y,
                                 template='plotly_dark',
                                 hole=0.4
                             )
@@ -492,13 +491,7 @@ with tab1:
                             fig_margin.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="<b>%{label}</b><br>Margine: € %{value:,.2f}<br>Incidenza: %{percent}<extra></extra>".replace(',', 'X').replace('.', ',').replace('X', '.'))
                             st.plotly_chart(fig_margin, use_container_width=True)
                         else:
-                            st.info("💡 Margine commerciale non sufficiente o negativo per generare il grafico a torta del mix.")
-                else:
-                    st.caption("⚠️ I record del file CTG per la selezione corrente contengono volumi pari a zero.")
-            else:
-                st.caption("⚠️ Nessuna categoria merceologica nel file CTG corrisponde ai filtri attivi.")
-        else:
-            st.info("Carica il file CTG e imposta i filtri per sbloccare l'analisi grafica merceologica.")
+                            st.info("💡 Margine commerciale non sufficiente o negativo per generare il grafico del mix.")
 
 
 # =============================================================================
