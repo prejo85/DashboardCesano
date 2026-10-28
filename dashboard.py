@@ -2,7 +2,18 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-# --- FUNZIONI DI FORMATTAZIONE VALUTA ITALIANA ---
+
+# -----------------------------------------------------------------------------
+# 1. CONFIGURAZIONE DELLA PAGINA E TITOLO PRINCIPALE
+# -----------------------------------------------------------------------------
+st.set_page_config(page_title="Dashboard Commerciale Avanzata", layout="wide", page_icon="📊")
+
+st.title("📊 Dashboard Commerciale Integrata")
+st.markdown("### Analisi Multilivello: Store, Aree, Reparti e Segmentazione Clienti")
+
+# -----------------------------------------------------------------------------
+# 2. FUNZIONI DI FORMATTAZIONE VALUTA ITALIANA (PURO PYTHON)
+# -----------------------------------------------------------------------------
 def fmt_valuta(valore):
     return f"€ {valore:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
@@ -13,14 +24,7 @@ def fmt_giorni(valore):
     return f"{valore:.1f} gg".replace('.', ',')
 
 # -----------------------------------------------------------------------------
-# 1. CONFIGURAZIONE DELLA PAGINA E TITOLO PRINCIPALE
-# -----------------------------------------------------------------------------
-st.set_page_config(page_title="Dashboard Commerciale Avanzata", layout="wide", page_icon="📊")
-
-st.title("📊 Dashboard Commerciale Integrata")
-st.markdown("### Analisi Multilivello: Store, Aree, Reparti e Segmentazione Clienti")
-# -----------------------------------------------------------------------------
-# 2. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
+# 3. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabili, file_mensile):
@@ -35,39 +39,15 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
         df = df[df.iloc[:, 0].notna()]
         return df
 
-    def parse_numeric(series):
-        series_clean = series.astype(str).str.replace(r'\s+', '', regex=True)
-        series_clean = series_clean.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-        series_clean = series_clean.replace(['-', '--', 'nan', 'NaN', ''], '0')
-        return pd.to_numeric(series_clean, errors='coerce').fillna(0.0)
-
     df_rep = clean_df(file_reparti)
     df_ctg = clean_df(file_ctg)
     df_sel = clean_df(file_sellout)
     df_ind = clean_df(file_indispensabili)
     df_men = clean_df(file_mensile)
-
-    colonne_valori = ["sales", "margin", "colli", "visite", "visit", "stock", "shrinkage", "sfrido", "accrediti"]
-
-    for col in df_rep.columns:
-        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["department", "reparto"]):
-            df_rep[col] = parse_numeric(df_rep[col])
-    for col in df_ctg.columns:
-        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["department", "reparto", "detail", "category", "ctg", "flag"]):
-            df_ctg[col] = parse_numeric(df_ctg[col])
-    for col in df_sel.columns:
-        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["customer", "venditore", "gestione", "club"]):
-            df_sel[col] = parse_numeric(df_sel[col])
-    for col in df_ind.columns:
-        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["article", "department", "reparto"]):
-            df_ind[col] = parse_numeric(df_ind[col])
-    for col in df_men.columns:
-        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["store", "department", "area", "reparto"]):
-            df_men[col] = parse_numeric(df_men[col])
-
     return df_rep, df_ctg, df_sel, df_ind, df_men
+
 # -----------------------------------------------------------------------------
-# 3. INTERFACCIA CARICAMENTO NELLA SIDEBAR LATERALE E CREAZIONE TAB
+# 4. INTERFACCIA CARICAMENTO NELLA SIDEBAR LATERALE E CREAZIONE TAB
 # -----------------------------------------------------------------------------
 st.sidebar.header("📁 Caricamento File Sorgente")
 u_rep = st.sidebar.file_uploader("1. File BMPL Reparti (.csv)", type="csv")
@@ -82,10 +62,92 @@ if not (u_rep and u_ctg and u_sel and u_ind and u_men):
 
 # Inizializzazione dei dataframe e delle schede
 df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel, u_ind, u_men)
-
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
 
-        st.markdown("### 📊 Indicatori Chiave di Performance")
+# =============================================================================
+# SCHEDA 1: PERFORMANCE STRUTTURA STORE, AREE E REPARTI
+# =============================================================================
+with tab1:
+    st.header("🏬 Monitoraggio Gerarchico Store & Performance Mix")
+    
+    if len(df_men.columns) >= 5:
+        df_men_clean = df_men.copy()
+        df_men_clean.iloc[:, 1] = df_men_clean.iloc[:, 1].astype(str).str.strip() # Store
+        df_men_clean.iloc[:, 3] = df_men_clean.iloc[:, 3].astype(str).str.strip() # Area
+        df_men_clean.iloc[:, 4] = df_men_clean.iloc[:, 4].astype(str).str.strip() # Reparto
+        
+        col_f1, col_f2, col_f3 = st.columns(3)
+        with col_f1:
+            lista_store = sorted([x for x in df_men_clean.iloc[:, 1].unique() if x not in ['nan', 'None', '']])
+            selected_store = st.selectbox("Seleziona Store:", lista_store)
+        with col_f2:
+            df_filtrato_store = df_men_clean[df_men_clean.iloc[:, 1] == selected_store]
+            lista_aree = ["--- TOTALE STORE ---"] + sorted([x for x in df_filtrato_store.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
+            selected_area = st.selectbox("Seleziona Area di Vendita:", lista_aree)
+        with col_f3:
+            if selected_area != "--- TOTALE STORE ---":
+                df_filtrato_area = df_filtrato_store[df_filtrato_store.iloc[:, 3] == selected_area]
+                lista_reparti = ["--- TOTALE AREA ---"] + sorted([x for x in df_filtrato_area.iloc[:, 4].unique() if x not in ['nan', 'None', '']])
+            else:
+                df_filtrato_area = df_filtrato_store.copy()
+                lista_reparti = ["--- DETTAGLIO RICHIESTO ---"]
+            selected_reparto = st.selectbox("Seleziona Reparto:", lista_reparti)
+
+        if selected_area == "--- TOTALE STORE ---":
+            dati_vista = df_filtrato_store.copy()
+            titolo_vista = f"Visualizzazione: TOTALE STORE {selected_store}"
+        elif selected_reparto == "--- TOTALE AREA ---":
+            dati_vista = df_filtrato_area.copy()
+            titolo_vista = f"Visualizzazione: TOTALE AREA {selected_area} ({selected_store})"
+        else:
+            dati_vista = df_filtrato_area[df_filtrato_area.iloc[:, 4] == selected_reparto]
+            titolo_vista = f"Visualizzazione REPARTO: {selected_reparto} ({selected_store})"
+    else:
+        dati_vista = pd.DataFrame()
+        st.error("Il file Mensilizzazione non ha colonne sufficienti.")
+
+    if not dati_vista.empty:
+        st.markdown(f"### 🎯 {titolo_vista}")
+        
+        # Estrattore e parser posizionale delle colonne stringa del CSV
+        def parse_to_numeric_series(dataframe, col_index):
+            if len(dataframe.columns) > col_index:
+                s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
+                s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                return pd.to_numeric(s, errors='coerce').fillna(0.0)
+            return pd.Series(dtype=float)
+
+        sales_series = parse_to_numeric_series(dati_vista, 5)
+        sales_py_series = parse_to_numeric_series(dati_vista, 8)
+        margin_series = parse_to_numeric_series(dati_vista, 11)
+        margin_py_series = parse_to_numeric_series(dati_vista, 12)
+        stock_days_series = parse_to_numeric_series(dati_vista, 13)
+        stock_days_py_series = parse_to_numeric_series(dati_vista, 15)
+        shrink_series = parse_to_numeric_series(dati_vista, 16)
+        shrink_py_series = parse_to_numeric_series(dati_vista, 17)
+        avg_stock_series = parse_to_numeric_series(dati_vista, 14)
+
+        sales_tot = float(sales_series.sum())
+        sales_py_tot = float(sales_py_series.sum())
+        margin_tot = float(margin_series.sum())
+        margin_py_tot = float(margin_py_series.sum())
+        shrink_tot = float(shrink_series.sum())
+        shrink_py_tot = float(shrink_py_series.sum())
+        
+        val_stock_days = float(stock_days_series.mean()) if not stock_days_series.empty else 0.0
+        val_stock_days_py = float(stock_days_py_series.mean()) if not stock_days_py_series.empty else 0.0
+        avg_stock_tot = float(avg_stock_series.sum())
+        
+        margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
+        shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
+        
+        delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
+        delta_margin_pct = ((margin_tot - margin_py_tot) / margin_py_tot * 100) if margin_py_tot != 0 else 0.0
+        delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
+        delta_shrink_pct = ((shrink_tot - shrink_py_tot) / shrink_py_tot * 100) if shrink_py_tot != 0 else 0.0
+
+        # --- RENDERING CARD IN PURO PYTHON ---
+        st.markdown("#### 📊 Indicatori Chiave di Performance")
         m1, m2, m3, m4 = st.columns(4)
         
         with m1:
@@ -119,216 +181,15 @@ tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Pr
                 help=f"Valore assoluto: {fmt_valuta(shrink_tot)}"
             )
 
-# =============================================================================
-# SCHEDA 1: PERFORMANCE STRUTTURA STORE, AREE E REPARTI
-# =============================================================================
-with tab1:
-    st.header("🏬 Monitoraggio Gerarchico Store & Performance Mix")
-    
-    col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
-        lista_store = sorted(df_men["Store"].unique()) if "Store" in df_men.columns else []
-        selected_store = st.selectbox("Seleziona Store:", lista_store)
-    with col_f2:
-        df_filtrato_store = df_men[df_men["Store"] == selected_store] if "Store" in df_men.columns else df_men.copy()
-        lista_aree = ["--- TOTALE STORE ---"] + sorted(df_filtrato_store["Sales Area Deparment"].unique()) if "Sales Area Deparment" in df_filtrato_store.columns else ["--- TOTALE STORE ---"]
-        selected_area = st.selectbox("Seleziona Area di Vendita:", lista_aree)
-    with col_f3:
-        if selected_area != "--- TOTALE STORE ---" and "Sales Area Deparment" in df_filtrato_store.columns:
-            df_filtrato_area = df_filtrato_store[df_filtrato_store["Sales Area Deparment"] == selected_area]
-            lista_reparti = ["--- TOTALE AREA ---"] + sorted(df_filtrato_area["Sales Department"].unique()) if "Sales Department" in df_filtrato_area.columns else ["--- TOTALE AREA ---"]
-        else:
-            df_filtrato_area = df_filtrato_store.copy()
-            lista_reparti = ["--- DETTAGLIO RICHIESTO ---"]
-        selected_reparto = st.selectbox("Seleziona Reparto:", lista_reparti)
-
-    if selected_area == "--- TOTALE STORE ---":
-        dati_vista = df_filtrato_store.copy()
-        titolo_vista = f"Visualizzazione: TOTALE STORE {selected_store}"
-    elif selected_reparto == "--- TOTALE AREA ---":
-        dati_vista = df_filtrato_area.copy()
-        titolo_vista = f"Visualizzazione: TOTALE AREA {selected_area} ({selected_store})"
-    else:
-        dati_vista = df_filtrato_area[df_filtrato_area["Sales Department"] == selected_reparto] if "Sales Department" in df_filtrato_area.columns else pd.DataFrame()
-        titolo_vista = f"Visualizzazione REPARTO: {selected_reparto} ({selected_store})"
-
-    if not dati_vista.empty:
-        st.markdown(f"### 🎯 {titolo_vista}")
-        
-        # --- FUNZIONE DI PARSING LOCALE APPOSITAMENTE TARATA SUI VALORI DEL CSV ---
-        def safe_sum(dataframe, col_index):
-            if len(dataframe.columns) > col_index:
-                # Estraggo la colonna come stringa, rimuovo spazi, converto i formati europei e sommo
-                series = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
-                series = series.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                series = pd.to_numeric(series, errors='coerce').fillna(0.0)
-                return float(series.sum())
-            return 0.0
-
-        def safe_mean(dataframe, col_index):
-            if len(dataframe.columns) > col_index:
-                series = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
-                series = series.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                series = pd.to_numeric(series, errors='coerce').fillna(0.0)
-                return float(series.mean())
-            return 0.0
-
-        # --- ESTRAZIONE TRAMITE INDICI POSIZIONALI DEI DOCUMENTI COMMERCIALI ---
-        sales_tot = safe_sum(dati_vista, 5)          # Colonna 5: DA - Sales TT
-        sales_py_tot = safe_sum(dati_vista, 8)       # Colonna 8: DA - Sales TT PY Custom Cal
-        margin_tot = safe_sum(dati_vista, 11)       # Colonna 11: DA - Front Margin
-        margin_py_tot = safe_sum(dati_vista, 12)     # Colonna 12: DA - Front Margin PY Custom Cal
-        shrink_tot = safe_sum(dati_vista, 16)       # Colonna 16: DA - Shrinkage NNBP
-        shrink_py_tot = safe_sum(dati_vista, 17)     # Colonna 17: DA - Shrinkage NNBP PY Custom Cal
-        
-        val_stock_days = safe_mean(dati_vista, 13)   # Colonna 13: DA - Stock Days
-        val_stock_days_py = safe_mean(dati_vista, 15) # Colonna 15: DA - Stock Days PY Custom Cal
-        avg_stock_tot = safe_sum(dati_vista, 14)     # Colonna 14: DA - Avg Stock
-        # -------------------------------------------------------------------------------------
-        
-        # Calcolo delle incidenze percentuali e dei delta KPI
-        margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
-        shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
-        
-        delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
-        delta_margin_pct = ((margin_tot - margin_py_tot) / margin_py_tot * 100) if margin_py_tot != 0 else 0.0
-        delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
-        delta_shrink_pct = ((shrink_tot - shrink_py_tot) / shrink_py_tot * 100) if shrink_py_tot != 0 else 0.0
-
-
-        reparti_inclusi = dati_vista["Sales Department"].dropna().unique() if "Sales Department" in dati_vista.columns else []
-        lista_codici_target = [str(r)[:3].strip() for r in reparti_inclusi if pd.notna(r)]
-
-        col_rep_ctg_check = [c for c in df_ctg.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-        if col_rep_ctg_check:
-            col_ctg_singola = col_rep_ctg_check[0]
-            dati_ctg_macro = df_ctg[df_ctg[col_ctg_singola].astype(str).str[:3].str.strip().isin(lista_codici_target)]
-        else:
-            dati_ctg_macro = pd.DataFrame()
-            
-        if not dati_ctg_macro.empty:
-            ctg_sales = float(dati_ctg_macro['Sales TT'].sum()) if 'Sales TT' in dati_ctg_macro.columns else 0.0
-            ctg_sales_py = float(dati_ctg_macro['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in dati_ctg_macro.columns else 0.0
-            accrediti_tot = float(dati_ctg_macro['Accrediti'].sum()) if 'Accrediti' in dati_ctg_macro.columns else 0.0
-            accrediti_py_tot = float(dati_ctg_macro['Accrediti PY Custom Cal'].sum()) if 'Accrediti PY Custom Cal' in dati_ctg_macro.columns else 0.0
-            
-            if accrediti_tot > 0: accrediti_tot = -accrediti_tot
-            if accrediti_py_tot > 0: accrediti_py_tot = -accrediti_py_tot
-            accrediti_pct = (accrediti_tot / ctg_sales * 100) if ctg_sales != 0 else 0.0
-            accrediti_py_pct = (accrediti_py_tot / ctg_sales_py * 100) if ctg_sales_py != 0 else 0.0
-            delta_accrediti_pct = accrediti_pct - accrediti_py_pct
-            
-            col_flag_hvs = [c for c in dati_ctg_macro.columns if 'hvs' in c.lower()]
-            if col_flag_hvs:
-                col_hvs_singola = col_flag_hvs[0]
-                hvs_pulito = dati_ctg_macro[col_hvs_singola].astype(str).str.upper().str.replace(r'\s+', '', regex=True)
-                match_hvs = dati_ctg_macro[hvs_pulito == 'HVS']
-                hvs_sales_tot = float(match_hvs['Sales TT'].sum()) if 'Sales TT' in match_hvs.columns else 0.0
-                hvs_sales_py = float(match_hvs['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in match_hvs.columns else 0.0
-                delta_hvs_pct = ((hvs_sales_tot - hvs_sales_py) / hvs_sales_py * 100) if hvs_sales_py != 0 else 0.0
-            else:
-                hvs_sales_tot, hvs_sales_py, delta_hvs_pct = 0.0, 0.0, 0.0
-        else:
-            accrediti_pct, delta_accrediti_pct, accrediti_py_pct = 0.0, 0.0, 0.0
-            hvs_sales_tot, hvs_sales_py, delta_hvs_pct = 0.0, 0.0, 0.0
-
-        # RENDERING GRAFICO CARD RIGA 1 & RIGA 2
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.markdown(get_modern_kpi_card("💰", "Sales TT", f"€ {sales_tot:,.2f}", delta_sales_pct, f"Prec: € {sales_py_tot:,.2f}", True), unsafe_allow_html=True)
-        with m2:
-            st.markdown(get_modern_kpi_card("📈", "Front Margin %", f"{margin_on_sales:.2f}%", delta_margin_pct, f"Valore: € {margin_tot:,.2f}", True), unsafe_allow_html=True)
-        with m3:
-            st.markdown(get_modern_kpi_card("📦", "Stock Days", f"{val_stock_days:.1f} gg", delta_stock_pct, f"Prec: {val_stock_days_py:.1f} gg", False), unsafe_allow_html=True)
-        with m4:
-            st.markdown(get_modern_kpi_card("📉", "Shrinkage (Sfrido)", f"{shrink_on_sales:.2f}%", delta_shrink_pct, f"Valore: € {shrink_tot:,.2f}", False), unsafe_allow_html=True)
-        
-        st.markdown("<br>##### 👥 Focus Canali & Qualità Vendite (Dati Report CTG)", unsafe_allow_html=True)
-        m_extra1, m_extra2 = st.columns(2)
-        with m_extra1:
-            st.markdown(get_modern_kpi_card("💳", "Accrediti % su Sales", f"{accrediti_pct:.2f}%", delta_accrediti_pct, f"Prec Incid: {accrediti_py_pct:.2f}%", False), unsafe_allow_html=True)
-        with m_extra2:
-            st.markdown(get_modern_kpi_card("🏆", "Fatturato Clienti HVS (Bulk)", f"€ {hvs_sales_tot:,.2f}", delta_hvs_pct, f"Prec: € {hvs_sales_py:,.2f}", True), unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("#### 📦 Dettaglio Giacenze e Rotazioni")
+        st.markdown("<br>#### 📦 Dettaglio Giacenze e Rotazioni", unsafe_allow_html=True)
         df_stock_kpi = pd.DataFrame({
             "Metrica": ["Giorni di Giacenza Correnti", "Giorni di Giacenza Anno Prec. (PY)", "Stock Medio Corrente Complessivo"],
-            "Valore": [f"{val_stock_days:.1f} Giorni", f"{val_stock_days_py:.1f} Giorni", f"€ {avg_stock_tot:,.2f}"]
+            "Valore": [fmt_giorni(val_stock_days), fmt_giorni(val_stock_days_py), fmt_valuta(avg_stock_tot)]
         })
         st.dataframe(df_stock_kpi, use_container_width=True, hide_index=True)
     else:
-        st.warning("Nessun dato corrispondente trovato nel file Mensilizzazione.")
-    st.markdown("---")
-    st.subheader("🔗 Indicatori di Performance dai File Esterni (BMPL & Indispensabili)")
+        st.warning("Nessun dato corrispondente trovato.")
 
-    def get_mini_kpi_block(label, current_val, py_val, is_currency=True, is_positive_good=True):
-        delta_pct = ((current_val - py_val) / py_val * 100) if py_val != 0 else 0.0
-        color = "#2ecc71" if (delta_pct >= 0 if is_positive_good else delta_pct <= 0) else "#e74c3c"
-        val_str = f"€ {current_val:,.2f}" if is_currency else f"{int(current_val):,}"
-        py_str = f"€ {py_val:,.2f}" if is_currency else f"{int(py_val):,}"
-        return f"""
-        <div style="background-color: #1e2430; padding: 12px; border-radius: 6px; border: 1px solid #2d3748; margin-bottom: 8px;">
-            <span style="color: #a0aec0; font-size: 0.8rem; font-weight: bold; text-transform: uppercase;">{label}</span>
-            <h3 style="margin: 2px 0; font-size: 1.4rem; font-weight: 700; color: #ffffff;">{val_str}</h3>
-            <span style="color: {color}; font-size: 0.85rem; font-weight: 600;">{delta_pct:+.2f}% vs PY <span style="color: #718096; font-size: 0.75rem;">(ex {py_str})</span></span>
-        </div>
-        """
-
-    col_c1, col_c2 = st.columns(2)
-    with col_c1:
-        with st.container(border=True):
-            st.markdown("#### 📈 Sintesi Totale BMPL Reparti")
-            col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-            if col_rep_bmpl:
-                col_rep_target = col_rep_bmpl[0]
-                match_bmpl = df_rep[df_rep[col_rep_target].astype(str).str[:3].str.strip().isin(lista_codici_target)] if lista_codici_target else pd.DataFrame()
-                if not match_bmpl.empty:
-                    bmpl_sales = float(match_bmpl['Sales TT'].sum())
-                    bmpl_sales_py = float(match_bmpl['Sales TT PY Custom Cal'].sum())
-                    bmpl_margin = float(match_bmpl['Front Margin'].sum())
-                    bmpl_margin_py = float(match_bmpl['Front Margin PY Custom Cal'].sum())
-                    bmpl_colli = float(match_bmpl['# Colli'].sum())
-                    bmpl_colli_py = float(match_bmpl['# Colli PY Custom Cal'].sum())
-                    
-                    st.markdown(get_mini_kpi_block("Sales TT (BMPL)", bmpl_sales, bmpl_sales_py), unsafe_allow_html=True)
-                    st.markdown(get_mini_kpi_block("Front Margin (BMPL)", bmpl_margin, bmpl_margin_py), unsafe_allow_html=True)
-                    st.markdown(get_mini_kpi_block("Volume # Colli (BMPL)", bmpl_colli, bmpl_colli_py, is_currency=False), unsafe_allow_html=True)
-                else:
-                    st.caption("Nessun record BMPL associato ai filtri correnti.")
-
-    with col_c2:
-        with st.container(border=True):
-            st.markdown("#### 📌 Sintesi Totale Articoli Indispensabili")
-            col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-            if col_rep_ind:
-                col_rep_target_ind = col_rep_ind[0]
-                match_indisp = df_ind[df_ind[col_rep_target_ind].astype(str).str[:3].str.strip().isin(lista_codici_target)] if lista_codici_target else pd.DataFrame()
-                if not match_indisp.empty:
-                    ind_sales = float(match_indisp['DA - Sales TT'].sum())
-                    ind_sales_py = float(match_indisp['DA - Sales TT PY Custom Cal'].sum())
-                    ind_colli = float(match_indisp['DA - #Colli'].sum())
-                    ind_colli_py = float(match_indisp['DA - #Colli PY Custom Cal'].sum())
-                    
-                    st.markdown(get_mini_kpi_block("Sales TT (Indispensabili)", ind_sales, ind_sales_py), unsafe_allow_html=True)
-                    st.markdown(get_mini_kpi_block("Volume # Colli (Indispensabili)", ind_colli, ind_colli_py, is_currency=False), unsafe_allow_html=True)
-                    n_articoli = match_indisp['Article'].nunique() if 'Article' in match_indisp.columns else 0
-                    st.markdown(f"""<div style="background-color: #232936; padding: 8px; border-radius: 4px; text-align: center; border: 1px dashed #4a5568; margin-top: 12px;"><span style="color: #cbd5e0; font-size: 0.85rem;">Articoli Chiave Tracciati nel Mix: <b>{n_articoli}</b></span></div>""", unsafe_allow_html=True)
-                else:
-                    st.caption("Nessun articolo indispensabile abbinato ai filtri correnti.")
-
-    st.markdown("---")
-    st.subheader("👥 Vista Canale e Categoria Cliente (Dati Report CTG)")
-    if not dati_ctg_macro.empty:
-        groupby_cols = [c for c in ["Channel Detail", "Customer Category", "CTG"] if c in dati_ctg_macro.columns]
-        if groupby_cols:
-            metrics_cols = [c for c in ["Sales TT", "# Visits", "Sales per Visit"] if c in dati_ctg_macro.columns]
-            pivot_ctg = dati_ctg_macro.groupby(groupby_cols)[metrics_cols].sum().reset_index()
-            if "Customer Category" in pivot_ctg.columns and "Sales TT" in pivot_ctg.columns:
-                color_col = "CTG" if "CTG" in pivot_ctg.columns else None
-                fig_ctg_bar = px.bar(pivot_ctg, x="Customer Category", y="Sales TT", color=color_col, barmode="group", title="Fatturato per Canale/Categoria Cliente")
-                st.plotly_chart(fig_ctg_bar, use_container_width=True)
-            st.dataframe(pivot_ctg.sort_values(by="Sales TT", ascending=False), use_container_width=True, hide_index=True)
 
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI (Free Analysis Sellout)
