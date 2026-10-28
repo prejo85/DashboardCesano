@@ -112,7 +112,7 @@ def get_modern_kpi_card(icon, label, value_str, delta_val, py_info_str="", is_po
     """
 
 # =============================================================================
-# SCHEDA 4: PERFORMANCE STRUTTURA STORE, AREE E REPARTI MIX (PARTE A - FILTRI)
+# SCHEDA 1: PERFORMANCE STRUTTURA STORE, AREE E REPARTI MIX (PARTE A - FILTRI)
 # =============================================================================
 with tab1:
     st.header("🏬 Monitoraggio Gerarchico Store & Performance Mix")
@@ -161,7 +161,7 @@ with tab1:
         c_stock_py = [c for c in dati_vista.columns if 'stock days' in c.lower() and 'py' in c.lower()]
         c_avg_stock = [c for c in dati_vista.columns if 'avg stock' in c.lower()]
 
-        # Estrazione sicura degli indici delle stringhe colonne trovate
+        # Estrazione sicura del nome stringa per l'indicizzazione
         cs = c_sales[0] if c_sales else None
         cspy = c_sales_py[0] if c_sales_py else None
         cm = c_margin[0] if c_margin else None
@@ -177,14 +177,14 @@ with tab1:
         sales_py_tot = float(dati_vista[cspy].sum()) if cspy else 0.0
         delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
         
-        # 2. FRONT MARGIN %: Incidenza e benchmark in Punti Percentuali (p.p.)
+        # 2. FRONT MARGIN %: Incidenza e benchmark espresso in Punti Percentuali (p.p.)
         margin_tot = float(dati_vista[cm].sum()) if cm else 0.0
         margin_py_tot = float(dati_vista[cmpy].sum()) if cmpy else 0.0
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         margin_on_sales_py = (margin_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
         delta_margin_points = margin_on_sales - margin_on_sales_py
         
-        # 3. SHRINKAGE %: Incidenza e benchmark in Punti Percentuali (p.p.)
+        # 3. SHRINKAGE %: Incidenza e benchmark espresso in Punti Percentuali (p.p.)
         shrink_tot = float(dati_vista[csh].sum()) if csh else 0.0
         shrink_py_tot = float(dati_vista[cshpy].sum()) if cshpy else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
