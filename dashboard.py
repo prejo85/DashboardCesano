@@ -244,7 +244,7 @@ with tab1:
             "Valore": [f"{val_stock_days:.1f} Giorni", f"{val_stock_days_py:.1f} Giorni", f"€ {avg_stock_tot:,.2f}"]
         })
         st.dataframe(df_stock_kpi, use_container_width=True, hide_index=True)
-        else:
+    else:
         st.warning("Nessun dato corrispondente trovato nel file Mensilizzazione.")
     
     st.markdown("---")
