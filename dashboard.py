@@ -409,30 +409,30 @@ with tab1:
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
         else:
             st.info("Carica i report aggiornati per popolare la griglia analitica degli articoli indispensabili.")
-
+            
         # =============================================================================
-        # NUOVA SEZIONE GRAFICA: ANALISI MERCEOLOGICA CTG (VERSIONE POSIZIONALE AD ALTA AFFIDABILITÀ)
+        # NUOVA SEZIONE: ANALISI INCROCIATA CUSTOMER CATEGORY & CTG MERCEOLOGICHE
         # =============================================================================
         st.markdown("<br>---", unsafe_allow_html=True)
-        st.subheader("📊 Analisi e Performance Mix Categorie (Report CTG)")
+        st.subheader("📊 Analisi Canali e Performance Mix Categorie (Report CTG)")
 
-        if not df_ctg.empty and len(df_ctg.columns) >= 12:
+        if not df_ctg.empty and len(df_ctg.columns) >= 8:
             df_ctg_clean = df_ctg.copy()
             
-            # 1. Isola i codici reparto numerici a 3 cifre dalla colonna all'indice 2 (Terza colonna)
-            df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.iloc[:, 2].astype(str).apply(
+            # 1. Isolamento del codice reparto a 3 cifre dalla colonna B (Indice 1) per aggancio filtri superiori
+            df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.iloc[:, 1].astype(str).apply(
                 lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
             )
             
-            # Sincronizzazione dinamica sui filtri superiori
+            # Sincronizzazione dinamica sui filtri iniziali di Store/Area/Reparto
             if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
                 match_ctg = df_ctg_clean[df_ctg_clean['Codice_Reparto_CTG'].isin(codici_target)].copy()
             else:
                 match_ctg = df_ctg_clean.copy()
             
             if not match_ctg.empty:
-                # Sottofunzione di pulizia stringhe e formati europei basata sul posizionamento
-                def parse_ctg_positional_final(dataframe, col_index):
+                # Sottofunzione locale per il parsing numerico corretto delle vendite europee (Colonna H, Indice 7)
+                def parse_ctg_sales_final(dataframe, col_index):
                     s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
                     s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
                     if s.str.count(r'\.').max() > 1:
@@ -443,65 +443,75 @@ with tab1:
                         s = s.str.replace(',', '.', regex=False)
                     return pd.to_numeric(s, errors='coerce').fillna(0.0)
 
-                # MAPPATURA POSIZIONALE CHIRURGICA DEL TRACCIATO CTG
-                match_ctg['Sales_Num'] = parse_ctg_positional_final(match_ctg, 5)   # Indice 5: Sesta colonna (Sales TT)
-                match_ctg['Margin_Num'] = parse_ctg_positional_final(match_ctg, 11) # Indice 11: Dodicesima colonna (Front Margin)
+                # Conversione della colonna Sales TT (Indice 7)
+                match_ctg['Sales_Num'] = parse_ctg_sales_final(match_ctg, 7)
                 
-                # Descrizione Categoria merceologica (Indice 3: Quarta colonna)
-                match_ctg['Categoria_Testo'] = match_ctg.iloc[:, 3].astype(str).str.strip().replace(['nan', 'None', ''], '-')
+                # Estrazione e pulizia dei campi testuali descrittivi dal tracciato
+                match_ctg['Channel_Detail'] = match_ctg.iloc[:, 2].astype(str).str.strip()
+                match_ctg['Customer_Category'] = match_ctg.iloc[:, 3].astype(str).str.strip()
+                match_ctg['CTG_Merceologica'] = match_ctg.iloc[:, 4].astype(str).str.strip()
 
-                # Raggruppamento per Categoria merceologica unica
-                df_ctg_grafici = match_ctg.groupby('Categoria_Testo').agg({
-                    'Sales_Num': 'sum',
-                    'Margin_Num': 'sum'
-                }).reset_index()
-                
-                df_ctg_grafici = df_ctg_grafici.sort_values(by='Sales_Num', ascending=True)
-                df_ctg_grafici = df_ctg_grafici[df_ctg_grafici['Sales_Num'] > 0]
-
-                if not df_ctg_grafici.empty:
-                    g1, g2 = st.columns(2)
+                # Escludiamo dal conteggio eventuali record nulli o a fatturato zero
+                match_ctg = match_ctg[match_ctg['Sales_Num'] > 0]
+                if not match_ctg.empty:
+                    # Filtro locale per isolare e analizzare una singola macro Customer Category
+                    lista_cust_cat = ["--- TUTTI I TARGET ---"] + sorted(list(match_ctg['Customer_Category'].unique()))
+                    selected_cust_cat = st.selectbox("🎯 Isola una Customer Category specifica per analizzarne i dettagli:", lista_cust_cat)
                     
-                    with g1:
-                        st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TT)")
-                        fig_sales = px.bar(
-                            df_ctg_grafici,
-                            x='Sales_Num',
-                            y='Categoria_Testo',
-                            orientation='h',
-                            labels={'Sales_Num': 'Fatturato (€)', 'Categoria_Testo': 'Categoria'},
-                            template='plotly_dark',
-                            color='Sales_Num',
-                            color_continuous_scale='Blues'
-                        )
-                        fig_sales.update_layout(showlegend=False, coloraxis_showscale=False, height=450, margin=dict(l=20, r=20, t=20, b=20))
-                        fig_sales.update_traces(hovertemplate="<b>%{y}</b><br>Fatturato: € %{x:,.0f}<extra></extra>".replace(',', '.'))
-                        st.plotly_chart(fig_sales, use_container_width=True)
-                        
-                    with g2:
-                        st.markdown("#### 🎯 Mix di Incidenza del Margine Commerciale (Front Margin)")
-                        df_pie = df_ctg_grafici[df_ctg_grafici['Margin_Num'] > 0]
-                        
-                        if not df_pie.empty:
-                            fig_margin = px.pie(
-                                df_pie,
-                                values='Margin_Num',
-                                names='Categoria_Testo',
-                                template='plotly_dark',
-                                hole=0.4
-                            )
-                            fig_margin.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20))
-                            fig_margin.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="<b>%{label}</b><br>Margine: € %{value:,.2f}<br>Incidenza: %{percent}<extra></extra>".replace(',', 'X').replace('.', ',').replace('X', '.'))
-                            st.plotly_chart(fig_margin, use_container_width=True)
-                        else:
-                            st.info("💡 Margine commerciale non sufficiente o negativo per generare la torta del mix.")
-                else:
-                    st.caption("⚠️ I record del file CTG per la selezione corrente contengono volumi pari a zero.")
-            else:
-                st.caption("⚠️ Nessuna categoria merceologica nel file CTG corrisponde ai filtri attivi della Mensilizzazione.")
-        else:
-            st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'analisi grafica merceologica.")
+                    df_filtrato_grafici = match_ctg.copy()
+                    if selected_cust_cat != "--- TUTTI I TARGET ---":
+                        df_filtrato_grafici = df_filtrato_grafici[df_filtrato_grafici['Customer_Category'] == selected_cust_cat]
 
+                    # Generazione del layout a due colonne per accogliere i grafici Plotly
+                    g_col1, g_col2 = st.columns(2)
+                    
+                    with g_col1:
+                        st.markdown("#### 🏢 Fatturato per Canale (Channel Detail) e Target Cliente")
+                        # Raggruppamento per Channel Detail e Customer Category
+                        df_chan_cust = df_filtrato_grafici.groupby(['Channel_Detail', 'Customer_Category'])['Sales_Num'].sum().reset_index()
+                        df_chan_cust = df_chan_cust.sort_values(by='Sales_Num', ascending=True)
+                        
+                        fig_chan = px.bar(
+                            df_chan_cust,
+                            x='Sales_Num',
+                            y='Channel_Detail',
+                            color='Customer_Category',
+                            orientation='h',
+                            title="Composizione Fatturato per Canale Distribuzione",
+                            labels={'Sales_Num': 'Fatturato (€)', 'Channel_Detail': 'Canale di Vendita', 'Customer_Category': 'Target'},
+                            template='plotly_dark',
+                            color_discrete_scale=px.colors.qualitative.Pastel
+                        )
+                        fig_chan.update_layout(height=480, legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5))
+                        fig_chan.update_traces(hovertemplate="<b>Canale:</b> %{y}<br><b>Fatturato:</b> € %{x:,.0f}<extra></extra>".replace(',', '.'))
+                        st.plotly_chart(fig_chan, use_container_width=True)
+
+                    with g2_col2 if 'g2_col2' in locals() else g_col2:
+                        st.markdown("#### 🍕 Performance Dettaglio CTG per Canale Selezionato")
+                        # Raggruppamento per CTG Merceologica e Customer Category per mostrare la segmentazione interna
+                        df_ctg_mix = df_filtrato_grafici.groupby(['CTG_Merceologica', 'Customer_Category'])['Sales_Num'].sum().reset_index()
+                        df_ctg_mix = df_ctg_mix.sort_values(by='Sales_Num', ascending=True)
+                        
+                        fig_ctg = px.bar(
+                            df_ctg_mix,
+                            x='Sales_Num',
+                            y='CTG_Merceologica',
+                            color='Customer_Category',
+                            orientation='h',
+                            title="Suddivisione del Fatturato per Singola CTG",
+                            labels={'Sales_Num': 'Fatturato (€)', 'CTG_Merceologica': 'CTG Merceologica', 'Customer_Category': 'Target'},
+                            template='plotly_dark',
+                            color_discrete_scale=px.colors.qualitative.Safe
+                        )
+                        fig_ctg.update_layout(height=480, legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5))
+                        fig_ctg.update_traces(hovertemplate="<b>CTG:</b> %{y}<br><b>Fatturato:</b> € %{x:,.0f}<extra></extra>".replace(',', '.'))
+                        st.plotly_chart(fig_ctg, use_container_width=True)
+                else:
+                    st.caption("⚠️ I record del file CTG per il reparto o l'area selezionata contengono volumi di fatturato pari a zero.")
+            else:
+                st.caption("⚠️ Nessun dato merceologico nel file CTG corrisponde ai filtri gerarchici attivi della Mensilizzazione.")
+        else:
+            st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'esplorazione grafica di canali e categorie.")
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
 # =============================================================================
