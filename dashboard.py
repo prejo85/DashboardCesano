@@ -50,7 +50,7 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
     return df_rep, df_ctg, df_sel, df_ind, df_men
 
 # -----------------------------------------------------------------------------
-# 4. INTERFACCIA CARICAMENTO NELLA SIDEBAR LATERALE + FILTRI GERARCHICI
+# 4. INTERFACCIA CARICAMENTO NELLA SIDEBAR LATERALE
 # -----------------------------------------------------------------------------
 st.sidebar.header("📁 Caricamento File Sorgente")
 u_rep = st.sidebar.file_uploader("1. File BMPL Reparti (.csv)", type="csv")
@@ -63,13 +63,24 @@ if not (u_rep and u_ctg and u_sel and u_ind and u_men):
     st.info("💡 Carica i 5 report commerciali puliti nel pannello laterale sinistro per attivare l'interfaccia.")
     st.stop()
 
-# Inizializzazione dei dataframe e delle schede dopo il caricamento dei file
+# Caricamento effettivo dei dati
 df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel, u_ind, u_men)
 
-st.sidebar.markdown("---")
-st.sidebar.header("🎯 Filtri di Selezione")
+# -----------------------------------------------------------------------------
+# 5. GESTIONE STATO FILTRI E BOTTONE DI RESET (IN ALTO, SOPRA I TAB)
+# -----------------------------------------------------------------------------
+st.markdown("---")
 
-# Struttura dei filtri gerarchici inserita correttamente nella Sidebar
+# Inizializzazione chiavi dello stato se non presenti
+if "reset_clicked" not in st.session_state:
+    st.session_state.reset_clicked = False
+
+def reset_filters():
+    st.session_state.reset_clicked = True
+
+# Creazione dell'area filtri organizzata su 3 colonne principali per i menu + 1 colonna per il tasto di reset
+col_f1, col_f2, col_f3, col_reset = st.columns([3, 3, 3, 1])
+
 if len(df_men.columns) >= 5:
     df_men_clean = df_men.copy()
     df_men_clean.iloc[:, 1] = df_men_clean.iloc[:, 1].astype(str).str.strip() 
@@ -77,20 +88,41 @@ if len(df_men.columns) >= 5:
     df_men_clean.iloc[:, 4] = df_men_clean.iloc[:, 4].astype(str).str.strip() 
     
     lista_store = sorted([x for x in df_men_clean.iloc[:, 1].unique() if x not in ['nan', 'None', '']])
-    selected_store = st.sidebar.selectbox("Seleziona Store:", lista_store)
     
+    with col_f1:
+        # Se è stato premuto reset, forziamo l'indice a 0
+        idx_store = 0 if st.session_state.reset_clicked else 0
+        selected_store = st.selectbox("Seleziona Store:", lista_store, index=idx_store)
+        
     df_filtrato_store = df_men_clean[df_men_clean.iloc[:, 1] == selected_store]
     lista_aree = ["--- TOTALE STORE ---"] + sorted([x for x in df_filtrato_store.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
-    selected_area = st.sidebar.selectbox("Seleziona Area di Vendita:", lista_aree)
     
+    with col_f2:
+        idx_area = 0 if st.session_state.reset_clicked else 0
+        selected_area = st.selectbox("Seleziona Area di Vendita:", lista_aree, index=idx_area)
+        
     if selected_area != "--- TOTALE STORE ---":
         df_filtrato_area = df_filtrato_store[df_filtrato_store.iloc[:, 3] == selected_area]
         lista_reparti = ["--- TOTALE AREA ---"] + sorted([x for x in df_filtrato_area.iloc[:, 4].unique() if x not in ['nan', 'None', '']])
     else:
         df_filtrato_area = df_filtrato_store.copy()
         lista_reparti = ["--- DETTAGLIO RICHIESTO ---"]
-    selected_reparto = st.sidebar.selectbox("Seleziona Reparto:", lista_reparti)
+        
+    with col_f3:
+        idx_rep = 0 if st.session_state.reset_clicked else 0
+        selected_reparto = st.selectbox("Seleziona Reparto:", lista_reparti, index=idx_rep)
 
+    with col_reset:
+        st.markdown("<div style='padding-top: 28px;'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Reset", use_container_width=True, help="Azzera le selezioni e torna al Totale Store"):
+            st.session_state.reset_clicked = True
+            st.rerun()
+
+    # Ripristiniamo la flag di reset dopo il rinfresco
+    if st.session_state.reset_clicked:
+        st.session_state.reset_clicked = False
+
+    # Definizione logica dei titoli e del set dati filtrato
     nome_store_pulito = selected_store.split(" - ")[-1] if " - " in str(selected_store) else selected_store
 
     if selected_area == "--- TOTALE STORE ---":
@@ -104,17 +136,15 @@ if len(df_men.columns) >= 5:
         titolo_vista = f"Visualizzazione REPARTO: {selected_reparto} ({nome_store_pulito})"
 else:
     dati_vista = pd.DataFrame()
-    st.sidebar.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
+    st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
 
-# Definizione dei tab
+# Configurazione delle schede principali (I filtri esterni ora governano entrambi i tab all'istante)
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
 
 # =============================================================================
-# TAB 1: VISUALIZZAZIONE PERFORMANCE SORGENTI E DATI AGGIORNATI CTG
+# TAB 1: GERARCHIA STORE, REPARTI & INTEGRAZIONE REPORT CTG AGGIORNATO
 # =============================================================================
 with tab1:
-    st.header("🏬 Monitoraggio Gerarchico Store & Performance Mix")
-    
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
         
@@ -194,7 +224,7 @@ with tab1:
             if match:
                 codici_target.add(match.group())
 
-        # Rendering delle KPI Cards superiori
+        # Rendering delle KPI cards superiori dello Store
         st.markdown("#### 📊 Indicatori Chiave di Performance")
         m1, m2, m3, m4, m5 = st.columns(5)
         with m1:
@@ -227,7 +257,7 @@ with tab1:
                 if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
                     col_bmpl_rep = [c for c in df_rep_pure.columns if 'department' in c.lower() or 'reparto' in c.lower()]
                     if col_bmpl_rep and len(codici_target) > 0:
-                        df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[col_bmpl_rep[0]].astype(str).apply(
+                        df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[col_bmpl_rep].astype(str).apply(
                             lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
                         )
                         match_bmpl = df_rep_pure[df_rep_pure['Codice_Reparto_BMPL'].isin(codici_target)]
@@ -339,7 +369,7 @@ with tab1:
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
 
 # =============================================================================
-# BLOCCO 6: INTEGRAZIONE CHIRURGICA E REATTIVA REPORT "CTG.CSV" (AGGIORNATO AI FILTRI)
+# BLOCCO 6: INTEGRAZIONE REATTIVA DATI FILE "CTG.CSV" (SOPRA I FILTRI ATTUALI)
 # =============================================================================
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
@@ -347,12 +377,11 @@ with tab1:
         if not df_ctg.empty:
             df_ctg_clean = df_ctg.copy()
             
-            # Isolo i codici reparto numerici a 3 cifre dalla colonna 'Sales Department' (Indice 1)
             df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.iloc[:, 1].astype(str).apply(
                 lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
             )
             
-            # Il report CTG ora si aggiorna reattivamente usando la variabile 'codici_target' definita dai filtri sopra
+            # Il report CTG ora si aggiorna in modo reattivo in base alla tendina in alto
             if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
                 match_ctg = df_ctg_clean[df_ctg_clean['Codice_Reparto_CTG'].isin(codici_target)].copy()
             else:
@@ -443,7 +472,7 @@ with tab1:
             st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'analisi grafica merceologica.")
 
 # =============================================================================
-# SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
+# TAB 2: PORTAFOGLIO FORZA VENDITE E CLIENTI (AGGANCIATO AI FILTRI SUPERIORI)
 # =============================================================================
 with tab2:
     st.header("👥 Analisi Profilazione e Portafoglio Clienti (Sellout)")
