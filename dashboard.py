@@ -214,53 +214,28 @@ with tab2:
     if ricerca_cliente and "Customer" in df_sel.columns:
         df_sel_filtrato = df_sel_filtrato[df_sel_filtrato["Customer"].astype(str).str.contains(ricerca_cliente, case=False, na=False)]
 
-    sellout_sales_tot = float(df_sel_filtrato["Sales TT"].sum()) if "Sales TT" in df_sel_filtrato.columns else 0.0
-    sellout_margin_tot = float(df_sel_filtrato["Front Margin"].sum()) if "Front Margin" in df_sel_filtrato.columns else 0.0
-    sellout_visits_tot = float(df_sel_filtrato["# Visit"].sum()) if "# Visit" in df_sel_filtrato.columns else 0.0
+    # --- CALCOLO METRICHE SELLOUT ---
+    # Usiamo lo stesso parser sicuro usato nella prima scheda per i decimali europei
+    def parse_sellout_col(series):
+        s = series.astype(str).str.replace(r'\s+', '', regex=True)
+        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+        return pd.to_numeric(s, errors='coerce').fillna(0.0)
+
+    sellout_sales_tot = float(parse_sellout_col(df_sel_filtrato["Sales TT"]).sum()) if "Sales TT" in df_sel_filtrato.columns else 0.0
+    sellout_margin_tot = float(parse_sellout_col(df_sel_filtrato["Front Margin"]).sum()) if "Front Margin" in df_sel_filtrato.columns else 0.0
+    sellout_visits_tot = float(parse_sellout_col(df_sel_filtrato["# Visit"]).sum()) if "# Visit" in df_sel_filtrato.columns else 0.0
     sellout_margin_pct = (sellout_margin_tot / sellout_sales_tot * 100) if sellout_sales_tot != 0 else 0.0
 
+    # --- RENDERING CARD IN PURO PYTHON (SCHEDA 2) ---
     st.markdown("##### 📊 Indicatori Chiave del Portafoglio Selezionato")
     ms1, ms2, ms3 = st.columns(3)
     with ms1:
-        st.markdown(get_modern_kpi_card("💼", "Fatturato Portafoglio (Sellout)", f"€ {sellout_sales_tot:,.2f}", 0.0, "", True, show_delta=False), unsafe_allow_html=True)
+        st.metric(label="💼 Fatturato Portafoglio (Sellout)", value=fmt_valuta(sellout_sales_tot))
     with ms2:
-        st.markdown(get_modern_kpi_card("🎯", "Front Margin % Realizzato", f"{sellout_margin_pct:.2f}%", sellout_margin_pct, f"Valore Assoluto: € {sellout_margin_tot:,.2f}", True, show_delta=False), unsafe_allow_html=True)
+        st.metric(label="🎯 Front Margin % Realizzato", value=fmt_percentuale(sellout_margin_pct), help=f"Valore assoluto: {fmt_valuta(sellout_margin_tot)}")
     with ms3:
-        st.markdown(get_modern_kpi_card("👣", "Volume Totale Visite", f"{int(sellout_visits_tot):,}", 0.0, "", True, show_delta=False), unsafe_allow_html=True)
+        st.metric(label="👣 Volume Totale Visite", value=f"{int(sellout_visits_tot):,}".replace(',', '.'))
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    c_g1, c_g2 = st.columns(2)
-    with c_g1:
-        if "Venditore" in df_sel_filtrato.columns:
-            df_v_sales = df_sel_filtrato.groupby("Venditore")["Sales TT"].sum().reset_index().sort_values(by="Sales TT", ascending=False).head(10)
-            fig_v_sales = px.bar(df_v_sales, x="Sales TT", y="Venditore", orientation="h", title="Top 10 Venditori per Fatturato Sviluppato (Sellout)", color="Sales TT", color_continuous_scale="Blugrn")
-            fig_v_sales.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig_v_sales, use_container_width=True)
-    with c_g2:
-        if "Customer Category" in df_sel_filtrato.columns:
-            df_cat_sales = df_sel_filtrato.groupby("Customer Category")["Sales TT"].sum().reset_index()
-            fig_cat_sales = px.pie(df_cat_sales, values="Sales TT", names="Customer Category", title="Fatturato per Macrocategoria Canale Cliente", hole=0.3)
-            fig_cat_sales.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig_cat_sales, use_container_width=True)
 
-    st.markdown("### 📋 Elenco Analitico Clienti (Ordinati per Fatturato Decrescente)")
-    raggruppamento_cols = [c for c in ["Customer", "Customer Category", "Venditore", "MPRO Club"] if c in df_sel_filtrato.columns]
-    
-    # ... (resto del codice precedente invariato) ...
-    if raggruppamento_cols:
-        agg_dict = {"Sales TT": "sum"}
-        if "Front Margin" in df_sel_filtrato.columns: agg_dict["Front Margin"] = "sum"
-        if "# Visit" in df_sel_filtrato.columns: agg_dict["# Visit"] = "sum"
-        
-        df_customer_pivoted = df_sel_filtrato.groupby(raggruppamento_cols).agg(agg_dict).reset_index().sort_values(by="Sales TT", ascending=False)
-        
-        # Formattazione monetaria delle colonne prima della visualizzazione
-        df_customer_pivoted["Sales TT"] = df_customer_pivoted["Sales TT"].map('€ {:,.2f}'.format)
-        if "Front Margin" in df_customer_pivoted.columns:
-            df_customer_pivoted["Front Margin"] = df_customer_pivoted["Front Margin"].map('€ {:,.2f}'.format)
-        if "# Visit" in df_customer_pivoted.columns:
-            df_customer_pivoted["# Visit"] = df_customer_pivoted["# Visit"].map('{:,.0f}'.format)
-
-        # Mostra la tabella (corretto e fuori dall'if di Front Margin)
-        st.dataframe(df_customer_pivoted, use_container_width=True, hide_index=True)
