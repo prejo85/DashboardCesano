@@ -194,18 +194,22 @@ with tab1:
         val_stock_days_py = float(giorni_validi_py['Days_PY'].mean()) if not giorni_validi_py.empty else 0.0
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
 
-        # --- CALCOLO SPERIMENTALE: AVG STOCK DELL'ULTIMO GIORNO CRONOLOGICO ---
+        # --- ENGINE DI CALCOLO INTERNO: AVG STOCK DELL'ULTIMO GIORNO CRONOLOGICO (PROTETTO) ---
         val_avg_stock_ultimo_giorno = 0.0
         try:
-            df_calc['Date_Parsed'] = pd.to_datetime(df_calc.iloc[:, 0].astype(str).str.strip(), format='%d/%m/%Y', errors='coerce')
+            # Usiamo format='mixed' per digerire automaticamente anni a 2 o 4 cifre (%y o %Y)
+            df_calc['Date_Parsed'] = pd.to_datetime(df_calc.iloc[:, 0].astype(str).str.strip(), format='mixed', errors='coerce')
             df_date_valide = df_calc[df_calc['Date_Parsed'].notna()]
+            
             if not df_date_valide.empty:
+                # Isola la data cronologicamente più recente della selezione corrente
                 ultima_data_assoluta = df_date_valide['Date_Parsed'].max()
                 df_ultimo_giorno_stock = df_date_valide[df_date_valide['Date_Parsed'] == ultima_data_assoluta]
+                
+                # Somma i valori delle giacenze per i reparti inclusi nel filtro attivo
                 val_avg_stock_ultimo_giorno = float(df_ultimo_giorno_stock['Stock_TY_Num'].sum())
         except:
             pass
-        # -----------------------------------------------------------------------
 
 # =============================================================================
 # BLOCCO 3: FORMATTAZIONE EUROPEA E VISUALIZZAZIONE KPI CARDS
