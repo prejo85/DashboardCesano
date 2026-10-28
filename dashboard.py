@@ -12,9 +12,12 @@ st.title("📊 Dashboard Commerciale Integrata")
 st.markdown("### Analisi Multilivello: Store, Aree, Reparti e Segmentazione Clienti")
 
 # -----------------------------------------------------------------------------
-# 2. FUNZIONI DI FORMATTAZIONE VALUTA ITALIANA (PURO PYTHON)
+# 2. FUNZIONI DI FORMATTAZIONE VALUTA ED ESPRESSIONI ITALIANE (PURO PYTHON)
 # -----------------------------------------------------------------------------
-def fmt_valuta(valore):
+def fmt_valuta_interi(valore):
+    return f"€ {int(round(valore)):,}".replace(',', '.')
+
+def fmt_valuta_decimali(valore):
     return f"€ {valore:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
 def fmt_percentuale(valore):
@@ -47,7 +50,7 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
     return df_rep, df_ctg, df_sel, df_ind, df_men
 
 # -----------------------------------------------------------------------------
-# 4. INTERFACCIA CARICAMENTO NELLA SIDEBAR LATERALE E CREAZIONE TAB
+# 4. INTERFACCIA CARICAMENTO NELLA SIDEBAR LATERALE
 # -----------------------------------------------------------------------------
 st.sidebar.header("📁 Caricamento File Sorgente")
 u_rep = st.sidebar.file_uploader("1. File BMPL Reparti (.csv)", type="csv")
@@ -72,9 +75,9 @@ with tab1:
     
     if len(df_men.columns) >= 5:
         df_men_clean = df_men.copy()
-        df_men_clean.iloc[:, 1] = df_men_clean.iloc[:, 1].astype(str).str.strip() # Store
-        df_men_clean.iloc[:, 3] = df_men_clean.iloc[:, 3].astype(str).str.strip() # Area
-        df_men_clean.iloc[:, 4] = df_men_clean.iloc[:, 4].astype(str).str.strip() # Reparto
+        df_men_clean.iloc[:, 1] = df_men_clean.iloc[:, 1].astype(str).str.strip() 
+        df_men_clean.iloc[:, 3] = df_men_clean.iloc[:, 3].astype(str).str.strip() 
+        df_men_clean.iloc[:, 4] = df_men_clean.iloc[:, 4].astype(str).str.strip() 
         
         col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1:
@@ -112,36 +115,29 @@ with tab1:
         # --- PARSER AD ALTA PRECISIONE PER FORMATI EUROPEI COMPLESSI ---
         def parse_to_numeric_series(dataframe, col_index):
             if len(dataframe.columns) > col_index:
-                # Trasforma in stringa e rimuove spazi bianchi
                 s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
-                # Gestione stringhe vuote o trattini
                 s = s.replace(['-', '--', 'nan', 'NaN', ''], '0')
-                
-                # Se ci sono più punti (es. 1.004.906), è un intero con separatore delle migliaia
                 if s.str.count(r'\.').max() > 1:
                     s = s.str.replace('.', '', regex=False)
-                # Se c'è un solo punto e una virgola (es. 7.772,75), puliamo secondo lo standard EU
                 elif s.str.contains(r'\.').any() and s.str.contains(',').any():
                     s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                # Se c'è solo la virgola come decimale (es. 22,88)
                 elif s.str.contains(',').any() and not s.str.contains(r'\.').any():
                     s = s.str.replace(',', '.', regex=False)
-                    
                 return pd.to_numeric(s, errors='coerce').fillna(0.0)
             return pd.Series(dtype=float)
 
-        # --- MAPPATURA RIGOROSA BASATA SUL NUOVO DOCUMENTO CSV ---
-        sales_series = parse_to_numeric_series(dati_vista, 5)          # Colonna 5: DA - Sales TT
-        sales_py_series = parse_to_numeric_series(dati_vista, 6)       # Colonna 6: DA - Sales TT PY Custom Cal
-        margin_series = parse_to_numeric_series(dati_vista, 11)        # Colonna 11: DA - Front Margin
-        margin_py_series = parse_to_numeric_series(dati_vista, 12)     # Colonna 12: DA - Front Margin PY Custom Cal
-        avg_stock_series = parse_to_numeric_series(dati_vista, 13)     # Colonna 13: DA - Avg Stock
-        stock_days_series = parse_to_numeric_series(dati_vista, 14)    # Colonna 14: DA - Stock Days
-        stock_days_py_series = parse_to_numeric_series(dati_vista, 15) # Colonna 15: DA - Stock Days PY Custom Cal
-        shrink_series = parse_to_numeric_series(dati_vista, 16)        # Colonna 16: DA - Shrinkage NNBP
-        shrink_py_series = parse_to_numeric_series(dati_vista, 17)     # Colonna 17: DA - Shrinkage NNBP PY Custom Cal
+        # Mappatura posizionale esatta ricavata dall'ultimo file sorgente
+        sales_series = parse_to_numeric_series(dati_vista, 5)          
+        sales_py_series = parse_to_numeric_series(dati_vista, 6)       
+        margin_series = parse_to_numeric_series(dati_vista, 11)        
+        margin_py_series = parse_to_numeric_series(dati_vista, 12)     
+        avg_stock_series = parse_to_numeric_series(dati_vista, 13)     
+        stock_days_series = parse_to_numeric_series(dati_vista, 14)    
+        stock_days_py_series = parse_to_numeric_series(dati_vista, 15) 
+        shrink_series = parse_to_numeric_series(dati_vista, 16)        
+        shrink_py_series = parse_to_numeric_series(dati_vista, 17)     
 
-        # Aggregazioni matematiche corrette
+        # Somme complessive kpi commerciali
         sales_tot = float(sales_series.sum())
         sales_py_tot = float(sales_py_series.sum())
         margin_tot = float(margin_series.sum())
@@ -150,39 +146,29 @@ with tab1:
         shrink_py_tot = float(shrink_py_series.sum())
         avg_stock_tot = float(avg_stock_series.sum())
         
-        # Calcolo Giacenze Medie ponderate sul volume di fatturato (Previene distorsioni da righe vuote)
+        # Medie dei giorni di stock
         val_stock_days = float(stock_days_series.mean()) if not stock_days_series.empty else 0.0
         val_stock_days_py = float(stock_days_py_series.mean()) if not stock_days_py_series.empty else 0.0
 
-        # Calcolo percentuali di incidenza e variazioni (Delta)
+        # Calcolo incidenze percentuali correnti e passate per i delta pp
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
+        margin_on_sales_py = (margin_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
+        shrink_on_sales_py = (shrink_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
         
+        # Calcolo dei delta (Variazione in % e in punti percentuali pp)
         delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
-        delta_margin_pct = ((margin_tot - margin_py_tot) / margin_py_tot * 100) if margin_py_tot != 0 else 0.0
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
-        delta_shrink_pct = ((shrink_tot - shrink_py_tot) / shrink_py_tot * 100) if shrink_py_tot != 0 else 0.0
+        delta_margin_pp = margin_on_sales - margin_on_sales_py
+        delta_shrink_pp = shrink_on_sales - shrink_on_sales_py
 
-        # --- NUOVE FUNZIONI DI FORMATTAZIONE VALUTA SENZA DECIMALI SULLE VENDITE ---
-        def fmt_valuta_interi(valore):
-            return f"€ {int(round(valore)):,}".replace(',', '.')
-
-        def fmt_valuta_decimali(valore):
-            return f"€ {valore:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-
-        def fmt_percentuale(valore):
-            return f"{valore:.2f}%".replace('.', ',')
-
-        def fmt_giorni(valore):
-            return f"{valore:.1f} gg".replace('.', ',')
-
-        # --- RENDERING DEI COMPONENTI NATIVI STREAMLIT ---
+        # --- RENDERING DEGLI INDICATORI NATIVI ---
         st.markdown("#### 📊 Indicatori Chiave di Performance")
         m1, m2, m3, m4 = st.columns(4)
         
         with m1:
             st.metric(
-                label="💰 Sales TT (Arrotondato)", 
+                label="💰 Sales TT", 
                 value=fmt_valuta_interi(sales_tot), 
                 delta=f"{delta_sales_pct:+.2f}% vs PY",
                 help=f"Anno precedente: {fmt_valuta_interi(sales_py_tot)}"
@@ -191,8 +177,8 @@ with tab1:
             st.metric(
                 label="📈 Front Margin %", 
                 value=fmt_percentuale(margin_on_sales), 
-                delta=f"{delta_margin_pct:+.2f}% vs PY",
-                help=f"Valore assoluto: {fmt_valuta_decimali(margin_tot)}"
+                delta=f"{delta_margin_pp:+.2f} pp vs PY",
+                help=f"Anno prec: {fmt_percentuale(margin_on_sales_py)} | Valore: {fmt_valuta_decimali(margin_tot)}"
             )
         with m3:
             st.metric(
@@ -206,9 +192,9 @@ with tab1:
             st.metric(
                 label="📉 Shrinkage (Sfrido)", 
                 value=fmt_percentuale(shrink_on_sales), 
-                delta=f"{delta_shrink_pct:+.2f}% vs PY",
+                delta=f"{delta_shrink_pp:+.2f} pp vs PY",
                 delta_color="inverse",
-                help=f"Valore assoluto: {fmt_valuta_decimali(shrink_tot)}"
+                help=f"Anno prec: {fmt_percentuale(shrink_on_sales_py)} | Valore: {fmt_valuta_decimali(shrink_tot)}"
             )
 
         st.markdown("<br>#### 📦 Dettaglio Giacenze e Rotazioni", unsafe_allow_html=True)
@@ -218,10 +204,8 @@ with tab1:
         })
         st.dataframe(df_stock_kpi, use_container_width=True, hide_index=True)
 
-
-
 # =============================================================================
-# SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI (Free Analysis Sellout)
+# SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
 # =============================================================================
 with tab2:
     st.header("👥 Analisi Profilazione e Portafoglio Clienti (Sellout)")
@@ -243,8 +227,6 @@ with tab2:
     if ricerca_cliente and "Customer" in df_sel.columns:
         df_sel_filtrato = df_sel_filtrato[df_sel_filtrato["Customer"].astype(str).str.contains(ricerca_cliente, case=False, na=False)]
 
-    # --- CALCOLO METRICHE SELLOUT ---
-    # Usiamo lo stesso parser sicuro usato nella prima scheda per i decimali europei
     def parse_sellout_col(series):
         s = series.astype(str).str.replace(r'\s+', '', regex=True)
         s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
@@ -255,16 +237,29 @@ with tab2:
     sellout_visits_tot = float(parse_sellout_col(df_sel_filtrato["# Visit"]).sum()) if "# Visit" in df_sel_filtrato.columns else 0.0
     sellout_margin_pct = (sellout_margin_tot / sellout_sales_tot * 100) if sellout_sales_tot != 0 else 0.0
 
-    # --- RENDERING CARD IN PURO PYTHON (SCHEDA 2) ---
     st.markdown("##### 📊 Indicatori Chiave del Portafoglio Selezionato")
     ms1, ms2, ms3 = st.columns(3)
     with ms1:
-        st.metric(label="💼 Fatturato Portafoglio (Sellout)", value=fmt_valuta(sellout_sales_tot))
+        st.metric(label="💼 Fatturato Portafoglio (Sellout)", value=fmt_valuta_interi(sellout_sales_tot))
     with ms2:
-        st.metric(label="🎯 Front Margin % Realizzato", value=fmt_percentuale(sellout_margin_pct), help=f"Valore assoluto: {fmt_valuta(sellout_margin_tot)}")
+        st.metric(label="🎯 Front Margin % Realizzato", value=fmt_percentuale(sellout_margin_pct), help=f"Valore assoluto: {fmt_valuta_decimali(sellout_margin_tot)}")
     with ms3:
         st.metric(label="👣 Volume Totale Visite", value=f"{int(sellout_visits_tot):,}".replace(',', '.'))
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<br>### 📋 Elenco Analitico Clienti (Ordinati per Fatturato Decrescente)")
+    raggruppamento_cols = [c for c in ["Customer", "Customer Category", "Venditore", "MPRO Club"] if c in df_sel_filtrato.columns]
+    
+    if raggruppamento_cols:
+        agg_dict = {"Sales TT": "sum"}
+        if "Front Margin" in df_sel_filtrato.columns: agg_dict["Front Margin"] = "sum"
+        if "# Visit" in df_sel_filtrato.columns: agg_dict["# Visit"] = "sum"
+        
+        df_customer_pivoted = df_sel_filtrato.groupby(raggruppamento_cols).agg(agg_dict).reset_index().sort_values(by="Sales TT", ascending=False)
+        
+        df_customer_pivoted["Sales TT"] = df_customer_pivoted["Sales TT"].map(fmt_valuta_interi)
+        if "Front Margin" in df_customer_pivoted.columns:
+            df_customer_pivoted["Front Margin"] = df_customer_pivoted["Front Margin"].map(fmt_valuta_decimali)
+        if "# Visit" in df_customer_pivoted.columns:
+            df_customer_pivoted["# Visit"] = df_customer_pivoted["# Visit"].map('{:,.0f}'.format)
 
-
+        st.dataframe(df_customer_pivoted, use_container_width=True, hide_index=True)
