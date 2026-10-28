@@ -50,7 +50,7 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
     return df_rep, df_ctg, df_sel, df_ind, df_men
 
 # -----------------------------------------------------------------------------
-# 4. INTERFACCIA CARICAMENTO NELLA SIDEBAR LATERALE
+# 4. INTERFACCIA CARICAMENTO NELLA SIDEBAR LATERALE + FILTRI GERARCHICI
 # -----------------------------------------------------------------------------
 st.sidebar.header("📁 Caricamento File Sorgente")
 u_rep = st.sidebar.file_uploader("1. File BMPL Reparti (.csv)", type="csv")
@@ -63,57 +63,58 @@ if not (u_rep and u_ctg and u_sel and u_ind and u_men):
     st.info("💡 Carica i 5 report commerciali puliti nel pannello laterale sinistro per attivare l'interfaccia.")
     st.stop()
 
-# Inizializzazione dei dataframe e delle schede
+# Inizializzazione dei dataframe e delle schede dopo il caricamento dei file
 df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel, u_ind, u_men)
+
+st.sidebar.markdown("---")
+st.sidebar.header("🎯 Filtri di Selezione")
+
+# Struttura dei filtri gerarchici inserita correttamente nella Sidebar
+if len(df_men.columns) >= 5:
+    df_men_clean = df_men.copy()
+    df_men_clean.iloc[:, 1] = df_men_clean.iloc[:, 1].astype(str).str.strip() 
+    df_men_clean.iloc[:, 3] = df_men_clean.iloc[:, 3].astype(str).str.strip() 
+    df_men_clean.iloc[:, 4] = df_men_clean.iloc[:, 4].astype(str).str.strip() 
+    
+    lista_store = sorted([x for x in df_men_clean.iloc[:, 1].unique() if x not in ['nan', 'None', '']])
+    selected_store = st.sidebar.selectbox("Seleziona Store:", lista_store)
+    
+    df_filtrato_store = df_men_clean[df_men_clean.iloc[:, 1] == selected_store]
+    lista_aree = ["--- TOTALE STORE ---"] + sorted([x for x in df_filtrato_store.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
+    selected_area = st.sidebar.selectbox("Seleziona Area di Vendita:", lista_aree)
+    
+    if selected_area != "--- TOTALE STORE ---":
+        df_filtrato_area = df_filtrato_store[df_filtrato_store.iloc[:, 3] == selected_area]
+        lista_reparti = ["--- TOTALE AREA ---"] + sorted([x for x in df_filtrato_area.iloc[:, 4].unique() if x not in ['nan', 'None', '']])
+    else:
+        df_filtrato_area = df_filtrato_store.copy()
+        lista_reparti = ["--- DETTAGLIO RICHIESTO ---"]
+    selected_reparto = st.sidebar.selectbox("Seleziona Reparto:", lista_reparti)
+
+    nome_store_pulito = selected_store.split(" - ")[-1] if " - " in str(selected_store) else selected_store
+
+    if selected_area == "--- TOTALE STORE ---":
+        dati_vista = df_filtrato_store.copy()
+        titolo_vista = f"Visualizzazione: TOTALE STORE {nome_store_pulito}"
+    elif selected_reparto == "--- TOTALE AREA ---":
+        dati_vista = df_filtrato_area.copy()
+        titolo_vista = f"Visualizzazione: TOTALE AREA {selected_area} ({nome_store_pulito})"
+    else:
+        dati_vista = df_filtrato_area[df_filtrato_area.iloc[:, 4] == selected_reparto]
+        titolo_vista = f"Visualizzazione REPARTO: {selected_reparto} ({nome_store_pulito})"
+else:
+    dati_vista = pd.DataFrame()
+    st.sidebar.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
+
+# Definizione dei tab
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
 
 # =============================================================================
-# BLOCCO 1: CONFIGURAZIONE FILTRI E TITOLI DINAMICI
+# TAB 1: VISUALIZZAZIONE PERFORMANCE SORGENTI E DATI AGGIORNATI CTG
 # =============================================================================
 with tab1:
     st.header("🏬 Monitoraggio Gerarchico Store & Performance Mix")
     
-    if len(df_men.columns) >= 5:
-        df_men_clean = df_men.copy()
-        df_men_clean.iloc[:, 1] = df_men_clean.iloc[:, 1].astype(str).str.strip() 
-        df_men_clean.iloc[:, 3] = df_men_clean.iloc[:, 3].astype(str).str.strip() 
-        df_men_clean.iloc[:, 4] = df_men_clean.iloc[:, 4].astype(str).str.strip() 
-        
-        col_f1, col_f2, col_f3 = st.columns(3)
-        with col_f1:
-            lista_store = sorted([x for x in df_men_clean.iloc[:, 1].unique() if x not in ['nan', 'None', '']])
-            selected_store = st.selectbox("Seleziona Store:", lista_store)
-        with col_f2:
-            df_filtrato_store = df_men_clean[df_men_clean.iloc[:, 1] == selected_store]
-            lista_aree = ["--- TOTALE STORE ---"] + sorted([x for x in df_filtrato_store.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
-            selected_area = st.selectbox("Seleziona Area di Vendita:", lista_aree)
-        with col_f3:
-            if selected_area != "--- TOTALE STORE ---":
-                df_filtrato_area = df_filtrato_store[df_filtrato_store.iloc[:, 3] == selected_area]
-                lista_reparti = ["--- TOTALE AREA ---"] + sorted([x for x in df_filtrato_area.iloc[:, 4].unique() if x not in ['nan', 'None', '']])
-            else:
-                df_filtrato_area = df_filtrato_store.copy()
-                lista_reparti = ["--- DETTAGLIO RICHIESTO ---"]
-            selected_reparto = st.selectbox("Seleziona Reparto:", lista_reparti)
-
-        nome_store_pulito = selected_store.split(" - ")[-1] if " - " in str(selected_store) else selected_store
-
-        if selected_area == "--- TOTALE STORE ---":
-            dati_vista = df_filtrato_store.copy()
-            titolo_vista = f"Visualizzazione: TOTALE STORE {nome_store_pulito}"
-        elif selected_reparto == "--- TOTALE AREA ---":
-            dati_vista = df_filtrato_area.copy()
-            titolo_vista = f"Visualizzazione: TOTALE AREA {selected_area} ({nome_store_pulito})"
-        else:
-            dati_vista = df_filtrato_area[df_filtrato_area.iloc[:, 4] == selected_reparto]
-            titolo_vista = f"Visualizzazione REPARTO: {selected_reparto} ({nome_store_pulito})"
-    else:
-        dati_vista = pd.DataFrame()
-        st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
-
-# =============================================================================
-# BLOCCO 2: ENGINE DI CALCOLO COMMERCIALE E ROTAZIONE MEDIA SUL PERIODO
-# =============================================================================
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
         
@@ -193,12 +194,9 @@ with tab1:
             if match:
                 codici_target.add(match.group())
 
-# =============================================================================
-# BLOCCO 3: RENDERING DELLE CARDS KPI SUPERIORI
-# =============================================================================
+        # Rendering delle KPI Cards superiori
         st.markdown("#### 📊 Indicatori Chiave di Performance")
         m1, m2, m3, m4, m5 = st.columns(5)
-        
         with m1:
             st.metric(label="💰 Sales TT", value=fmt_valuta_interi(sales_tot), delta=f"{delta_sales_pct:+.2f}% vs PY")
         with m2:
@@ -210,9 +208,6 @@ with tab1:
         with m5:  
             st.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
 
-# =============================================================================
-# BLOCCO 4: SINTESI REPARTI E INDISPENSABILI
-# =============================================================================
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("🔗 Indicatori di Performance Cross-Report (BMPL & Indispensabili)")
         col_c1, col_c2 = st.columns(2)
@@ -304,12 +299,7 @@ with tab1:
                     st.metric(label="Volume Colli (Indisp.)", value=f"{int(round(ind_colli)):,}".replace(',', '.'), delta=f"{delta_colli_ind:+.2f}% vs PY")
                 with sub_ind3: 
                     st.metric(label="📉 Shrinkage (Indisp.)", value=fmt_valuta_interi(ind_shrink), delta=f"{delta_shk_ind:+.2f}% vs PY" if ind_shrink_py != 0 else None, delta_color="inverse")
-            else:
-                st.caption("⚠️ Nessun articolo indispensabile trovato per questa selezione.")
 
-# =============================================================================
-# BLOCCO 5: ELENCO ARTICOLI INDISPENSABILI
-# =============================================================================
         st.markdown("<br>#### 📋 Elenco Dettagliato Articoli Indispensabili Rilevati", unsafe_allow_html=True)
         if not match_indisp.empty:
             colonne_totali = list(df_ind.columns)
@@ -349,7 +339,7 @@ with tab1:
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
 
 # =============================================================================
-# BLOCCO 6: INTEGRAZIONE CHIRURGICA DATI NUOVO FILE "CTG.CSV" (MAPPATURA CORRETTA)
+# BLOCCO 6: INTEGRAZIONE CHIRURGICA E REATTIVA REPORT "CTG.CSV" (AGGIORNATO AI FILTRI)
 # =============================================================================
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
@@ -357,10 +347,12 @@ with tab1:
         if not df_ctg.empty:
             df_ctg_clean = df_ctg.copy()
             
+            # Isolo i codici reparto numerici a 3 cifre dalla colonna 'Sales Department' (Indice 1)
             df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.iloc[:, 1].astype(str).apply(
                 lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
             )
             
+            # Il report CTG ora si aggiorna reattivamente usando la variabile 'codici_target' definita dai filtri sopra
             if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
                 match_ctg = df_ctg_clean[df_ctg_clean['Codice_Reparto_CTG'].isin(codici_target)].copy()
             else:
