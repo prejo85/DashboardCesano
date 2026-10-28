@@ -185,7 +185,7 @@ with tab1:
             pass
 
 # =============================================================================
-# BLOCCO 3 - PARTE 1: VISUALIZZAZIONE DELLE CARDS KPI SUPERIORI (5 COLONNE)
+# BLOCCO 3 - PARTE 1: VISUALIZZAZIONE DELLE CARDS KPI SUPERIORI (PROTETTA)
 # =============================================================================
         import re
 
@@ -202,15 +202,16 @@ with tab1:
         col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
         
         if col_rep_ind and len(codici_target) > 0:
-            col_ind_nome = col_rep_ind
+            col_ind_nome = col_rep_ind[0]
             df_ind_clean = df_ind.copy()
-            df_ind_clean['Codice_Reparto_IND'] = df_ind_clean[col_ind_nome].astype(str).apply(
-                lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
+            
+            # RISOLTO TYPEERROR: Forziamo il casting a str(x) all'interno del motore Regex per evitare blocchi sui valori nulli
+            df_ind_clean['Codice_Reparto_IND'] = df_ind_clean[col_ind_nome].apply(
+                lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
             )
             match_indisp = df_ind_clean[df_ind_clean['Codice_Reparto_IND'].isin(codici_target)].copy()
             
             if not match_indisp.empty:
-                # Sottofunzione robusta che estrae i numeri rimuovendo formati europei e spazi
                 def parse_indisp_totals(dataframe, col_name):
                     if col_name in dataframe.columns:
                         s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
@@ -219,25 +220,22 @@ with tab1:
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
-                # Identificazione flessibile delle colonne per evitare problemi di KeyError o stringhe mancate
-                col_sales = [c for c in match_indisp.columns if 'sales' in c.lower() and 'py' not in c.lower()][0] if [c for c in match_indisp.columns if 'sales' in c.lower() and 'py' not in c.lower()] else 'DA - Sales TT'
-                col_sales_py = [c for c in match_indisp.columns if 'sales' in c.lower() and 'py' in col_lower][0] if [c for c in match_indisp.columns if 'sales' in c.lower() and 'py' in col_lower] else 'DA - Sales TT PY Custom Cal'
-                col_colli = [c for c in match_indisp.columns if 'colli' in c.lower() and 'py' not in c.lower()][0] if [c for c in match_indisp.columns if 'colli' in c.lower() and 'py' not in c.lower()] else 'DA - #Colli'
-                col_colli_py = [c for c in match_indisp.columns if 'colli' in c.lower() and 'py' in col_lower][0] if [c for c in match_indisp.columns if 'colli' in c.lower() and 'py' in col_lower] else 'DA - #Colli PY Custom Cal'
-                
-                # Ricerca dinamica flessibile per lo Shrinkage (Sfrido) TY e PY
-                col_shk = [c for c in match_indisp.columns if 'shrinkage' in c.lower() and 'py' not in c.lower() and 'net' not in c.lower()]
-                col_shk_py = [c for c in match_indisp.columns if 'shrinkage' in c.lower() and ('py' in c.lower() or 'net' in c.lower())]
+                # Identificazione dinamica flessibile delle colonne degli Indispensabili per evitare KeyError
+                c_sales = [c for c in match_indisp.columns if 'sales' in c.lower() and 'py' not in c.lower()]
+                c_sales_py = [c for c in match_indisp.columns if 'sales' in c.lower() and 'py' in c.lower()]
+                c_colli = [c for c in match_indisp.columns if 'colli' in c.lower() and 'py' not in c.lower()]
+                c_colli_py = [c for c in match_indisp.columns if 'colli' in c.lower() and 'py' in c.lower()]
+                c_shk = [c for c in match_indisp.columns if 'shrinkage' in c.lower() and 'py' not in c.lower() and 'net' not in c.lower()]
+                c_shk_py = [c for c in match_indisp.columns if 'shrinkage' in c.lower() and ('py' in c.lower() or 'net' in c.lower())]
 
-                ind_sales = float(parse_indisp_totals(match_indisp, col_sales).sum())
-                ind_sales_py = float(parse_indisp_totals(match_indisp, col_sales_py).sum())
-                ind_colli = float(parse_indisp_totals(match_indisp, col_colli).sum())
-                ind_colli_py = float(parse_indisp_totals(match_indisp, col_colli_py).sum())
-                
-                if col_shk: ind_shrink = float(parse_indisp_totals(match_indisp, col_shk[0]).sum())
-                if col_shk_py: ind_shrink_py = float(parse_indisp_totals(match_indisp, col_shk_py[0]).sum())
+                ind_sales = float(parse_indisp_totals(match_indisp, c_sales[0]).sum()) if c_sales else 0.0
+                ind_sales_py = float(parse_indisp_totals(match_indisp, c_sales_py[0]).sum()) if c_sales_py else 0.0
+                ind_colli = float(parse_indisp_totals(match_indisp, c_colli[0]).sum()) if c_colli else 0.0
+                ind_colli_py = float(parse_indisp_totals(match_indisp, c_colli_py[0]).sum()) if c_colli_py else 0.0
+                ind_shrink = float(parse_indisp_totals(match_indisp, c_shk[0]).sum()) if c_shk else 0.0
+                ind_shrink_py = float(parse_indisp_totals(match_indisp, c_shk_py[0]).sum()) if c_shk_py else 0.0
 
-        # Rendering a cinque colonne in puro Python nativo
+        # Rendering a cinque colonne in puro Python nativo delle card superiori dello Store
         st.markdown("#### 📊 Indicatori Chiave di Performance")
         m1, m2, m3, m4, m5 = st.columns(5)
         
