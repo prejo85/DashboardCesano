@@ -272,53 +272,71 @@ with tab1:
             else:
                 st.caption("🔍 Seleziona un'area o un reparto per agganciare gli articoli indispensabili.")
 
-        # --- NUOVA SEZIONE: TABELLA DETTAGLIO ARTICOLI INDISPENSABILI (SOLO DA G2 IN POI) ---
+        # --- NUOVA SEZIONE: TABELLA DETTAGLIO ARTICOLI INDISPENSABILI (REVISIONE GENERALE DEL PARSER PERCENTUALI) ---
         st.markdown("<br>#### 📋 Elenco Dettagliato Articoli Indispensabili Rilevati", unsafe_allow_html=True)
         if col_rep_ind and len(codici_target) > 0 and not match_indisp.empty:
             
-            # --- RIMOZIONE DELLE PRIME COLONNE: TAGLIAMO IL DATAFRAME DA 'G2' IN POI ---
-            # Cerchiamo l'indice della colonna 'G2' all'interno del file degli indispensabili
             colonne_totali = list(df_ind.columns)
             try:
                 indice_g2 = colonne_totali.index('G2')
-                # Teniamo solo le colonne a partire da G2 in avanti, escludendo il codice d'appoggio interno
                 colonne_filtrate = [c for c in colonne_totali[indice_g2:] if c != 'Codice_Reparto_IND']
                 df_tabella_indisp = match_indisp[colonne_filtrate].copy()
             except ValueError:
-                # Se la colonna non si chiama esattamente 'G2', facciamo partire il taglio dalla 3ª colonna (indice 3)
                 colonne_filtrate = [c for c in colonne_totali[3:] if c != 'Codice_Reparto_IND']
                 df_tabella_indisp = match_indisp[colonne_filtrate].copy()
             
-            # Formattazione chirurgica basata sui nomi reali delle colonne per evitare l'azzeramento delle stringhe
+            # Riempie temporaneamente i valori nulli nativi (NaN) con un trattino pulito prima dei cicli
+            df_tabella_indisp = df_tabella_indisp.fillna('-')
+            
             for col in df_tabella_indisp.columns:
                 col_lower = col.lower()
                 
-                # Applica la valuta solo alle colonne monetarie effettive (Sales TT o Front Margin Assoluto)
-                if 'sales' in col_lower and 'department' not in col_lower and 'area' not in col_lower:
-                    try:
-                        df_tabella_indisp[col] = parse_to_numeric_series(df_tabella_indisp, df_tabella_indisp.columns.get_loc(col)).map(fmt_valuta_interi)
-                    except: pass
-                elif 'margin' in col_lower and '%' not in col_lower and 'department' not in col_lower and 'area' not in col_lower:
-                    try:
-                        df_tabella_indisp[col] = parse_to_numeric_series(df_tabella_indisp, df_tabella_indisp.columns.get_loc(col)).map(fmt_valuta_decimali)
-                    except: pass
+                # Ignora le colonne puramente descrittive (G2 e Article) che non devono subire modifiche matematiche
+                if col in ['G2', 'Article']:
+                    # Sostituiamo eventuali stringhe 'None' o 'nan' testuali residue
+                    df_tabella_indisp[col] = df_tabella_indisp[col].astype(str).replace(['None', 'nan', 'NaN'], '-')
+                    continue
                 
-                # Mantiene o formatta le colonne percentuali native (senza azzerarle come testo)
-                elif '%' in col_lower or 'margin' in col_lower:
+                # Sottoprocesso locale di pulizia per intercettare i decimali con la virgola (es. 22,88)
+                def parse_table_row(val):
+                    v_str = str(val).strip().replace(' ', '')
+                    if v_str in ['-', '--', 'nan', 'None', 'NaN', '']:
+                        return None
+                    # Gestione del formato europeo standard con virgola decimale
+                    if ',' in v_str and '.' in v_str:
+                        v_str = v_str.replace('.', '').replace(',', '.')
+                    elif ',' in v_str and '.' not in v_str:
+                        v_str = v_str.replace(',', '.')
                     try:
-                        series_num = parse_to_numeric_series(df_tabella_indisp, df_tabella_indisp.columns.get_loc(col))
-                        df_tabella_indisp[col] = series_num.map(fmt_percentuale)
-                    except: pass
-                
-                # Formattazione dei volumi di colli come numeri interi europei
+                        return float(v_str)
+                    except:
+                        return None
+
+                # Applichiamo la trasformazione condizionale colonna per colonna
+                if 'sales' in col_lower:
+                    df_tabella_indisp[col] = df_tabella_indisp[col].apply(parse_table_row).map(
+                        lambda x: fmt_valuta_interi(x) if pd.notna(x) else '-'
+                    )
+                elif 'margin' in col_lower and '%' not in col_lower:
+                    df_tabella_indisp[col] = df_tabella_indisp[col].apply(parse_table_row).map(
+                        lambda x: fmt_valuta_decimali(x) if pd.notna(x) else '-'
+                    )
+                elif '%' in col_lower or 'margin' in col_lower or 'shrinkage' in col_lower:
+                    df_tabella_indisp[col] = df_tabella_indisp[col].apply(parse_table_row).map(
+                        lambda x: fmt_percentuale(x) if pd.notna(x) else '-'
+                    )
                 elif 'colli' in col_lower:
-                    try:
-                        df_tabella_indisp[col] = parse_to_numeric_series(df_tabella_indisp, df_tabella_indisp.columns.get_loc(col)).map(lambda x: f"{int(round(x)):,}".replace(',', '.'))
-                    except: pass
+                    df_tabella_indisp[col] = df_tabella_indisp[col].apply(parse_table_row).map(
+                        lambda x: f"{int(round(x)):,}".replace(',', '.') if pd.notna(x) else '-'
+                    )
+                else:
+                    # Per qualsiasi altra colonna non mappata, sostituiamo le scritte None grafiche
+                    df_tabella_indisp[col] = df_tabella_indisp[col].astype(str).replace(['None', 'nan', 'NaN'], '-')
             
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
         else:
             st.info("Carica i report aggiornati per popolare la griglia analitica degli articoli indispensabili.")
+
 
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
