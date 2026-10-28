@@ -292,15 +292,34 @@ with tab1:
             else:
                 st.caption("⚠️ Il file BMPL caricato risulta vuoto.")
 
-        # --- PANNELLO 2: REPORT ARTICOLI INDISPENSABILI (CON CARD SHRINKAGE INSERITA NELLA SEZIONE) ---
+        # --- PANNELLO 2: REPORT ARTICOLI INDISPENSABILI (VERSIONE POSIZIONALE AD ALTA PRECISIONE) ---
         with col_c2:
             st.markdown("#### 📌 Sintesi Articoli Indispensabili nel Mix")
+            
             if not match_indisp.empty:
+                # Sottofunzione locale che pulisce i formati europei basandosi puramente sulla posizione
+                def parse_indisp_positional(dataframe, col_index):
+                    if len(dataframe.columns) > col_index:
+                        s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
+                        s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
+                        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                        return pd.to_numeric(s, errors='coerce').fillna(0.0)
+                    return pd.Series(0.0, index=dataframe.index)
+
+                # Estrarre i totali usando gli indici numerici precisi del file Excel
+                ind_sales = float(parse_indisp_positional(match_indisp, 5).sum())       # Colonna F (Indice 5)
+                ind_sales_py = float(parse_indisp_positional(match_indisp, 6).sum())    # Colonna G (Indice 6)
+                ind_colli = float(parse_indisp_totals(match_indisp, 7).sum()) if 'parse_indisp_totals' in locals() else float(parse_indisp_positional(match_indisp, 7).sum())       # Colonna H (Indice 7)
+                ind_colli_py = float(parse_indisp_positional(match_indisp, 8).sum())    # Colonna I (Indice 8)
+                ind_shrink = float(parse_indisp_positional(match_indisp, 11).sum())     # Colonna L (Indice 11)
+                ind_shrink_py = float(parse_indisp_positional(match_indisp, 12).sum())  # Colonna M (Indice 12)
+
+                # Calcolo delle variazioni percentuali anno su anno (vs PY)
                 delta_sales_ind = ((ind_sales - ind_sales_py) / ind_sales_py * 100) if ind_sales_py != 0 else 0.0
                 delta_colli_ind = ((ind_colli - ind_colli_py) / ind_colli_py * 100) if ind_colli_py != 0 else 0.0
                 delta_shk_ind = ((ind_shrink - ind_shrink_py) / ind_shrink_py * 100) if ind_shrink_py != 0 else 0.0
 
-                # Generiamo 3 colonne interne nel pannello per mostrare Sales, Colli e lo Sfrido del file
+                # Generiamo le 3 card metriche native Streamlit affiancate all'interno della sezione degli Indispensabili
                 sub_ind1, sub_ind2, sub_ind3 = st.columns(3)
                 with sub_ind1: 
                     st.metric(label="Sales (Indispensabili)", value=fmt_valuta_interi(ind_sales), delta=f"{delta_sales_ind:+.2f}% vs PY")
