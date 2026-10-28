@@ -194,6 +194,19 @@ with tab1:
         val_stock_days_py = float(giorni_validi_py['Days_PY'].mean()) if not giorni_validi_py.empty else 0.0
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
 
+        # --- CALCOLO SPERIMENTALE: AVG STOCK DELL'ULTIMO GIORNO CRONOLOGICO ---
+        val_avg_stock_ultimo_giorno = 0.0
+        try:
+            df_calc['Date_Parsed'] = pd.to_datetime(df_calc.iloc[:, 0].astype(str).str.strip(), format='%d/%m/%Y', errors='coerce')
+            df_date_valide = df_calc[df_calc['Date_Parsed'].notna()]
+            if not df_date_valide.empty:
+                ultima_data_assoluta = df_date_valide['Date_Parsed'].max()
+                df_ultimo_giorno_stock = df_date_valide[df_date_valide['Date_Parsed'] == ultima_data_assoluta]
+                val_avg_stock_ultimo_giorno = float(df_ultimo_giorno_stock['Stock_TY_Num'].sum())
+        except:
+            pass
+        # -----------------------------------------------------------------------
+
 # =============================================================================
 # BLOCCO 3: FORMATTAZIONE EUROPEA E VISUALIZZAZIONE KPI CARDS
 # =============================================================================
@@ -210,23 +223,23 @@ with tab1:
         def fmt_giorni(valore):
             return f"{valore:.1f} gg".replace('.', ',')
 
-        # Rendering a quattro colonne in puro Python
+        # Rendering a cinque colonne in puro Python nativo
         st.markdown("#### 📊 Indicatori Chiave di Performance")
-        m1, m2, m3, m4 = st.columns(4)
+        m1, m2, m3, m4, m5 = st.columns(5)
         
         with m1:
             st.metric(
                 label="💰 Sales TT", 
                 value=fmt_valuta_interi(sales_tot), 
                 delta=f"{delta_sales_pct:+.2f}% vs PY",
-                help=f"Fatturato anno precedente: {fmt_valuta_interi(sales_py_tot)}"
+                help=f"Fatturato progressivo anno precedente: {fmt_valuta_interi(sales_py_tot)}"
             )
         with m2:
             st.metric(
                 label="📈 Front Margin %", 
                 value=fmt_percentuale(margin_on_sales), 
                 delta=f"{delta_margin_pp:+.2f} pp vs PY",
-                help=f"Margine PY: {fmt_percentuale(margin_on_sales_py)} | Valore: {fmt_valuta_decimali(margin_tot)}"
+                help=f"Margine PY: {fmt_percentuale(margin_on_sales_py)} | Valore assoluto TY: {fmt_valuta_decimali(margin_tot)}"
             )
         with m3:
             st.metric(
@@ -236,13 +249,20 @@ with tab1:
                 delta_color="inverse",
                 help=f"Giacenza PY: {fmt_giorni(val_stock_days_py)}"
             )
-        with m4:
+        with m5:  # Spostato shrinkage alla fine per inserire l'AVG vicino ai giorni di stock
             st.metric(
                 label="📉 Shrinkage (Sfrido)", 
                 value=fmt_percentuale(shrink_on_sales), 
                 delta=f"{delta_shrink_pp:+.2f} pp vs PY",
                 delta_color="inverse",
-                help=f"Sfrido PY: {fmt_percentuale(shrink_on_sales_py)} | Valore: {fmt_valuta_decimali(shrink_tot)}"
+                help=f"Sfrido PY: {fmt_percentuale(shrink_on_sales_py)} | Valore assoluto TY: {fmt_valuta_decimali(shrink_tot)}"
+            )
+        with m4:  # NUOVA CARD: Inserita perfettamente tra Stock Days e Shrinkage
+            st.metric(
+                label="🏬 Avg Stock Last Day", 
+                value=fmt_valuta_interi(val_avg_stock_ultimo_giorno),
+                delta=None,
+                help=f"Valore totale delle giacenze rilevate nell'ultimo giorno utile del report."
             )
 
         st.markdown("<br>#### 📦 Dettaglio Giacenze e Rotazioni", unsafe_allow_html=True)
