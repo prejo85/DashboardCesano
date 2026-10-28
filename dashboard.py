@@ -111,23 +111,31 @@ with tab1:
     else:
         dati_vista = pd.DataFrame()
         st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
+
 # =============================================================================
-# BLOCCO 2: ENGINE DI CALCOLO COMMERCIALE E ROTAZIONE SULL'ULTIMO GIORNO ATTIVO
+# BLOCCO 2: ENGINE DI CALCOLO COMMERCIALE E ROTAZIONE MEDIA SUL PERIODO
 # =============================================================================
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
         
-        # --- PARSER AD ALTA PRECISIONE PER FORMATI EUROPEI COMPLESSI ---
-        def parse_to_numeric_series(dataframe, col_index):
+        # --- PARSER AD ALTA PRECISIONE PER FORMATI EUROPEI E INTERI CON PUNTI ---
+        def parse_to_numeric_series(dataframe, col_index, is_stock=False):
             if len(dataframe.columns) > col_index:
                 s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
                 s = s.replace(['-', '--', 'nan', 'NaN', ''], '0')
-                if s.str.count(r'\.').max() > 1:
+                
+                if is_stock:
+                    # Per la colonna Stock (es. 149.108 o 1.004.906) rimuoviamo tutti i punti prima della conversione
                     s = s.str.replace('.', '', regex=False)
-                elif s.str.contains(r'\.').any() and s.str.contains(',').any():
-                    s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                elif s.str.contains(',').any() and not s.str.contains(r'\.').any():
-                    s = s.str.replace(',', '.', regex=False)
+                else:
+                    # Per le altre colonne commerciali (es. 7.772,75)
+                    if s.str.count(r'\.').max() > 1:
+                        s = s.str.replace('.', '', regex=False)
+                    elif s.str.contains(r'\.').any() and s.str.contains(',').any():
+                        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                    elif s.str.contains(',').any() and not s.str.contains(r'\.').any():
+                        s = s.str.replace(',', '.', regex=False)
+                        
                 return pd.to_numeric(s, errors='coerce').fillna(0.0)
             return pd.Series(dtype=float, index=dataframe.index)
 
@@ -137,11 +145,11 @@ with tab1:
         df_calc['Sales_PY_Num'] = parse_to_numeric_series(df_calc, 6)   # Colonna 6: DA - Sales TT PY Custom Cal
         df_calc['Margin_TY_Num'] = parse_to_numeric_series(df_calc, 11) # Colonna 11: DA - Front Margin
         df_calc['Margin_PY_Num'] = parse_to_numeric_series(df_calc, 12) # Colonna 12: DA - Front Margin PY Custom Cal
-        df_calc['Stock_TY_Num'] = parse_to_numeric_series(df_calc, 13)  # Colonna 13: DA - Avg Stock
+        df_calc['Stock_TY_Num'] = parse_to_numeric_series(df_calc, 13, is_stock=True)  # Colonna 13: DA - Avg Stock (Forzato Intero)
         df_calc['Shrink_TY_Num'] = parse_to_numeric_series(df_calc, 16) # Colonna 16: DA - Shrinkage NNBP
         df_calc['Shrink_PY_Num'] = parse_to_numeric_series(df_calc, 17) # Colonna 17: DA - Shrinkage NNBP PY Custom Cal
 
-        # Aggregazioni volumetriche totali del periodo
+        # Aggregazioni volumetriche totali del periodo selezionato
         sales_tot = float(df_calc['Sales_TY_Num'].sum())
         sales_py_tot = float(df_calc['Sales_PY_Num'].sum())
         margin_tot = float(df_calc['Margin_TY_Num'].sum())
@@ -156,35 +164,34 @@ with tab1:
         margin_on_sales_py = (margin_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
         shrink_on_sales_py = (shrink_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
 
-        # Delta classici e scostamenti in pp
+        # Delta classici e scostamenti in punti percentuali
         delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
         delta_margin_pp = margin_on_sales - margin_on_sales_py
         delta_shrink_pp = shrink_on_sales - shrink_on_sales_py
 
-        # --- ENGINE DI INDIVIDUAZIONE DELL'ULTIMO GIORNO REALE DI VENDITA ---
-        val_stock_days, val_stock_days_py = 0.0, 0.0
-        try:
-            df_calc['Date_Parsed'] = pd.to_datetime(df_calc.iloc[:, 0].astype(str).str.strip(), format='%d/%m/%Y', errors='coerce')
-            
-            # FILTRO CHIAVE: Prendiamo solo i giorni in cui l'aggregato delle vendite per la selezione corrente è maggiore di zero
-            df_giorni_attivi = df_calc.groupby('Date_Parsed').filter(lambda x: x['Sales_TY_Num'].sum() > 0)
-            
-            if not df_giorni_attivi.empty:
-                # Troviamo l'ultimo giorno reale in cui ci sono state vendite per questo specifico filtro
-                ultima_data_attiva = df_giorni_attivi['Date_Parsed'].max()
-                df_ultimo_giorno = df_giorni_attivi[df_giorni_attivi['Date_Parsed'] == ultima_data_attiva]
-                
-                # Sommiamo stock e vendite di quel giorno specifico
-                stock_ultimo_giorno = float(df_ultimo_giorno['Stock_TY_Num'].sum())
-                sales_ultimo_giorno_ty = float(df_ultimo_giorno['Sales_TY_Num'].sum())
-                sales_ultimo_giorno_py = float(df_ultimo_giorno['Sales_PY_Num'].sum())
-                
-                # Formula: Stock dell'ultimo giorno attivo / Sales dello stesso giorno
-                val_stock_days = (stock_ultimo_giorno / sales_ultimo_giorno_ty) if sales_ultimo_giorno_ty > 0 else 0.0
-                val_stock_days_py = (stock_ultimo_giorno / sales_ultimo_giorno_py) if sales_ultimo_giorno_py > 0 else 0.0
-        except:
-            pass
+        # --- ENGINE DI CALCOLO GENERALE DEGLI STOCK DAYS SU TUTTI I GIORNI DISPONIBILI ---
+        # Raggruppiamo i valori sommandoli giorno per giorno (Colonna 0: Data)
+        df_giornaliero = df_calc.groupby(df_calc.iloc[:, 0]).agg({
+            'Stock_TY_Num': 'sum',
+            'Sales_TY_Num': 'sum',
+            'Sales_PY_Num': 'sum'
+        }).reset_index()
 
+        # Calcolo del rapporto Stock / Sales per ogni singola giornata della selezione
+        df_giornaliero['Days_TY'] = df_giornaliero.apply(
+            lambda r: r['Stock_TY_Num'] / r['Sales_TY_Num'] if r['Sales_TY_Num'] > 0 else 0.0, axis=1
+        )
+        df_giornaliero['Days_PY'] = df_giornaliero.apply(
+            lambda r: r['Stock_TY_Num'] / r['Sales_PY_Num'] if r['Sales_PY_Num'] > 0 else 0.0, axis=1
+        )
+
+        # Consideriamo per la media solo le giornate con vendite attive
+        giorni_validi_ty = df_giornaliero[df_giornaliero['Days_TY'] > 0]
+        giorni_validi_py = df_giornaliero[df_giornaliero['Days_PY'] > 0]
+
+        # Calcolo finale delle medie del periodo selezionato
+        val_stock_days = float(giorni_validi_ty['Days_TY'].mean()) if not giorni_validi_ty.empty else 0.0
+        val_stock_days_py = float(giorni_validi_py['Days_PY'].mean()) if not giorni_validi_py.empty else 0.0
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
 
 # =============================================================================
