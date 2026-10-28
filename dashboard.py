@@ -184,15 +184,13 @@ with tab1:
         except:
             pass
 
-        # =============================================================================
-        # BLOCCO 3: VALORI ASSOLUTI BMPL E DETTAGLIO PRODOTTI INDISPENSABILI
-        # =============================================================================
-        st.markdown("<br>---", unsafe_allow_html=True)
-        st.subheader("🔗 Indicatori di Performance Cross-Report (BMPL & Indispensabili)")
-
+# =============================================================================
+# BLOCCO 3 - PARTE 1: VISUALIZZAZIONE DELLE CARDS KPI SUPERIORI (6 COLONNE)
+# =============================================================================
+        # --- LOGICA DI CALCOLO DINAMICA PER GLI ARTICOLI INDISPENSABILI (INCLUSO SHK) ---
         import re
 
-        # Estrazione dinamica e pulita dei codici reparto filtrati (es. {'110', '190'})
+        # Estrazione dinamica dei codici reparto filtrati (es. {'110', '190'})
         reparti_mensilizzazione = dati_vista.iloc[:, 4].dropna().astype(str).str.strip()
         codici_target = set()
         for r in reparti_mensilizzazione:
@@ -200,9 +198,66 @@ with tab1:
             if match:
                 codici_target.add(match.group())
 
+        ind_sales, ind_sales_py, ind_colli, ind_colli_py, ind_shrink, ind_shrink_py = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        match_indisp = pd.DataFrame()
+        col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+        
+        if col_rep_ind and len(codici_target) > 0:
+            col_ind_nome = col_rep_ind[0]
+            df_ind_clean = df_ind.copy()
+            df_ind_clean['Codice_Reparto_IND'] = df_ind_clean[col_ind_nome].astype(str).apply(
+                lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
+            )
+            match_indisp = df_ind_clean[df_ind_clean['Codice_Reparto_IND'].isin(codici_target)].copy()
+            
+            if not match_indisp.empty:
+                def parse_indisp_totals(dataframe, col_name):
+                    if col_name in dataframe.columns:
+                        s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
+                        s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
+                        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                        return pd.to_numeric(s, errors='coerce').fillna(0.0)
+                    return pd.Series(0.0, index=dataframe.index)
+
+                ind_sales = float(parse_indisp_totals(match_indisp, 'DA - Sales TT').sum())
+                ind_sales_py = float(parse_indisp_totals(match_indisp, 'DA - Sales TT PY Custom Cal').sum())
+                ind_colli = float(parse_indisp_totals(match_indisp, 'DA - #Colli').sum())
+                ind_colli_py = float(parse_indisp_totals(match_indisp, 'DA - #Colli PY Custom Cal').sum())
+                ind_shrink = float(parse_indisp_totals(match_indisp, 'DA - Shrinkage').sum())
+                ind_shrink_py = float(parse_indisp_totals(match_indisp, 'NNBP net PY Custo').sum() if 'NNBP net PY Custo' in match_indisp.columns else 0.0)
+
+        # Rendering grafico delle 6 metric cards native in Streamlit
+        st.markdown("#### 📊 Indicatori Chiave di Performance")
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
+        
+        with m1:
+            st.metric(label="💰 Sales TT", value=fmt_valuta_interi(sales_tot), delta=f"{delta_sales_pct:+.2f}% vs PY")
+        with m2:
+            st.metric(label="📈 Front Margin %", value=fmt_percentuale(margin_on_sales), delta=f"{delta_margin_pp:+.2f} pp vs PY")
+        with m3:
+            st.metric(label="📦 Stock Days", value=fmt_giorni(val_stock_days), delta=f"{delta_stock_pct:+.2f}% vs PY", delta_color="inverse")
+        with m4:  
+            st.metric(label="🏬 Avg Stock Last Day", value=fmt_valuta_interi(val_avg_stock_ultimo_giorno), delta=None)
+        with m5:  
+            st.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
+        with m6:
+            delta_shk_ind = ((ind_shrink - ind_shrink_py) / ind_shrink_py * 100) if ind_shrink_py != 0 else 0.0
+            st.metric(
+                label="🎯 Shk Indispensabili", 
+                value=fmt_valuta_interi(ind_shrink), 
+                delta=f"{delta_shk_ind:+.2f}% vs PY" if ind_shrink_py != 0 else None,
+                delta_color="inverse",
+                help="Valore assoluto dello Shrinkage calcolato dinamicamente sugli articoli indispensabili filtrati."
+            )
+# =============================================================================
+# BLOCCO 3 - PARTE 2: INDICATORI CROSS-REPORT SUI VALORI ASSOLUTI
+# =============================================================================
+        st.markdown("<br>---", unsafe_allow_html=True)
+        st.subheader("🔗 Indicatori di Performance Cross-Report (BMPL & Indispensabili)")
+
         col_c1, col_c2 = st.columns(2)
         
-        # --- PANNELLO 1: REPORT BMPL REPARTI (SOMMA DIRETTA SENZA ESCLUSIONI) ---
+        # --- PANNELLO 1: REPORT BMPL REPARTI (SOMMA DIRETTA AD ALTA ACCURATEZZA) ---
         with col_c1:
             st.markdown("#### 📈 Sintesi Report BMPL Reparti")
             if not df_rep.empty:
@@ -214,7 +269,6 @@ with tab1:
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
-                # Consideriamo tutte le righe operative per far quadrare i subtotali Excel
                 df_rep_pure = df_rep[df_rep.iloc[:, 0].astype(str).str.contains('FOOD', case=False, na=False)].copy()
 
                 bmpl_sales = float(parse_bmpl_direct(df_rep_pure, 'Sales TT').sum())
@@ -238,44 +292,23 @@ with tab1:
             else:
                 st.caption("⚠️ Il file BMPL caricato risulta vuoto.")
 
-        # --- PANNELLO 2: REPORT ARTICOLI INDISPENSABILI (DINAMICO SUI FILTRI) ---
+        # --- PANNELLO 2: REPORT ARTICOLI INDISPENSABILI (PULIZIA DIRETTA) ---
         with col_c2:
             st.markdown("#### 📌 Sintesi Articoli Indispensabili nel Mix")
-            col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-            
-            if col_rep_ind and len(codici_target) > 0:
-                col_ind_nome = col_rep_ind[0]
-                
-                # Creiamo una colonna pulita per associare i codici reparto degli Indispensabili
-                df_ind_clean = df_ind.copy()
-                df_ind_clean['Codice_Reparto_IND'] = df_ind_clean[col_ind_nome].astype(str).apply(
-                    lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
-                )
-                
-                # Applichiamo il filtro dinamico in base a Store/Area/Reparto selezionati in alto
-                match_indisp = df_ind_clean[df_ind_clean['Codice_Reparto_IND'].isin(codici_target)].copy()
-                
-                if not match_indisp.empty:
-                    ind_sales = float(parse_to_numeric_series(match_indisp, df_ind.columns.get_loc('DA - Sales TT') if 'DA - Sales TT' in df_ind.columns else 0).sum())
-                    ind_sales_py = float(parse_to_numeric_series(match_indisp, df_ind.columns.get_loc('DA - Sales TT PY Custom Cal') if 'DA - Sales TT PY Custom Cal' in df_ind.columns else 0).sum())
-                    ind_colli = float(parse_to_numeric_series(match_indisp, df_ind.columns.get_loc('DA - #Colli') if 'DA - #Colli' in df_ind.columns else 0).sum())
-                    ind_colli_py = float(parse_to_numeric_series(match_indisp, df_ind.columns.get_loc('DA - #Colli PY Custom Cal') if 'DA - #Colli PY Custom Cal' in df_ind.columns else 0).sum())
-                    
-                    delta_sales_ind = ((ind_sales - ind_sales_py) / ind_sales_py * 100) if ind_sales_py != 0 else 0.0
-                    delta_colli_ind = ((ind_colli - ind_colli_py) / ind_colli_py * 100) if ind_colli_py != 0 else 0.0
+            if not match_indisp.empty:
+                delta_sales_ind = ((ind_sales - ind_sales_py) / ind_sales_py * 100) if ind_sales_py != 0 else 0.0
+                delta_colli_ind = ((ind_colli - ind_colli_py) / ind_colli_py * 100) if ind_colli_py != 0 else 0.0
 
-                    sub_ind1, sub_ind2 = st.columns(2)
-                    with sub_ind1: st.metric(label="Sales (Indispensabili)", value=fmt_valuta_interi(ind_sales), delta=f"{delta_sales_ind:+.2f}% vs PY")
-                    with sub_ind2: st.metric(label="Volume Colli (Indisp.)", value=f"{int(round(ind_colli)):,}".replace(',', '.'), delta=f"{delta_colli_ind:+.2f}% vs PY")
-                else:
-                    st.caption("⚠️ Nessun articolo indispensabile trovato per questa selezione.")
+                sub_ind1, sub_ind2 = st.columns(2)
+                with sub_ind1: st.metric(label="Sales (Indispensabili)", value=fmt_valuta_interi(ind_sales), delta=f"{delta_sales_ind:+.2f}% vs PY")
+                with sub_ind2: st.metric(label="Volume Colli (Indisp.)", value=f"{int(round(ind_colli)):,}".replace(',', '.'), delta=f"{delta_colli_ind:+.2f}% vs PY")
             else:
-                st.caption("🔍 Seleziona un'area o un reparto per agganciare gli articoli indispensabili.")
-
-        # --- NUOVA SEZIONE: TABELLA DETTAGLIO ARTICOLI INDISPENSABILI (VERSIONE FEDELTÀ EXCEL) ---
+                st.caption("⚠️ Nessun articolo indispensabile trovato per questa selezione.")
+# =============================================================================
+# BLOCCO 3 - PARTE 3: GRIGLIA PRODOTTI INDISPENSABILI DA COLONNA G2 IN POI
+# =============================================================================
         st.markdown("<br>#### 📋 Elenco Dettagliato Articoli Indispensabili Rilevati", unsafe_allow_html=True)
         if col_rep_ind and len(codici_target) > 0 and not match_indisp.empty:
-            
             colonne_totali = list(df_ind.columns)
             try:
                 indice_g2 = colonne_totali.index('G2')
@@ -285,7 +318,9 @@ with tab1:
                 colonne_filtrate = [c for c in colonne_totali[3:] if c != 'Codice_Reparto_IND']
                 df_tabella_indisp = match_indisp[colonne_filtrate].copy()
             
-            # Sottoprocesso locale di pulizia specifico per le colonne monetarie assolute
+            # Pulisce i valori vuoti/nulli prima dell'elaborazione delle stringhe
+            df_tabella_indisp = df_tabella_indisp.fillna('-')
+            
             def parse_valuta_indisp(val):
                 v_str = str(val).strip().replace(' ', '')
                 if v_str in ['-', '--', 'nan', 'None', 'NaN', '']:
@@ -300,15 +335,15 @@ with tab1:
                 except:
                     return v_str
 
-            # Applichiamo la formattazione mirata mantenendo intatti i testi originali delle percentuali
             for col in df_tabella_indisp.columns:
                 col_lower = col.lower()
                 
-                # 1. Forza la formattazione VALUTA con decimali sulle colonne assolute di Shrinkage e Margine
+                if col in ['G2', 'Article']:
+                    df_tabella_indisp[col] = df_tabella_indisp[col].astype(str).replace(['None', 'nan', 'NaN'], '-')
+                    continue
+                
                 if 'shrinkage' in col_lower or ('margin' in col_lower and '%' not in col_lower and 'pp' not in col_lower):
                     df_tabella_indisp[col] = df_tabella_indisp[col].apply(parse_valuta_indisp)
-                
-                # 2. Lascia intatte le stringhe native per le percentuali, i codici e le descrizioni (rimuove solo i nulli grafici)
                 else:
                     df_tabella_indisp[col] = df_tabella_indisp[col].astype(str).apply(
                         lambda x: '-' if x.strip() in ['nan', 'None', 'NaN', ''] else x.strip()
