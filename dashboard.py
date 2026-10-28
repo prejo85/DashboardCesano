@@ -44,7 +44,9 @@ def load_and_clean_data(file_mensile):
         df["Date"] = df["Date"].astype(str).str.replace('"', '').str.strip()
         df["Date_Parsed"] = pd.to_datetime(df["Date"], format="%d/%m/%Y", errors="coerce")
 
-    return df = pd.read_csv(file_mensile, sep=",", skip_blank_lines=True, encoding="latin1")
+    return 
+    
+    df = pd.read_csv(file_mensile, sep=",", skip_blank_lines=True, encoding="latin1")
  
     # Pulizia nomi colonne e testi da spazi e doppie virgolette
     df.columns = df.columns.str.replace('"', '').str.strip()
