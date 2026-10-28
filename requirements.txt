@@ -1,2 +1,1 @@
-plotly
-pandas
+pip install streamlit pandas plotly openpyxl
