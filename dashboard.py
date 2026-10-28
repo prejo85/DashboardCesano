@@ -124,47 +124,59 @@ with tab1:
                 elif s.str.contains(',').any() and not s.str.contains(r'\.').any():
                     s = s.str.replace(',', '.', regex=False)
                 return pd.to_numeric(s, errors='coerce').fillna(0.0)
-            return pd.Series(dtype=float)
+            return pd.Series(dtype=float, index=dataframe.index)
 
-        # Mappatura posizionale esatta ricavata dall'ultimo file sorgente
-        sales_series = parse_to_numeric_series(dati_vista, 5)          
-        sales_py_series = parse_to_numeric_series(dati_vista, 6)       
-        margin_series = parse_to_numeric_series(dati_vista, 11)        
-        margin_py_series = parse_to_numeric_series(dati_vista, 12)     
-        avg_stock_series = parse_to_numeric_series(dati_vista, 13)     
-        stock_days_series = parse_to_numeric_series(dati_vista, 14)    
-        stock_days_py_series = parse_to_numeric_series(dati_vista, 15) 
-        shrink_series = parse_to_numeric_series(dati_vista, 16)        
-        shrink_py_series = parse_to_numeric_series(dati_vista, 17)     
+        # 1. Creiamo colonne numeriche temporanee pulite nel subset filtrato corrente
+        df_calc = dati_vista.copy()
+        df_calc['Sales_TY_Num'] = parse_to_numeric_series(df_calc, 5)   # Colonna 5: DA - Sales TT
+        df_calc['Sales_PY_Num'] = parse_to_numeric_series(df_calc, 6)   # Colonna 6: DA - Sales TT PY Custom Cal
+        df_calc['Margin_TY_Num'] = parse_to_numeric_series(df_calc, 11) # Colonna 11: DA - Front Margin
+        df_calc['Margin_PY_Num'] = parse_to_numeric_series(df_calc, 12) # Colonna 12: DA - Front Margin PY Custom Cal
+        df_calc['Stock_TY_Num'] = parse_to_numeric_series(df_calc, 13)  # Colonna 13: DA - Avg Stock
+        df_calc['Shrink_TY_Num'] = parse_to_numeric_series(df_calc, 16)  # Colonna 16: DA - Shrinkage NNBP
+        df_calc['Shrink_PY_Num'] = parse_to_numeric_series(df_calc, 17)  # Colonna 17: DA - Shrinkage NNBP PY Custom Cal
 
-        # Somme complessive kpi commerciali
-        sales_tot = float(sales_series.sum())
-        sales_py_tot = float(sales_py_series.sum())
-        margin_tot = float(margin_series.sum())
-        margin_py_tot = float(margin_py_series.sum())
-        shrink_tot = float(shrink_series.sum())
-        shrink_py_tot = float(shrink_py_series.sum())
-        avg_stock_tot = float(avg_stock_series.sum())
-        
-        # --- CALCOLO CORRETTO DEGLI STOCK DAYS (PONDERATI SUL GIORNO) ---
-        # Creiamo un set temporaneo raggruppato per data con le somme di Stock e Sales
-        df_daily = dati_vista.groupby(dati_vista.columns[0]).agg({
-            dati_vista.columns[13]: lambda x: parse_to_numeric_series(pd.DataFrame(x), 0).sum(),  # DA - Avg Stock
-            dati_vista.columns[5]:  lambda x: parse_to_numeric_series(pd.DataFrame(x), 0).sum(),  # DA - Sales TT
-            dati_vista.columns[6]:  lambda x: parse_to_numeric_series(pd.DataFrame(x), 0).sum()   # DA - Sales TT PY
+        # Totalizzatori Generali del Periodo
+        sales_tot = float(df_calc['Sales_TY_Num'].sum())
+        sales_py_tot = float(df_calc['Sales_PY_Num'].sum())
+        margin_tot = float(df_calc['Margin_TY_Num'].sum())
+        margin_py_tot = float(df_calc['Margin_PY_Num'].sum())
+        shrink_tot = float(df_calc['Shrink_TY_Num'].sum())
+        shrink_py_tot = float(df_calc['Shrink_PY_Num'].sum())
+        avg_stock_tot = float(df_calc['Stock_TY_Num'].sum())
+
+        # Incidenze percentuali del periodo
+        margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
+        shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
+        margin_on_sales_py = (margin_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
+        shrink_on_sales_py = (shrink_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
+
+        # Delta in % ed in Punti Percentuali (pp)
+        delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
+        delta_margin_pp = margin_on_sales - margin_on_sales_py
+        delta_shrink_pp = shrink_on_sales - shrink_on_sales_py
+
+        # 2. --- ENGINE DI CALCOLO GIORNALIERO DEGLI STOCK DAYS (REPARTO PER REPARTO COERENTE) ---
+        # Raggruppiamo le colonne numeriche aggregate per la colonna 0 (Date)
+        df_giornaliero = df_calc.groupby(df_calc.columns[0]).agg({
+            'Stock_TY_Num': 'sum',
+            'Sales_TY_Num': 'sum',
+            'Sales_PY_Num': 'sum'
         }).reset_index()
 
-        # Divisione dello Stock Giornaliero per le Sales Giornaliere
-        df_daily['Stock_Days_TY'] = df_daily.iloc[:, 1] / df_daily.iloc[:, 2]
-        df_daily['Stock_Days_PY'] = df_daily.iloc[:, 1] / df_daily.iloc[:, 3]
+        # Formula: Valore dello stock del giorno / sales di quel giorno
+        df_giornaliero['Days_TY'] = df_giornaliero['Stock_TY_Num'] / df_giornaliero['Sales_TY_Num']
+        df_giornaliero['Days_PY'] = df_giornaliero['Stock_TY_Num'] / df_giornaliero['Sales_PY_Num']
 
-        # Gestione di eventuali divisioni per zero o valori infiniti
-        df_daily = df_daily.replace([float('inf'), float('-inf')], 0.0).fillna(0.0)
+        # Sostituiamo gli infiniti generati da giorni a zero vendite
+        df_giornaliero = df_giornaliero.replace([float('inf'), float('-inf')], 0.0).fillna(0.0)
 
-        # Calcolo della media finale dei giorni di stock giornalieri complessivi
-        val_stock_days = float(df_daily['Stock_Days_TY'].mean())
-        val_stock_days_py = float(df_daily['Stock_Days_PY'].mean())
-        # -----------------------------------------------------------------
+        # Media aritmetica finale dei rapporti giornalieri
+        val_stock_days = float(df_giornaliero['Days_TY'].mean()) if not df_giornaliero.empty else 0.0
+        val_stock_days_py = float(df_giornaliero['Days_PY'].mean()) if not df_giornaliero.empty else 0.0
+        delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
+        # ---------------------------------------------------------------------------------------
+
 
         # Calcolo incidenze percentuali correnti e passate per i delta pp
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
