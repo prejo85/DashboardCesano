@@ -249,6 +249,7 @@ with tab1:
             st.metric(label="🏬 Avg Stock Last Day", value=fmt_valuta_interi(val_avg_stock_ultimo_giorno), delta=None)
         with m5:  
             st.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
+
 # =============================================================================
 # BLOCCO 3 - PARTE 2: INDICATORI CROSS-REPORT SUI VALORI ASSOLUTI
 # =============================================================================
@@ -408,8 +409,9 @@ with tab1:
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
         else:
             st.info("Carica i report aggiornati per popolare la griglia analitica degli articoli indispensabili.")
+
         # =============================================================================
-        # NUOVA SEZIONE GRAFICA: ANALISI MERCEOLOGICA CTG (FLESSIBILE AD ALTA PRECISIONE)
+        # NUOVA SEZIONE GRAFICA: ANALISI MERCEOLOGICA CTG (VERSIONE CORRETTA)
         # =============================================================================
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("📊 Analisi e Performance Mix Categorie (Report CTG)")
@@ -423,8 +425,8 @@ with tab1:
             col_sales_ctg = [c for c in df_ctg_clean.columns if 'sales' in c.lower() and 'py' not in c.lower() and '%' not in c.lower()]
             col_margin_ctg = [c for c in df_ctg_clean.columns if 'margin' in c.lower() and 'py' not in c.lower() and '%' not in c.lower()]
             
-            # Fallback posizionale se il rilevamento testuale fallisce
-            c_rep = col_rep_ctg[0] if col_rep_impl := col_rep_ctg else df_ctg_clean.columns[2]
+            # Fallback posizionali sicuri se il rilevamento testuale fallisce o trova liste vuote
+            c_rep = col_rep_ctg[0] if col_rep_ctg else df_ctg_clean.columns[2]
             c_cat = col_cat_ctg[0] if col_cat_ctg else df_ctg_clean.columns[3]
             c_sales = col_sales_ctg[0] if col_sales_ctg else df_ctg_clean.columns[5]
             c_margin = col_margin_ctg[0] if col_margin_ctg else df_ctg_clean.columns[11]
@@ -504,7 +506,6 @@ with tab1:
                 st.caption("⚠️ Nessuna categoria merceologica nel file CTG corrisponde ai filtri attivi.")
         else:
             st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'analisi grafica merceologica.")
-
 
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
