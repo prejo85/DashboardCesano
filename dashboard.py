@@ -112,7 +112,7 @@ with tab1:
         dati_vista = pd.DataFrame()
         st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
 # =============================================================================
-# BLOCCO 2: ENGINE DI CALCOLO COMMERCIALE E CALCOLO STOCK DAYS CRONOLOGICO
+# BLOCCO 2: ENGINE DI CALCOLO COMMERCIALE E ROTAZIONE SULL'ULTIMO GIORNO ATTIVO
 # =============================================================================
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
@@ -141,7 +141,7 @@ with tab1:
         df_calc['Shrink_TY_Num'] = parse_to_numeric_series(df_calc, 16) # Colonna 16: DA - Shrinkage NNBP
         df_calc['Shrink_PY_Num'] = parse_to_numeric_series(df_calc, 17) # Colonna 17: DA - Shrinkage NNBP PY Custom Cal
 
-        # Aggregazioni volumetriche totali del periodo (Manteniamo i progressivi mensili per le card generali)
+        # Aggregazioni volumetriche totali del periodo
         sales_tot = float(df_calc['Sales_TY_Num'].sum())
         sales_py_tot = float(df_calc['Sales_PY_Num'].sum())
         margin_tot = float(df_calc['Margin_TY_Num'].sum())
@@ -161,30 +161,29 @@ with tab1:
         delta_margin_pp = margin_on_sales - margin_on_sales_py
         delta_shrink_pp = shrink_on_sales - shrink_on_sales_py
 
-        # --- ALGORITMO DI INDIVIDUAZIONE CRONOLOGICA SICURA DELL'ULTIMO GIORNO ---
+        # --- ENGINE DI INDIVIDUAZIONE DELL'ULTIMO GIORNO REALE DI VENDITA ---
+        val_stock_days, val_stock_days_py = 0.0, 0.0
         try:
-            # Creiamo una colonna Datetime fittizia per ordinare correttamente le date europee (DD/MM/YYYY)
             df_calc['Date_Parsed'] = pd.to_datetime(df_calc.iloc[:, 0].astype(str).str.strip(), format='%d/%m/%Y', errors='coerce')
-            df_valide = df_calc[df_calc['Date_Parsed'].notna()]
             
-            if not df_valide.empty:
-                # Estraiamo la data più recente in assoluto per il filtro impostato
-                ultima_data_cronologica = df_valide['Date_Parsed'].max()
-                df_ultimo_giorno = df_valide[df_valide['Date_Parsed'] == ultima_data_cronologica]
+            # FILTRO CHIAVE: Prendiamo solo i giorni in cui l'aggregato delle vendite per la selezione corrente è maggiore di zero
+            df_giorni_attivi = df_calc.groupby('Date_Parsed').filter(lambda x: x['Sales_TY_Num'].sum() > 0)
+            
+            if not df_giorni_attivi.empty:
+                # Troviamo l'ultimo giorno reale in cui ci sono state vendite per questo specifico filtro
+                ultima_data_attiva = df_giorni_attivi['Date_Parsed'].max()
+                df_ultimo_giorno = df_giorni_attivi[df_giorni_attivi['Date_Parsed'] == ultima_data_attiva]
                 
-                # Sommiamo i rispettivi valori dell'ultimo giorno per i reparti/aree coinvolte
+                # Sommiamo stock e vendite di quel giorno specifico
                 stock_ultimo_giorno = float(df_ultimo_giorno['Stock_TY_Num'].sum())
                 sales_ultimo_giorno_ty = float(df_ultimo_giorno['Sales_TY_Num'].sum())
                 sales_ultimo_giorno_py = float(df_ultimo_giorno['Sales_PY_Num'].sum())
                 
-                # Formula Richiesta: Valore Stock del giorno / Sales del giorno
+                # Formula: Stock dell'ultimo giorno attivo / Sales dello stesso giorno
                 val_stock_days = (stock_ultimo_giorno / sales_ultimo_giorno_ty) if sales_ultimo_giorno_ty > 0 else 0.0
                 val_stock_days_py = (stock_ultimo_giorno / sales_ultimo_giorno_py) if sales_ultimo_giorno_py > 0 else 0.0
-            else:
-                val_stock_days, val_stock_days_py = 0.0, 0.0
         except:
-            # Fallback di sicurezza se la conversione datetime fallisce per formati dati imprevisti
-            val_stock_days, val_stock_days_py = 0.0, 0.0
+            pass
 
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
 
