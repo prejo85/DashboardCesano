@@ -272,7 +272,7 @@ with tab1:
             else:
                 st.caption("🔍 Seleziona un'area o un reparto per agganciare gli articoli indispensabili.")
 
-        # --- NUOVA SEZIONE: TABELLA DETTAGLIO ARTICOLI INDISPENSABILI (REVISIONE GENERALE DEL PARSER PERCENTUALI) ---
+        # --- NUOVA SEZIONE: TABELLA DETTAGLIO ARTICOLI INDISPENSABILI (VERSIONE FEDELTÀ EXCEL) ---
         st.markdown("<br>#### 📋 Elenco Dettagliato Articoli Indispensabili Rilevati", unsafe_allow_html=True)
         if col_rep_ind and len(codici_target) > 0 and not match_indisp.empty:
             
@@ -285,53 +285,34 @@ with tab1:
                 colonne_filtrate = [c for c in colonne_totali[3:] if c != 'Codice_Reparto_IND']
                 df_tabella_indisp = match_indisp[colonne_filtrate].copy()
             
-            # Riempie temporaneamente i valori nulli nativi (NaN) con un trattino pulito prima dei cicli
-            df_tabella_indisp = df_tabella_indisp.fillna('-')
-            
+            # Sottoprocesso locale di pulizia specifico per le colonne monetarie assolute
+            def parse_valuta_indisp(val):
+                v_str = str(val).strip().replace(' ', '')
+                if v_str in ['-', '--', 'nan', 'None', 'NaN', '']:
+                    return '-'
+                if ',' in v_str and '.' in v_str:
+                    v_str = v_str.replace('.', '').replace(',', '.')
+                elif ',' in v_str and '.' not in v_str:
+                    v_str = v_str.replace(',', '.')
+                try:
+                    num = float(v_str)
+                    return fmt_valuta_decimali(num)
+                except:
+                    return v_str
+
+            # Applichiamo la formattazione mirata mantenendo intatti i testi originali delle percentuali
             for col in df_tabella_indisp.columns:
                 col_lower = col.lower()
                 
-                # Ignora le colonne puramente descrittive (G2 e Article) che non devono subire modifiche matematiche
-                if col in ['G2', 'Article']:
-                    # Sostituiamo eventuali stringhe 'None' o 'nan' testuali residue
-                    df_tabella_indisp[col] = df_tabella_indisp[col].astype(str).replace(['None', 'nan', 'NaN'], '-')
-                    continue
+                # 1. Forza la formattazione VALUTA con decimali sulle colonne assolute di Shrinkage e Margine
+                if 'shrinkage' in col_lower or ('margin' in col_lower and '%' not in col_lower and 'pp' not in col_lower):
+                    df_tabella_indisp[col] = df_tabella_indisp[col].apply(parse_valuta_indisp)
                 
-                # Sottoprocesso locale di pulizia per intercettare i decimali con la virgola (es. 22,88)
-                def parse_table_row(val):
-                    v_str = str(val).strip().replace(' ', '')
-                    if v_str in ['-', '--', 'nan', 'None', 'NaN', '']:
-                        return None
-                    # Gestione del formato europeo standard con virgola decimale
-                    if ',' in v_str and '.' in v_str:
-                        v_str = v_str.replace('.', '').replace(',', '.')
-                    elif ',' in v_str and '.' not in v_str:
-                        v_str = v_str.replace(',', '.')
-                    try:
-                        return float(v_str)
-                    except:
-                        return None
-
-                # Applichiamo la trasformazione condizionale colonna per colonna
-                if 'sales' in col_lower:
-                    df_tabella_indisp[col] = df_tabella_indisp[col].apply(parse_table_row).map(
-                        lambda x: fmt_valuta_interi(x) if pd.notna(x) else '-'
-                    )
-                elif 'margin' in col_lower and '%' not in col_lower:
-                    df_tabella_indisp[col] = df_tabella_indisp[col].apply(parse_table_row).map(
-                        lambda x: fmt_valuta_decimali(x) if pd.notna(x) else '-'
-                    )
-                elif '%' in col_lower or 'margin' in col_lower or 'shrinkage' in col_lower:
-                    df_tabella_indisp[col] = df_tabella_indisp[col].apply(parse_table_row).map(
-                        lambda x: fmt_percentuale(x) if pd.notna(x) else '-'
-                    )
-                elif 'colli' in col_lower:
-                    df_tabella_indisp[col] = df_tabella_indisp[col].apply(parse_table_row).map(
-                        lambda x: f"{int(round(x)):,}".replace(',', '.') if pd.notna(x) else '-'
-                    )
+                # 2. Lascia intatte le stringhe native per le percentuali, i codici e le descrizioni (rimuove solo i nulli grafici)
                 else:
-                    # Per qualsiasi altra colonna non mappata, sostituiamo le scritte None grafiche
-                    df_tabella_indisp[col] = df_tabella_indisp[col].astype(str).replace(['None', 'nan', 'NaN'], '-')
+                    df_tabella_indisp[col] = df_tabella_indisp[col].astype(str).apply(
+                        lambda x: '-' if x.strip() in ['nan', 'None', 'NaN', ''] else x.strip()
+                    )
             
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
         else:
