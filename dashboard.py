@@ -14,19 +14,38 @@ st.markdown("### Analisi Multilivello: Store, Aree e Reparti")
 @st.cache_data
 def load_and_clean_data(file_mensile):
     def parse_numeric(series):
-        # Rimozione spazi, pulizia stringhe e gestione parentesi per i negativi
         s_clean = series.astype(str).str.replace(r'\s+', '', regex=True)
         s_clean = s_clean.str.replace('"', '', regex=False)
         s_clean = s_clean.str.replace('(', '-', regex=False).str.replace(')', '', regex=False)
-        
-        # Gestione separatore migliaia (rimozione della virgola)
         s_clean = s_clean.str.replace(',', '', regex=False)
         s_clean = s_clean.replace(['-', '--', 'nan', 'NaN', ''], '0')
         return pd.to_numeric(s_clean, errors='coerce').fillna(0.0)
 
-    # Lettura file CSV con codifica standard
-    df = pd.read_csv(file_mensile, sep=",", skip_blank_lines=True)
+    # AGGIORNATO: Aggiunto encoding="latin1" per evitare l'UnicodeDecodeError
+    df = pd.read_csv(file_mensile, sep=",", skip_blank_lines=True, encoding="latin1")
     
+    df.columns = df.columns.str.replace('"', '').str.strip()
+    for col in ["Store", "F/NF", "Sales Area Deparment", "Sales Department"]:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.replace('"', '').str.strip()
+
+    colonne_valori = [
+        "DA - Sales TT", "DA - Sales TT PY Custom Cal", 
+        "DA - Front Margin", "DA - Front Margin PY Custom Cal",
+        "DA - Stock Days", "DA - Avg Stock", "DA - Stock Days PY Custom Cal",
+        "DA - Shrinkage NNBP", "DA - Shrinkage NNBP PY Custom Cal"
+    ]
+
+    for col in colonne_valori:
+        if col in df.columns:
+            df[col] = parse_numeric(df[col])
+
+    if "Date" in df.columns:
+        df["Date"] = df["Date"].astype(str).str.replace('"', '').str.strip()
+        df["Date_Parsed"] = pd.to_datetime(df["Date"], format="%d/%m/%Y", errors="coerce")
+
+    return df = pd.read_csv(file_mensile, sep=",", skip_blank_lines=True, encoding="latin1")
+ 
     # Pulizia nomi colonne e testi da spazi e doppie virgolette
     df.columns = df.columns.str.replace('"', '').str.strip()
     for col in ["Store", "F/NF", "Sales Area Deparment", "Sales Department"]:
