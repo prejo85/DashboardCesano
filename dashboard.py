@@ -269,15 +269,88 @@ with tab1:
                 help=f"Valore totale delle giacenze rilevate nell'ultimo giorno utile del report."
             )
 
-        st.markdown("<br>#### 📦 Dettaglio Giacenze e Rotazioni", unsafe_allow_html=True)
-        df_stock_kpi = pd.DataFrame({
-            "Metrica": ["Giorni di Giacenza Correnti (Ponderati)", "Giorni di Giacenza Anno Prec. (PY)", "Stock Medio Corrente Complessivo"],
-            "Valore": [fmt_giorni(val_stock_days), fmt_giorni(val_stock_days_py), fmt_valuta_interi(avg_stock_tot)]
-        })
-        st.dataframe(df_stock_kpi, use_container_width=True, hide_index=True)
+        # =============================================================================
+        # NUOVA INTEGRAZIONE DINAMICA: COMPONENTI ESTERNI (BMPL & INDISPENSABILI)
+        # =============================================================================
+        st.markdown("<br>---", unsafe_allow_html=True)
+        st.subheader("🔗 Indicatori di Performance Cross-Report (BMPL & Indispensabili)")
+
+        # 1. Estrazione dinamica dei codici reparto unici selezionati (es. "110", "120")
+        reparti_inclusi = dati_vista.iloc[:, 4].dropna().unique() if len(dati_vista.columns) > 4 else []
+        lista_codici_target = [str(r)[:3].strip() for r in reparti_inclusi if pd.notna(r) and str(r).strip() != '']
+
+        # Funzione di utilità locale per generare i mini blocchi KPI nativi
+        def render_mini_kpi(label, current_val, py_val, is_currency=True):
+            delta_pct = ((current_val - py_val) / py_val * 100) if py_val != 0 else 0.0
+            val_str = fmt_valuta_interi(current_val) if is_currency else f"{int(round(current_val)):,}".replace(',', '.')
+            py_str = fmt_valuta_interi(py_val) if is_currency else f"{int(round(py_val)):,}".replace(',', '.')
+            
+            st.metric(
+                label=label,
+                value=val_str,
+                delta=f"{delta_pct:+.2f}% vs PY",
+                help=f"Valore Anno Precedente (PY): {py_str}"
+            )
+
+        col_c1, col_c2 = st.columns(2)
+        
+        # --- PANNELLO 1: REPORT BMPL REPARTI ---
+        with col_c1:
+            st.markdown("#### 📈 Sintesi Report BMPL Reparti")
+            col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+            
+            if col_rep_bmpl and lista_codici_target:
+                col_bmpl_target = col_rep_bmpl[0]
+                # Match se il codice reparto inizia con uno dei codici selezionati nei filtri
+                match_bmpl = df_rep[df_rep[col_bmpl_target].astype(str).str[:3].str.strip().isin(lista_codici_target)]
+                
+                if not match_bmpl.empty:
+                    # Parsing e somme dinamiche sul tracciato BMPL
+                    bmpl_sales = float(parse_to_numeric_series(match_bmpl, df_rep.columns.get_loc('Sales TT') if 'Sales TT' in df_rep.columns else 0).sum())
+                    bmpl_sales_py = float(parse_to_numeric_series(match_bmpl, df_rep.columns.get_loc('Sales TT PY Custom Cal') if 'Sales TT PY Custom Cal' in df_rep.columns else 0).sum())
+                    bmpl_margin = float(parse_to_numeric_series(match_bmpl, df_rep.columns.get_loc('Front Margin') if 'Front Margin' in df_rep.columns else 0).sum())
+                    bmpl_margin_py = float(parse_to_numeric_series(match_bmpl, df_rep.columns.get_loc('Front Margin PY Custom Cal') if 'Front Margin PY Custom Cal' in df_rep.columns else 0).sum())
+                    bmpl_colli = float(parse_to_numeric_series(match_bmpl, df_rep.columns.get_loc('# Colli') if '# Colli' in df_rep.columns else 0).sum())
+                    bmpl_colli_py = float(parse_to_numeric_series(match_bmpl, df_rep.columns.get_loc('# Colli PY Custom Cal') if '# Colli PY Custom Cal' in df_rep.columns else 0).sum())
+                    
+                    # Visualizzazione delle metriche correlate
+                    sub_col1, sub_col2, sub_col3 = st.columns(3)
+                    with sub_col1: render_mini_kpi("Sales TT (BMPL)", bmpl_sales, bmpl_sales_py)
+                    with sub_col2: render_mini_kpi("Front Margin (BMPL)", bmpl_margin, bmpl_margin_py)
+                    with sub_col3: render_mini_kpi("Volume Colli (BMPL)", bmpl_colli, bmpl_colli_py, is_currency=False)
+                else:
+                    st.caption("⚠️ Nessun dato BMPL corrispondente ai reparti selezionati.")
+            else:
+                st.caption("🔍 Seleziona un'area o un reparto per visualizzare l'analisi BMPL.")
+
+        # --- PANNELLO 2: REPORT ARTICOLI INDISPENSABILI ---
+        with col_c2:
+            st.markdown("#### 📌 Sintesi Articoli Indispensabili nel Mix")
+            col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+            
+            if col_rep_ind and lista_codici_target:
+                col_ind_target = col_rep_ind[0]
+                match_indisp = df_ind[df_ind[col_ind_target].astype(str).str[:3].str.strip().isin(lista_codici_target)]
+                
+                if not match_indisp.empty:
+                    # Parsing e somme dinamiche basate sui prefissi 'DA - ' del report indispensabili
+                    ind_sales = float(parse_to_numeric_series(match_indisp, df_ind.columns.get_loc('DA - Sales TT') if 'DA - Sales TT' in df_ind.columns else 0).sum())
+                    ind_sales_py = float(parse_to_numeric_series(match_indisp, df_ind.columns.get_loc('DA - Sales TT PY Custom Cal') if 'DA - Sales TT PY Custom Cal' in df_ind.columns else 0).sum())
+                    ind_colli = float(parse_to_numeric_series(match_indisp, df_ind.columns.get_loc('DA - #Colli') if 'DA - #Colli' in df_ind.columns else 0).sum())
+                    ind_colli_py = float(parse_to_numeric_series(match_indisp, df_ind.columns.get_loc('DA - #Colli PY Custom Cal') if 'DA - #Colli PY Custom Cal' in df_ind.columns else 0).sum())
+                    n_articoli = match_indisp[df_ind.columns[0]].nunique() # Conta gli SKU univoci
+                    
+                    sub_ind1, sub_ind2 = st.columns(2)
+                    with sub_ind1: render_mini_kpi("Sales (Indispensabili)", ind_sales, ind_sales_py)
+                    with sub_ind2: render_mini_kpi("Volume Colli (Indisp.)", ind_colli, ind_colli_py, is_currency=False)
+                    st.info(f"🎯 **{n_articoli}** Articoli Indispensabili monitorati nella selezione corrente.")
+                else:
+                    st.caption("⚠️ Nessun articolo indispensabile trovato per questa selezione.")
+            else:
+                st.caption("🔍 Seleziona un'area o un reparto per visualizzare l'analisi degli articoli indispensabili.")
     else:
         st.warning("Nessun record corrispondente rilevato all'interno dei filtri correnti.")
-
+ 
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
 # =============================================================================
