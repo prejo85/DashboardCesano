@@ -272,29 +272,53 @@ with tab1:
             else:
                 st.caption("🔍 Seleziona un'area o un reparto per agganciare gli articoli indispensabili.")
 
-        # --- NUOVA SEZIONE: TABELLA DETTAGLIO ARTICOLI INDISPENSABILI (IN FONDO PAGINA) ---
+        # --- NUOVA SEZIONE: TABELLA DETTAGLIO ARTICOLI INDISPENSABILI (SOLO DA G2 IN POI) ---
         st.markdown("<br>#### 📋 Elenco Dettagliato Articoli Indispensabili Rilevati", unsafe_allow_html=True)
         if col_rep_ind and len(codici_target) > 0 and not match_indisp.empty:
-            # Selezioniamo le colonne chiave presenti nel file degli indispensabili per popolare la tabella
-            colonne_visualizzazione = [c for c in df_ind.columns if c not in ['Codice_Reparto_IND']]
-            df_tabella_indisp = match_indisp[colonne_visualizzazione].copy()
             
-            # Formattiamo le colonne numeriche della tabella prima di mostrarle
+            # --- RIMOZIONE DELLE PRIME COLONNE: TAGLIAMO IL DATAFRAME DA 'G2' IN POI ---
+            # Cerchiamo l'indice della colonna 'G2' all'interno del file degli indispensabili
+            colonne_totali = list(df_ind.columns)
+            try:
+                indice_g2 = colonne_totali.index('G2')
+                # Teniamo solo le colonne a partire da G2 in avanti, escludendo il codice d'appoggio interno
+                colonne_filtrate = [c for c in colonne_totali[indice_g2:] if c != 'Codice_Reparto_IND']
+                df_tabella_indisp = match_indisp[colonne_filtrate].copy()
+            except ValueError:
+                # Se la colonna non si chiama esattamente 'G2', facciamo partire il taglio dalla 3ª colonna (indice 3)
+                colonne_filtrate = [c for c in colonne_totali[3:] if c != 'Codice_Reparto_IND']
+                df_tabella_indisp = match_indisp[colonne_filtrate].copy()
+            
+            # Formattazione chirurgica basata sui nomi reali delle colonne per evitare l'azzeramento delle stringhe
             for col in df_tabella_indisp.columns:
-                if 'sales' in col.lower() or 'margin' in col.lower():
-                    # Applica formattazione valuta se contiene dati monetari
-                    try: df_tabella_indisp[col] = parse_to_numeric_series(df_tabella_indisp, df_tabella_indisp.columns.get_loc(col)).map(fmt_valuta_interi)
+                col_lower = col.lower()
+                
+                # Applica la valuta solo alle colonne monetarie effettive (Sales TT o Front Margin Assoluto)
+                if 'sales' in col_lower and 'department' not in col_lower and 'area' not in col_lower:
+                    try:
+                        df_tabella_indisp[col] = parse_to_numeric_series(df_tabella_indisp, df_tabella_indisp.columns.get_loc(col)).map(fmt_valuta_interi)
                     except: pass
-                elif 'colli' in col.lower():
-                    # Applica formattazione intera senza decimali per i pezzi/colli
-                    try: df_tabella_indisp[col] = parse_to_numeric_series(df_tabella_indisp, df_tabella_indisp.columns.get_loc(col)).map(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                elif 'margin' in col_lower and '%' not in col_lower and 'department' not in col_lower and 'area' not in col_lower:
+                    try:
+                        df_tabella_indisp[col] = parse_to_numeric_series(df_tabella_indisp, df_tabella_indisp.columns.get_loc(col)).map(fmt_valuta_decimali)
+                    except: pass
+                
+                # Mantiene o formatta le colonne percentuali native (senza azzerarle come testo)
+                elif '%' in col_lower or 'margin' in col_lower:
+                    try:
+                        series_num = parse_to_numeric_series(df_tabella_indisp, df_tabella_indisp.columns.get_loc(col))
+                        df_tabella_indisp[col] = series_num.map(fmt_percentuale)
+                    except: pass
+                
+                # Formattazione dei volumi di colli come numeri interi europei
+                elif 'colli' in col_lower:
+                    try:
+                        df_tabella_indisp[col] = parse_to_numeric_series(df_tabella_indisp, df_tabella_indisp.columns.get_loc(col)).map(lambda x: f"{int(round(x)):,}".replace(',', '.'))
                     except: pass
             
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
         else:
-            st.info("Carica il file degli Indispensabili e imposta i filtri per consultare la tabella dei prodotti.")
-    else:
-        st.warning("Nessun record corrispondente rilevato all'interno dei filtri correnti.")
+            st.info("Carica i report aggiornati per popolare la griglia analitica degli articoli indispensabili.")
 
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
