@@ -112,7 +112,7 @@ with tab1:
         dati_vista = pd.DataFrame()
         st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
 # =============================================================================
-# BLOCCO 2: ENGINE DI CALCOLO COMMERCIALE E CALCOLO STOCK DAYS
+# BLOCCO 2: ENGINE DI CALCOLO COMMERCIALE E CALCOLO STOCK DAYS (ULTIMO GIORNO)
 # =============================================================================
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
@@ -131,19 +131,17 @@ with tab1:
                 return pd.to_numeric(s, errors='coerce').fillna(0.0)
             return pd.Series(dtype=float, index=dataframe.index)
 
-        # Estrazione colonne numeriche d'appoggio nel subset filtrato corrente
+        # Creazione colonne numeriche d'appoggio nel subset filtrato corrente
         df_calc = dati_vista.copy()
         df_calc['Sales_TY_Num'] = parse_to_numeric_series(df_calc, 5)   # Colonna 5: DA - Sales TT
         df_calc['Sales_PY_Num'] = parse_to_numeric_series(df_calc, 6)   # Colonna 6: DA - Sales TT PY Custom Cal
         df_calc['Margin_TY_Num'] = parse_to_numeric_series(df_calc, 11) # Colonna 11: DA - Front Margin
         df_calc['Margin_PY_Num'] = parse_to_numeric_series(df_calc, 12) # Colonna 12: DA - Front Margin PY Custom Cal
         df_calc['Stock_TY_Num'] = parse_to_numeric_series(df_calc, 13)  # Colonna 13: DA - Avg Stock
-        df_calc['Stock_Days_TY'] = parse_to_numeric_series(df_calc, 14) # Colonna 14: DA - Stock Days
-        df_calc['Stock_Days_PY'] = parse_to_numeric_series(df_calc, 15) # Colonna 15: DA - Stock Days PY Custom Cal
-        df_calc['Shrink_TY_Num'] = parse_to_numeric_series(df_calc, 16)  # Colonna 16: DA - Shrinkage NNBP
-        df_calc['Shrink_PY_Num'] = parse_to_numeric_series(df_calc, 17)  # Colonna 17: DA - Shrinkage NNBP PY Custom Cal
+        df_calc['Shrink_TY_Num'] = parse_to_numeric_series(df_calc, 16) # Colonna 16: DA - Shrinkage NNBP
+        df_calc['Shrink_PY_Num'] = parse_to_numeric_series(df_calc, 17) # Colonna 17: DA - Shrinkage NNBP PY Custom Cal
 
-        # Aggregazioni volumetriche totali del periodo selezionato
+        # Aggregazioni volumetriche totali del periodo (Manteniamo i progressivi mensili per le card generali)
         sales_tot = float(df_calc['Sales_TY_Num'].sum())
         sales_py_tot = float(df_calc['Sales_PY_Num'].sum())
         margin_tot = float(df_calc['Margin_TY_Num'].sum())
@@ -152,41 +150,40 @@ with tab1:
         shrink_py_tot = float(df_calc['Shrink_PY_Num'].sum())
         avg_stock_tot = float(df_calc['Stock_TY_Num'].sum())
 
-        # Calcolo incidenze percentuali correnti (TY) e passate (PY)
+        # Calcolo incidenze percentuali progressive
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         margin_on_sales_py = (margin_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
         shrink_on_sales_py = (shrink_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
 
-        # Variazioni classiche (Delta %)
+        # Delta classici e scostamenti in pp
         delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
-
-        # Calcolo scostamenti in Punti Percentuali (Sottrazione diretta pp)
         delta_margin_pp = margin_on_sales - margin_on_sales_py
         delta_shrink_pp = shrink_on_sales - shrink_on_sales_py
 
-        # --- ALGORITMO DI CALCOLO STOCK DAYS SU MATRICE GIORNALIERA AGGREGATA ---
-        df_giornaliero = df_calc.groupby(df_calc.iloc[:, 0]).agg({
-            'Stock_TY_Num': 'sum',
-            'Sales_TY_Num': 'sum',
-            'Sales_PY_Num': 'sum'
-        }).reset_index()
+        # --- NUOVA LOGICA: CALCOLO PUNTUALE DEGLI STOCK DAYS SULL'ULTIMA DATA ---
+        # 1. Identifichiamo l'ultima data disponibile (Colonna 0)
+        df_calc.iloc[:, 0] = df_calc.iloc[:, 0].astype(str).str.strip()
+        lista_date = df_calc.iloc[:, 0].unique()
+        
+        if len(lista_date) > 0:
+            ultima_data = lista_date[-1]  # Prende l'ultima riga cronologica del file sorgente
+            df_ultimo_giorno = df_calc[df_calc.iloc[:, 0] == ultima_data]
+            
+            # Sommiamo stock e vendite dell'ultimo giorno per i reparti inclusi nel filtro
+            stock_ultimo_giorno = float(df_ultimo_giorno['Stock_TY_Num'].sum())
+            sales_ultimo_giorno_ty = float(df_ultimo_giorno['Sales_TY_Num'].sum())
+            sales_ultimo_giorno_py = float(df_ultimo_giorno['Sales_PY_Num'].sum())
+            
+            # Formula: Stock dell'ultimo giorno / Vendite dell'ultimo giorno
+            val_stock_days = (stock_ultimo_giorno / sales_ultimo_giorno_ty) if sales_ultimo_giorno_ty > 0 else 0.0
+            val_stock_days_py = (stock_ultimo_giorno / sales_ultimo_giorno_py) if sales_ultimo_giorno_py > 0 else 0.0
+        else:
+            val_stock_days, val_stock_days_py = 0.0, 0.0
 
-        # Divisione analitica giornaliera: Stock del giorno / Vendite del giorno
-        df_giornaliero['Days_TY'] = df_giornaliero.apply(
-            lambda r: r['Stock_TY_Num'] / r['Sales_TY_Num'] if r['Sales_TY_Num'] > 0 else 0.0, axis=1
-        )
-        df_giornaliero['Days_PY'] = df_giornaliero.apply(
-            lambda r: r['Stock_TY_Num'] / r['Sales_PY_Num'] if r['Sales_PY_Num'] > 0 else 0.0, axis=1
-        )
-
-        # Filtro di protezione: escludiamo dalla media le giornate senza attività
-        giorni_attivi_ty = df_giornaliero[df_giornaliero['Days_TY'] > 0]
-        giorni_attivi_py = df_giornaliero[df_giornaliero['Days_PY'] > 0]
-
-        val_stock_days = float(giorni_attivi_ty['Days_TY'].mean()) if not giorni_attivi_ty.empty else 0.0
-        val_stock_days_py = float(giorni_attivi_py['Days_PY'].mean()) if not giorni_attivi_py.empty else 0.0
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
+        # ---------------------------------------------------------------------------------------
+
 # =============================================================================
 # BLOCCO 3: FORMATTAZIONE EUROPEA E VISUALIZZAZIONE KPI CARDS
 # =============================================================================
