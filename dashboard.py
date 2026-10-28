@@ -145,24 +145,38 @@ with tab1:
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
         
-        # --- ESTRAZIONE SICURA TRAMITE INDICI NUMERICI (.iloc) ---
-        # Verifichiamo quante colonne sono effettivamente presenti nel dataframe per evitare errori di fuori intervallo
-        num_colonne = len(dati_vista.columns)
+        # --- FUNZIONE DI PARSING LOCALE APPOSITAMENTE TARATA SUI VALORI DEL CSV ---
+        def safe_sum(dataframe, col_index):
+            if len(dataframe.columns) > col_index:
+                # Estraggo la colonna come stringa, rimuovo spazi, converto i formati europei e sommo
+                series = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
+                series = series.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                series = pd.to_numeric(series, errors='coerce').fillna(0.0)
+                return float(series.sum())
+            return 0.0
 
-        # Mappa i valori basandoti sulla posizione (indice da 0 a N). 
-        # Modifica i numeri tra parentesi quadre se le colonne si trovano in posizioni diverse.
-        sales_tot = float(dati_vista.iloc[:, 4].sum()) if num_colonne > 4 else 0.0          # Esempio: 5ª colonna
-        sales_py_tot = float(dati_vista.iloc[:, 5].sum()) if num_colonne > 5 else 0.0       # Esempio: 6ª colonna
-        margin_tot = float(dati_vista.iloc[:, 6].sum()) if num_colonne > 6 else 0.0         # Esempio: 7ª colonna
-        margin_py_tot = float(dati_vista.iloc[:, 7].sum()) if num_colonne > 7 else 0.0       # Esempio: 8ª colonna
-        shrink_tot = float(dati_vista.iloc[:, 8].sum()) if num_colonne > 8 else 0.0         # Esempio: 9ª colonna
-        shrink_py_tot = float(dati_vista.iloc[:, 9].sum()) if num_colonne > 9 else 0.0       # Esempio: 10ª colonna
+        def safe_mean(dataframe, col_index):
+            if len(dataframe.columns) > col_index:
+                series = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
+                series = series.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                series = pd.to_numeric(series, errors='coerce').fillna(0.0)
+                return float(series.mean())
+            return 0.0
+
+        # --- ESTRAZIONE TRAMITE INDICI POSIZIONALI DEI DOCUMENTI COMMERCIALI ---
+        sales_tot = safe_sum(dati_vista, 5)          # Colonna 5: DA - Sales TT
+        sales_py_tot = safe_sum(dati_vista, 8)       # Colonna 8: DA - Sales TT PY Custom Cal
+        margin_tot = safe_sum(dati_vista, 11)       # Colonna 11: DA - Front Margin
+        margin_py_tot = safe_sum(dati_vista, 12)     # Colonna 12: DA - Front Margin PY Custom Cal
+        shrink_tot = safe_sum(dati_vista, 16)       # Colonna 16: DA - Shrinkage NNBP
+        shrink_py_tot = safe_sum(dati_vista, 17)     # Colonna 17: DA - Shrinkage NNBP PY Custom Cal
         
-        val_stock_days = float(dati_vista.iloc[:, 10].mean()) if num_colonne > 10 else 0.0   # Esempio: 11ª colonna
-        val_stock_days_py = float(dati_vista.iloc[:, 11].mean()) if num_colonne > 11 else 0.0# Esempio: 12ª colonna
-        avg_stock_tot = float(dati_vista.iloc[:, 12].sum()) if num_colonne > 12 else 0.0     # Esempio: 13ª colonna
+        val_stock_days = safe_mean(dati_vista, 13)   # Colonna 13: DA - Stock Days
+        val_stock_days_py = safe_mean(dati_vista, 15) # Colonna 15: DA - Stock Days PY Custom Cal
+        avg_stock_tot = safe_sum(dati_vista, 14)     # Colonna 14: DA - Avg Stock
         # -------------------------------------------------------------------------------------
         
+        # Calcolo delle incidenze percentuali e dei delta KPI
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         
