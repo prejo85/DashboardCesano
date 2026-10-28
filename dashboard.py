@@ -145,16 +145,18 @@ with tab1:
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
         
-        sales_tot = float(dati_vista['DA - Sales TT'].sum())
-        sales_py_tot = float(dati_vista['DA - Sales TT PY Custom Cal'].sum())
-        margin_tot = float(dati_vista['DA - Front Margin'].sum())
-        margin_py_tot = float(dati_vista['DA - Front Margin PY Custom Cal'].sum())
-        shrink_tot = float(dati_vista['DA - Shrinkage NNBP'].sum())
+        # --- ESTRAZIONE SICURA DELLE COLONNE (Previene il KeyError) ---
+        sales_tot = float(dati_vista['DA - Sales TT'].sum()) if 'DA - Sales TT' in dati_vista.columns else 0.0
+        sales_py_tot = float(dati_vista['DA - Sales TT PY Custom Cal'].sum()) if 'DA - Sales TT PY Custom Cal' in dati_vista.columns else 0.0
+        margin_tot = float(dati_vista['DA - Front Margin'].sum()) if 'DA - Front Margin' in dati_vista.columns else 0.0
+        margin_py_tot = float(dati_vista['DA - Front Margin PY Custom Cal'].sum()) if 'DA - Front Margin PY Custom Cal' in dati_vista.columns else 0.0
+        shrink_tot = float(dati_vista['DA - Shrinkage NNBP'].sum()) if 'DA - Shrinkage NNBP' in dati_vista.columns else 0.0
         shrink_py_tot = float(dati_vista['DA - Shrinkage NNBP PY Custom Cal'].sum()) if 'DA - Shrinkage NNBP PY Custom Cal' in dati_vista.columns else 0.0
         
-        val_stock_days = float(dati_vista['DA - Stock Days'].mean())
-        val_stock_days_py = float(dati_vista['DA - Stock Days PY Custom Cal'].mean())
-        avg_stock_tot = float(dati_vista['DA - Avg Stock'].sum())
+        val_stock_days = float(dati_vista['DA - Stock Days'].mean()) if 'DA - Stock Days' in dati_vista.columns else 0.0
+        val_stock_days_py = float(dati_vista['DA - Stock Days PY Custom Cal'].mean()) if 'DA - Stock Days PY Custom Cal' in dati_vista.columns else 0.0
+        avg_stock_tot = float(dati_vista['DA - Avg Stock'].sum()) if 'DA - Avg Stock' in dati_vista.columns else 0.0
+        # ---------------------------------------------------------------
         
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
