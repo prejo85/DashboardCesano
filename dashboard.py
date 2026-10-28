@@ -485,11 +485,9 @@ with tab1:
                         st.plotly_chart(fig_ctg, use_container_width=True)
                 else:
                     st.caption("⚠️ I record del file CTG per il reparto o l'area selezionata contengono volumi di fatturato pari a zero.")
-            else:
-                st.caption("⚠️ Nessun dato merceologico nel file CTG corrisponde ai filtri gerarchici attivi della Mensilizzazione.")
         else:
-            st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'esplorazione grafica di canali e categorie.")
-
+            st.caption("⚠️ Nessun dato merceologico nel file CTG corrisponde ai filtri gerarchici attivi della Mensilizzazione.")
+        
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
 # =============================================================================
