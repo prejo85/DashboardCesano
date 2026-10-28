@@ -211,73 +211,21 @@ with tab1:
         except:
             pass
 
-# =============================================================================
-# BLOCCO 3: FORMATTAZIONE EUROPEA E VISUALIZZAZIONE KPI CARDS
-# =============================================================================
-        # Funzioni di localizzazione e arrotondamento stringhe
-        def fmt_valuta_interi(valore):
-            return f"€ {int(round(valore)):,}".replace(',', '.')
-
-        def fmt_valuta_decimali(valore):
-            return f"€ {valore:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-
-        def fmt_percentuale(valore):
-            return f"{valore:.2f}%".replace('.', ',')
-
-        def fmt_giorni(valore):
-            return f"{valore:.1f} gg".replace('.', ',')
-
-        # Rendering a cinque colonne in puro Python nativo
-        st.markdown("#### 📊 Indicatori Chiave di Performance")
-        m1, m2, m3, m4, m5 = st.columns(5)
-        
-        with m1:
-            st.metric(
-                label="💰 Sales TT", 
-                value=fmt_valuta_interi(sales_tot), 
-                delta=f"{delta_sales_pct:+.2f}% vs PY",
-                help=f"Fatturato progressivo anno precedente: {fmt_valuta_interi(sales_py_tot)}"
-            )
-        with m2:
-            st.metric(
-                label="📈 Front Margin %", 
-                value=fmt_percentuale(margin_on_sales), 
-                delta=f"{delta_margin_pp:+.2f} pp vs PY",
-                help=f"Margine PY: {fmt_percentuale(margin_on_sales_py)} | Valore assoluto TY: {fmt_valuta_decimali(margin_tot)}"
-            )
-        with m3:
-            st.metric(
-                label="📦 Stock Days", 
-                value=fmt_giorni(val_stock_days), 
-                delta=f"{delta_stock_pct:+.2f}% vs PY", 
-                delta_color="inverse",
-                help=f"Giacenza PY: {fmt_giorni(val_stock_days_py)}"
-            )
-        with m5:  # Spostato shrinkage alla fine per inserire l'AVG vicino ai giorni di stock
-            st.metric(
-                label="📉 Shrinkage (Sfrido)", 
-                value=fmt_percentuale(shrink_on_sales), 
-                delta=f"{delta_shrink_pp:+.2f} pp vs PY",
-                delta_color="inverse",
-                help=f"Sfrido PY: {fmt_percentuale(shrink_on_sales_py)} | Valore assoluto TY: {fmt_valuta_decimali(shrink_tot)}"
-            )
-        with m4:  # NUOVA CARD: Inserita perfettamente tra Stock Days e Shrinkage
-            st.metric(
-                label="🏬 Avg Stock Last Day", 
-                value=fmt_valuta_interi(val_avg_stock_ultimo_giorno),
-                delta=None,
-                help=f"Valore totale delle giacenze rilevate nell'ultimo giorno utile del report."
-            )
-
         # =============================================================================
-        # NUOVA INTEGRAZIONE DINAMICA: COMPONENTI ESTERNI (BMPL & INDISPENSABILI)
+        # BLOCCO 3 AGGIORNATO: INTEGRAZIONE DINAMICA CROSS-REPORT (PRECISION ENGINE)
         # =============================================================================
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("🔗 Indicatori di Performance Cross-Report (BMPL & Indispensabili)")
 
-        # 1. Estrazione dinamica dei codici reparto unici selezionati (es. "110", "120")
-        reparti_inclusi = dati_vista.iloc[:, 4].dropna().unique() if len(dati_vista.columns) > 4 else []
-        lista_codici_target = [str(r)[:3].strip() for r in reparti_inclusi if pd.notna(r) and str(r).strip() != '']
+        import re
+
+        # 1. Estrazione dinamica e pulita dei codici reparto unici filtrati (es. {'110', '190'}) tramite Regex
+        reparti_mensilizzazione = dati_vista.iloc[:, 4].dropna().astype(str).str.strip()
+        codici_target = set()
+        for r in reparti_mensilizzazione:
+            match = re.search(r'\d+', r)
+            if match:
+                codici_target.add(match.group())
 
         # Funzione di utilità locale per generare i mini blocchi KPI nativi
         def render_mini_kpi(label, current_val, py_val, is_currency=True):
@@ -294,29 +242,24 @@ with tab1:
 
         col_c1, col_c2 = st.columns(2)
         
-        # --- PANNELLO 1: REPORT BMPL REPARTI (DYNAMIC MATCH SUI CODICI REPARTO) ---
+        # --- PANNELLO 1: REPORT BMPL REPARTI (ALLINEAMENTO STRUTTURALE ALL'ECCEL) ---
         with col_c1:
             st.markdown("#### 📈 Sintesi Report BMPL Reparti")
-            
-            # Troviamo la colonna del reparto nel file BMPL (cerca la colonna che contiene 'reparto' o 'department')
             col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
             
-            if col_rep_bmpl and not dati_vista.empty:
+            if col_rep_bmpl and not dati_vista.empty and len(codici_target) > 0:
                 col_bmpl_nome = col_rep_bmpl[0]
                 
-                # 1. Estraiamo i codici a 3 cifre puliti dai reparti attualmente filtrati nella Mensilizzazione
-                reparti_mensilizzazione = dati_vista.iloc[:, 4].dropna().astype(str).str.strip()
-                codici_target = set([r[:3] for r in reparti_mensilizzazione if r[:3].isdigit()])
-                
-                # 2. Creiamo una copia del dataframe BMPL e puliamo la sua colonna dei reparti
+                # Creiamo una copia per ripulire i codici reparto estratti da BMPL usando lo stesso motore Regex
                 df_rep_clean = df_rep.copy()
-                df_rep_clean['Codice_Reparto_BMPL'] = df_rep_clean[col_bmpl_nome].astype(str).str.strip().str[:3]
+                df_rep_clean['Codice_Reparto_BMPL'] = df_rep_clean[col_bmpl_nome].astype(str).apply(
+                    lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
+                )
                 
-                # Filtriamo il file BMPL prendendo solo i reparti che corrispondono alla selezione corrente
+                # Filtriamo il file BMPL legandolo unicamente alle chiavi attive del filtro iniziale
                 match_bmpl = df_rep_clean[df_rep_clean['Codice_Reparto_BMPL'].isin(codici_target)]
                 
                 if not match_bmpl.empty:
-                    # Funzione ad hoc per il parsing numerico di BMPL (rimuove i punti e preserva gli interi)
                     def parse_bmpl_clean(dataframe, col_name):
                         if col_name in dataframe.columns:
                             s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
@@ -325,7 +268,7 @@ with tab1:
                             return pd.to_numeric(s, errors='coerce').fillna(0.0)
                         return pd.Series(0.0, index=dataframe.index)
 
-                    # Calcolo dei totali dinamici basati esclusivamente sulle righe corrispondenti ai filtri
+                    # Calcolo aggregati dinamici sulle sole righe corrispondenti
                     bmpl_sales = float(parse_bmpl_clean(match_bmpl, 'Sales TT').sum())
                     bmpl_sales_py = float(parse_bmpl_clean(match_bmpl, 'Sales TT PY Custom Cal').sum())
                     bmpl_margin = float(parse_bmpl_clean(match_bmpl, 'Front Margin').sum())
@@ -333,16 +276,14 @@ with tab1:
                     bmpl_colli = float(parse_bmpl_clean(match_bmpl, '# Colli').sum())
                     bmpl_colli_py = float(parse_bmpl_clean(match_bmpl, '# Colli PY Custom Cal').sum())
                     
-                    # Calcolo delle percentuali di margine e del delta in punti percentuali (pp)
                     margin_pct_ty = (bmpl_margin / bmpl_sales * 100) if bmpl_sales != 0 else 0.0
                     margin_pct_py = (bmpl_margin_py / bmpl_sales_py * 100) if bmpl_sales_py != 0 else 0.0
                     delta_margin_bmpl_pp = margin_pct_ty - margin_pct_py
                     
-                    # Delta percentuali per vendite e colli
                     delta_sales_bmpl = ((bmpl_sales - bmpl_sales_py) / bmpl_sales_py * 100) if bmpl_sales_py != 0 else 0.0
                     delta_colli_bmpl = ((bmpl_colli - bmpl_colli_py) / bmpl_colli_py * 100) if bmpl_colli_py != 0 else 0.0
 
-                    # Renderizzazione delle card metriche di Streamlit
+                    # Renderizzazione delle tre card simmetriche per il file BMPL
                     sub_col1, sub_col2, sub_col3 = st.columns(3)
                     with sub_col1: 
                         st.metric(label="Sales TT (BMPL)", value=fmt_valuta_interi(bmpl_sales), delta=f"{delta_sales_bmpl:+.2f}% vs PY")
@@ -353,35 +294,36 @@ with tab1:
                 else:
                     st.caption("⚠️ Nessun reparto del file BMPL corrisponde ai filtri attivi della Mensilizzazione.")
             else:
-                st.caption("🔍 Seleziona uno Store o un'Area per calcolare i dati aggregati del report BMPL.")
+                st.caption("🔍 Seleziona uno Store o un'Area per visualizzare i dati storici del report BMPL.")
 
         # --- PANNELLO 2: REPORT ARTICOLI INDISPENSABILI ---
         with col_c2:
             st.markdown("#### 📌 Sintesi Articoli Indispensabili nel Mix")
             col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
             
-            if col_rep_ind and lista_codici_target:
-                col_ind_target = col_rep_ind[0]
-                match_indisp = df_ind[df_ind[col_ind_target].astype(str).str[:3].str.strip().isin(lista_codici_target)]
+            if col_rep_ind and len(codici_target) > 0:
+                col_ind_nome = col_rep_ind[0]
+                df_ind_clean = df_ind.copy()
+                df_ind_clean['Codice_Reparto_IND'] = df_ind_clean[col_ind_nome].astype(str).apply(
+                    lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
+                )
+                match_indisp = df_ind_clean[df_ind_clean['Codice_Reparto_IND'].isin(codici_target)]
                 
                 if not match_indisp.empty:
-                    # Parsing e somme dinamiche basate sui prefissi 'DA - ' del report indispensabili
                     ind_sales = float(parse_to_numeric_series(match_indisp, df_ind.columns.get_loc('DA - Sales TT') if 'DA - Sales TT' in df_ind.columns else 0).sum())
                     ind_sales_py = float(parse_to_numeric_series(match_indisp, df_ind.columns.get_loc('DA - Sales TT PY Custom Cal') if 'DA - Sales TT PY Custom Cal' in df_ind.columns else 0).sum())
                     ind_colli = float(parse_to_numeric_series(match_indisp, df_ind.columns.get_loc('DA - #Colli') if 'DA - #Colli' in df_ind.columns else 0).sum())
                     ind_colli_py = float(parse_to_numeric_series(match_indisp, df_ind.columns.get_loc('DA - #Colli PY Custom Cal') if 'DA - #Colli PY Custom Cal' in df_ind.columns else 0).sum())
-                    n_articoli = match_indisp[df_ind.columns[0]].nunique() # Conta gli SKU univoci
+                    n_articoli = match_indisp[df_ind.columns[0]].nunique()
                     
                     sub_ind1, sub_ind2 = st.columns(2)
                     with sub_ind1: render_mini_kpi("Sales (Indispensabili)", ind_sales, ind_sales_py)
                     with sub_ind2: render_mini_kpi("Volume Colli (Indisp.)", ind_colli, ind_colli_py, is_currency=False)
-                    st.info(f"🎯 **{n_articoli}** Articoli Indispensabili monitorati nella selezione corrente.")
+                    st.info(f"🎯 **{n_articoli}** Articoli Indispensabili filtrati ed elaborati nel mix corrente.")
                 else:
                     st.caption("⚠️ Nessun articolo indispensabile trovato per questa selezione.")
             else:
-                st.caption("🔍 Seleziona un'area o un reparto per visualizzare l'analisi degli articoli indispensabili.")
-    else:
-        st.warning("Nessun record corrispondente rilevato all'interno dei filtri correnti.")
+                st.caption("🔍 Seleziona un'area o un reparto per agganciare gli articoli indispensabili.")
  
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
