@@ -22,14 +22,12 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
                 df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
         except:
             df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
-            
-        # Pulisce le colonne eliminando le virgolette generate da Excel
-        df.columns = df.columns.astype(str).str.replace('"', '', regex=False).str.replace("'", "", regex=False).str.strip()
+        df.columns = df.columns.str.strip()
         df = df[df.iloc[:, 0].notna()]
         return df
 
     def parse_numeric(series):
-        series_clean = series.astype(str).str.replace('"', '', regex=False).str.replace("'", "", regex=False).str.replace(r'\s+', '', regex=True)
+        series_clean = series.astype(str).str.replace(r'\s+', '', regex=True)
         series_clean = series_clean.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
         series_clean = series_clean.replace(['-', '--', 'nan', 'NaN', ''], '0')
         return pd.to_numeric(series_clean, errors='coerce').fillna(0.0)
@@ -78,37 +76,41 @@ df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
 
 # -----------------------------------------------------------------------------
-# 4. ENGINE GRAFICO: CONTEMPORARY KPI CARD SENZA REFUSI HTML (RETTIFICATO)
+# 4. MOTORE GRAFICO DI GENERAZIONE DELLE KPI CARD AD ALTA LEGGIBILITÀ
 # -----------------------------------------------------------------------------
-def get_modern_kpi_card(icon, label, value_str, delta_val, py_info_str="", is_positive_good=True, show_delta=True, is_points=False):
+def get_modern_kpi_card(icon, label, value_str, delta_val, py_info_str="", is_positive_good=True, show_delta=True):
     is_positive = delta_val >= 0
     if not is_positive_good:
         is_positive = not is_positive
         
     bg_badge = "#23c45e" if is_positive else "#ef4444"
     icon_color = "#3b82f6" if is_positive_good else "#f59e0b"
-    suffix = " p.p. vs PY" if is_points else "% vs PY"
     
-    badge_html = f'<div style="background-color: {bg_badge}; color: #ffffff; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; width: fit-content; text-align: center; margin-bottom: 4px;">{delta_val:+.2f}{suffix}</div>' if show_delta else ""
-    py_html = f'<div style="color: #718096; font-size: 0.78rem; font-weight: 500; margin-top: 2px;">{py_info_str}</div>' if py_info_str else ""
+    badge_html = f"""
+    <div style="background-color: {bg_badge}; color: #ffffff; padding: 3px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; display: inline-block; width: fit-content; text-align: center;">
+        {delta_val:+.2f}% vs PY
+    </div>
+    """ if show_delta else ""
+
+    py_html = f'<span style="color: #718096; font-size: 0.75rem; font-weight: 500; margin-top: 2px;">{py_info_str}</span>' if py_info_str else ""
 
     return f"""
-    <div style="background: linear-gradient(135deg, #1e2530 0%, #161b24 100%); padding: 20px; border-radius: 12px; border: 1px solid #2d3748; box-shadow: 0 4px 15px rgba(0,0,0,0.3); min-height: 160px; display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+    <div style="background: linear-gradient(135deg, #1e2530 0%, #161b24 100%); padding: 20px; border-radius: 12px; border: 1px solid #2d3748; box-shadow: 0 4px 15px rgba(0,0,0,0.3); min-height: 155px; display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="color: #a0aec0; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">{label}</span>
             <span style="font-size: 1.3rem; color: {icon_color};">{icon}</span>
         </div>
-        <div style="margin: 10px 0;">
-            <h2 style="font-size: 1.9rem; font-weight: 800; color: #ffffff; margin: 0; letter-spacing: -0.5px;">{value_str}</h2>
+        <div style="margin: 6px 0;">
+            <h2 style="font-size: 1.85rem; font-weight: 800; color: #ffffff; margin: 0; letter-spacing: -0.5px;">{value_str}</h2>
         </div>
-        <div style="display: flex; flex-direction: column; align-items: flex-start;">
+        <div style="display: flex; flex-direction: column; gap: 2px;">
             {badge_html}
             {py_html}
         </div>
     </div>
     """
 # =============================================================================
-# SCHEDA 1: PERFORMANCE STRUTTURA STORE, AREE E REPARTI MIX
+# SCHEDA 1: PERFORMANCE STRUTTURA STORE, AREE E REPARTI
 # =============================================================================
 with tab1:
     st.header("🏬 Monitoraggio Gerarchico Store & Performance Mix")
@@ -116,9 +118,9 @@ with tab1:
     col_f1, col_f2, col_f3 = st.columns(3)
     with col_f1:
         lista_store = sorted(df_men["Store"].unique()) if "Store" in df_men.columns else []
-        selected_store = st.selectbox("Seleziona Store:", lista_store) if lista_store else None
+        selected_store = st.selectbox("Seleziona Store:", lista_store)
     with col_f2:
-        df_filtrato_store = df_men[df_men["Store"] == selected_store] if (selected_store and "Store" in df_men.columns) else df_men.copy()
+        df_filtrato_store = df_men[df_men["Store"] == selected_store] if "Store" in df_men.columns else df_men.copy()
         lista_aree = ["--- TOTALE STORE ---"] + sorted(df_filtrato_store["Sales Area Deparment"].unique()) if "Sales Area Deparment" in df_filtrato_store.columns else ["--- TOTALE STORE ---"]
         selected_area = st.selectbox("Seleziona Area di Vendita:", lista_aree)
     with col_f3:
@@ -130,7 +132,6 @@ with tab1:
             lista_reparti = ["--- DETTAGLIO RICHIESTO ---"]
         selected_reparto = st.selectbox("Seleziona Reparto:", lista_reparti)
 
-    # Logica di instradamento dell'aggregazione dati con fallback di sicurezza
     if selected_area == "--- TOTALE STORE ---":
         dati_vista = df_filtrato_store.copy()
         titolo_vista = f"Visualizzazione: TOTALE STORE {selected_store}"
@@ -138,65 +139,46 @@ with tab1:
         dati_vista = df_filtrato_area.copy()
         titolo_vista = f"Visualizzazione: TOTALE AREA {selected_area} ({selected_store})"
     else:
-        dati_vista = df_filtrato_area[df_filtrato_area["Sales Department"] == selected_reparto] if (selected_reparto and "Sales Department" in df_filtrato_area.columns) else pd.DataFrame()
+        dati_vista = df_filtrato_area[df_filtrato_area["Sales Department"] == selected_reparto] if "Sales Department" in df_filtrato_area.columns else pd.DataFrame()
         titolo_vista = f"Visualizzazione REPARTO: {selected_reparto} ({selected_store})"
 
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
         
-        # --- RICERCA DINAMICA PROTETTA DELLE COLONNE PER EVITARE I KEYERROR ---
-        c_sales = [c for c in dati_vista.columns if 'sales tt' in c.lower() and 'py' not in c.lower()]
-        c_sales_py = [c for c in dati_vista.columns if 'sales tt' in c.lower() and 'py' in c.lower()]
-        c_margin = [c for c in dati_vista.columns if 'front margin' in c.lower() and 'py' not in c.lower()]
-        c_margin_py = [c for c in dati_vista.columns if 'front margin' in c.lower() and 'py' in c.lower()]
-        c_shrink = [c for c in dati_vista.columns if 'shrinkage' in c.lower() and 'py' not in c.lower()]
-        c_shrink_py = [c for c in dati_vista.columns if 'shrinkage' in c.lower() and 'py' in c.lower()]
-        c_stock = [c for c in dati_vista.columns if 'stock days' in c.lower() and 'py' not in c.lower()]
-        c_stock_py = [c for c in dati_vista.columns if 'stock days' in c.lower() and 'py' in c.lower()]
-        c_avg_stock = [c for c in dati_vista.columns if 'avg stock' in c.lower()]
-
-        # 1. SALES TT: Somma e benchmark %
-        sales_tot = float(dati_vista[c_sales[0]].sum()) if c_sales else 0.0
-        sales_py_tot = float(dati_vista[c_sales_py[0]].sum()) if c_sales_py else 0.0
-        delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
+        sales_tot = float(dati_vista['DA - Sales TT'].sum())
+        sales_py_tot = float(dati_vista['DA - Sales TT PY Custom Cal'].sum())
+        margin_tot = float(dati_vista['DA - Front Margin'].sum())
+        margin_py_tot = float(dati_vista['DA - Front Margin PY Custom Cal'].sum())
+        shrink_tot = float(dati_vista['DA - Shrinkage NNBP'].sum())
+        shrink_py_tot = float(dati_vista['DA - Shrinkage NNBP PY Custom Cal'].sum()) if 'DA - Shrinkage NNBP PY Custom Cal' in dati_vista.columns else 0.0
         
-        # 2. FRONT MARGIN %: Incidenza e benchmark scostamento aritmetico p.p.
-        margin_tot = float(dati_vista[c_margin[0]].sum()) if c_margin else 0.0
-        margin_py_tot = float(dati_vista[c_margin_py[0]].sum()) if c_margin_py else 0.0
+        val_stock_days = float(dati_vista['DA - Stock Days'].mean())
+        val_stock_days_py = float(dati_vista['DA - Stock Days PY Custom Cal'].mean())
+        avg_stock_tot = float(dati_vista['DA - Avg Stock'].sum())
+        
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
-        margin_on_sales_py = (margin_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
-        delta_margin_points = margin_on_sales - margin_on_sales_py
-        
-        # 3. SHRINKAGE %: Incidenza e benchmark scostamento aritmetico p.p.
-        shrink_tot = float(dati_vista[c_shrink[0]].sum()) if c_shrink else 0.0
-        shrink_py_tot = float(dati_vista[c_shrink_py[0]].sum()) if c_shrink_py else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
-        shrink_on_sales_py = (shrink_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
-        delta_shrink_points = shrink_on_sales - shrink_on_sales_py
         
-        # 4. STOCK DAYS: Calcolato come media semplice dei valori dei reparti
-        val_stock_days = float(dati_vista[c_stock[0]].mean()) if c_stock else 0.0
-        val_stock_days_py = float(dati_vista[c_stock_py[0]].mean()) if c_stock_py else 0.0
+        delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
+        delta_margin_pct = ((margin_tot - margin_py_tot) / margin_py_tot * 100) if margin_py_tot != 0 else 0.0
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
-        avg_stock_tot = float(dati_vista[c_avg_stock[0]].sum()) if c_avg_stock else 0.0
+        delta_shrink_pct = ((shrink_tot - shrink_py_tot) / shrink_py_tot * 100) if shrink_py_tot != 0 else 0.0
 
-        # Estrazione condizionale dati CTG
         reparti_inclusi = dati_vista["Sales Department"].dropna().unique() if "Sales Department" in dati_vista.columns else []
         lista_codici_target = [str(r)[:3].strip() for r in reparti_inclusi if pd.notna(r)]
 
         col_rep_ctg_check = [c for c in df_ctg.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-        dati_ctg_macro = df_ctg[df_ctg[col_rep_ctg_check[0]].astype(str).str[:3].str.strip().isin(lista_codici_target)] if col_rep_ctg_check else pd.DataFrame()
-        
-        if not dati_ctg_macro.empty:
-            c_ctg_s = [c for c in dati_ctg_macro.columns if 'sales tt' in c.lower() and 'py' not in c.lower()]
-            c_ctg_spy = [c for c in dati_ctg_macro.columns if 'sales tt' in c.lower() and 'py' in c.lower()]
-            ctg_sales = float(dati_ctg_macro[c_ctg_s[0]].sum()) if c_ctg_s else 0.0
-            ctg_sales_py = float(dati_ctg_macro[c_ctg_spy[0]].sum()) if c_ctg_spy else 0.0
+        if col_rep_ctg_check:
+            col_ctg_singola = col_rep_ctg_check[0]
+            dati_ctg_macro = df_ctg[df_ctg[col_ctg_singola].astype(str).str[:3].str.strip().isin(lista_codici_target)]
+        else:
+            dati_ctg_macro = pd.DataFrame()
             
-            c_acc = [c for c in dati_ctg_macro.columns if 'accrediti' in c.lower() and 'py' not in c.lower()]
-            c_acc_py = [c for c in dati_ctg_macro.columns if 'accrediti' in c.lower() and 'py' in c.lower()]
-            accrediti_tot = float(dati_ctg_macro[c_acc[0]].sum()) if c_acc else 0.0
-            accrediti_py_tot = float(dati_ctg_macro[c_acc_py[0]].sum()) if c_acc_py else 0.0
+        if not dati_ctg_macro.empty:
+            ctg_sales = float(dati_ctg_macro['Sales TT'].sum()) if 'Sales TT' in dati_ctg_macro.columns else 0.0
+            ctg_sales_py = float(dati_ctg_macro['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in dati_ctg_macro.columns else 0.0
+            accrediti_tot = float(dati_ctg_macro['Accrediti'].sum()) if 'Accrediti' in dati_ctg_macro.columns else 0.0
+            accrediti_py_tot = float(dati_ctg_macro['Accrediti PY Custom Cal'].sum()) if 'Accrediti PY Custom Cal' in dati_ctg_macro.columns else 0.0
             
             if accrediti_tot > 0: accrediti_tot = -accrediti_tot
             if accrediti_py_tot > 0: accrediti_py_tot = -accrediti_py_tot
@@ -206,12 +188,11 @@ with tab1:
             
             col_flag_hvs = [c for c in dati_ctg_macro.columns if 'hvs' in c.lower()]
             if col_flag_hvs:
-                hvs_pulito = dati_ctg_macro[col_flag_hvs[0]].astype(str).str.upper().str.replace(r'\s+', '', regex=True)
+                col_hvs_singola = col_flag_hvs[0]
+                hvs_pulito = dati_ctg_macro[col_hvs_singola].astype(str).str.upper().str.replace(r'\s+', '', regex=True)
                 match_hvs = dati_ctg_macro[hvs_pulito == 'HVS']
-                c_hvs_s = [c for c in match_hvs.columns if 'sales tt' in c.lower() and 'py' not in c.lower()]
-                c_hvs_spy = [c for c in match_hvs.columns if 'sales tt' in c.lower() and 'py' in c.lower()]
-                hvs_sales_tot = float(match_hvs[c_hvs_s[0]].sum()) if c_hvs_s and not match_hvs.empty else 0.0
-                hvs_sales_py = float(match_hvs[c_hvs_spy[0]].sum()) if c_hvs_spy and not match_hvs.empty else 0.0
+                hvs_sales_tot = float(match_hvs['Sales TT'].sum()) if 'Sales TT' in match_hvs.columns else 0.0
+                hvs_sales_py = float(match_hvs['Sales TT PY Custom Cal'].sum()) if 'Sales TT PY Custom Cal' in match_hvs.columns else 0.0
                 delta_hvs_pct = ((hvs_sales_tot - hvs_sales_py) / hvs_sales_py * 100) if hvs_sales_py != 0 else 0.0
             else:
                 hvs_sales_tot, hvs_sales_py, delta_hvs_pct = 0.0, 0.0, 0.0
@@ -219,34 +200,91 @@ with tab1:
             accrediti_pct, delta_accrediti_pct, accrediti_py_pct = 0.0, 0.0, 0.0
             hvs_sales_tot, hvs_sales_py, delta_hvs_pct = 0.0, 0.0, 0.0
 
-        # STAMPA RIGA 1 & RIGA 2
+        # RENDERING GRAFICO CARD RIGA 1 & RIGA 2
         m1, m2, m3, m4 = st.columns(4)
         with m1:
-            st.markdown(get_modern_kpi_card("💰", "Sales TT", f"€ {sales_tot:,.2f}", delta_sales_pct, f"Prec: € {sales_py_tot:,.2f}", True, is_points=False), unsafe_allow_html=True)
+            st.markdown(get_modern_kpi_card("💰", "Sales TT", f"€ {sales_tot:,.2f}", delta_sales_pct, f"Prec: € {sales_py_tot:,.2f}", True), unsafe_allow_html=True)
         with m2:
-            st.markdown(get_modern_kpi_card("📈", "Front Margin %", f"{margin_on_sales:.2f}%", delta_margin_points, f"Prec: {margin_on_sales_py:.2f}%", True, is_points=True), unsafe_allow_html=True)
+            st.markdown(get_modern_kpi_card("📈", "Front Margin %", f"{margin_on_sales:.2f}%", delta_margin_pct, f"Valore: € {margin_tot:,.2f}", True), unsafe_allow_html=True)
         with m3:
-            st.markdown(get_modern_kpi_card("📦", "Stock Days (Media)", f"{val_stock_days:.1f} gg", delta_stock_pct, f"Prec: {val_stock_days_py:.1f} gg", False, is_points=False), unsafe_allow_html=True)
+            st.markdown(get_modern_kpi_card("📦", "Stock Days", f"{val_stock_days:.1f} gg", delta_stock_pct, f"Prec: {val_stock_days_py:.1f} gg", False), unsafe_allow_html=True)
         with m4:
-            st.markdown(get_modern_kpi_card("📉", "Shrinkage (Sfrido)", f"{shrink_on_sales:.2f}%", delta_shrink_points, f"Prec: {shrink_on_sales_py:.2f}%", False, is_points=True), unsafe_allow_html=True)
+            st.markdown(get_modern_kpi_card("📉", "Shrinkage (Sfrido)", f"{shrink_on_sales:.2f}%", delta_shrink_pct, f"Valore: € {shrink_tot:,.2f}", False), unsafe_allow_html=True)
         
         st.markdown("<br>##### 👥 Focus Canali & Qualità Vendite (Dati Report CTG)", unsafe_allow_html=True)
         m_extra1, m_extra2 = st.columns(2)
         with m_extra1:
-            st.markdown(get_modern_kpi_card("💳", "Accrediti % su Sales", f"{accrediti_pct:.2f}%", delta_accrediti_pct, f"Prec Incid: {accrediti_py_pct:.2f}%", False, is_points=True), unsafe_allow_html=True)
+            st.markdown(get_modern_kpi_card("💳", "Accrediti % su Sales", f"{accrediti_pct:.2f}%", delta_accrediti_pct, f"Prec Incid: {accrediti_py_pct:.2f}%", False), unsafe_allow_html=True)
         with m_extra2:
-            st.markdown(get_modern_kpi_card("🏆", "Fatturato Clienti HVS (Bulk)", f"€ {hvs_sales_tot:,.2f}", delta_hvs_pct, f"Prec: € {hvs_sales_py:,.2f}", True, is_points=False), unsafe_allow_html=True)
+            st.markdown(get_modern_kpi_card("🏆", "Fatturato Clienti HVS (Bulk)", f"€ {hvs_sales_tot:,.2f}", delta_hvs_pct, f"Prec: € {hvs_sales_py:,.2f}", True), unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("#### 📦 Dettaglio Giacenze e Rotazioni")
         df_stock_kpi = pd.DataFrame({
-            "Metrica": ["Giorni di Giacenza Correnti (Media Semplice)", "Giorni di Giacenza Anno Prec. (PY)", "Stock Medio Corrente Complessivo"],
+            "Metrica": ["Giorni di Giacenza Correnti", "Giorni di Giacenza Anno Prec. (PY)", "Stock Medio Corrente Complessivo"],
             "Valore": [f"{val_stock_days:.1f} Giorni", f"{val_stock_days_py:.1f} Giorni", f"€ {avg_stock_tot:,.2f}"]
         })
         st.dataframe(df_stock_kpi, use_container_width=True, hide_index=True)
     else:
         st.warning("Nessun dato corrispondente trovato nel file Mensilizzazione.")
-    
+    st.markdown("---")
+    st.subheader("🔗 Indicatori di Performance dai File Esterni (BMPL & Indispensabili)")
+
+    def get_mini_kpi_block(label, current_val, py_val, is_currency=True, is_positive_good=True):
+        delta_pct = ((current_val - py_val) / py_val * 100) if py_val != 0 else 0.0
+        color = "#2ecc71" if (delta_pct >= 0 if is_positive_good else delta_pct <= 0) else "#e74c3c"
+        val_str = f"€ {current_val:,.2f}" if is_currency else f"{int(current_val):,}"
+        py_str = f"€ {py_val:,.2f}" if is_currency else f"{int(py_val):,}"
+        return f"""
+        <div style="background-color: #1e2430; padding: 12px; border-radius: 6px; border: 1px solid #2d3748; margin-bottom: 8px;">
+            <span style="color: #a0aec0; font-size: 0.8rem; font-weight: bold; text-transform: uppercase;">{label}</span>
+            <h3 style="margin: 2px 0; font-size: 1.4rem; font-weight: 700; color: #ffffff;">{val_str}</h3>
+            <span style="color: {color}; font-size: 0.85rem; font-weight: 600;">{delta_pct:+.2f}% vs PY <span style="color: #718096; font-size: 0.75rem;">(ex {py_str})</span></span>
+        </div>
+        """
+
+    col_c1, col_c2 = st.columns(2)
+    with col_c1:
+        with st.container(border=True):
+            st.markdown("#### 📈 Sintesi Totale BMPL Reparti")
+            col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+            if col_rep_bmpl:
+                col_rep_target = col_rep_bmpl[0]
+                match_bmpl = df_rep[df_rep[col_rep_target].astype(str).str[:3].str.strip().isin(lista_codici_target)] if lista_codici_target else pd.DataFrame()
+                if not match_bmpl.empty:
+                    bmpl_sales = float(match_bmpl['Sales TT'].sum())
+                    bmpl_sales_py = float(match_bmpl['Sales TT PY Custom Cal'].sum())
+                    bmpl_margin = float(match_bmpl['Front Margin'].sum())
+                    bmpl_margin_py = float(match_bmpl['Front Margin PY Custom Cal'].sum())
+                    bmpl_colli = float(match_bmpl['# Colli'].sum())
+                    bmpl_colli_py = float(match_bmpl['# Colli PY Custom Cal'].sum())
+                    
+                    st.markdown(get_mini_kpi_block("Sales TT (BMPL)", bmpl_sales, bmpl_sales_py), unsafe_allow_html=True)
+                    st.markdown(get_mini_kpi_block("Front Margin (BMPL)", bmpl_margin, bmpl_margin_py), unsafe_allow_html=True)
+                    st.markdown(get_mini_kpi_block("Volume # Colli (BMPL)", bmpl_colli, bmpl_colli_py, is_currency=False), unsafe_allow_html=True)
+                else:
+                    st.caption("Nessun record BMPL associato ai filtri correnti.")
+
+    with col_c2:
+        with st.container(border=True):
+            st.markdown("#### 📌 Sintesi Totale Articoli Indispensabili")
+            col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+            if col_rep_ind:
+                col_rep_target_ind = col_rep_ind[0]
+                match_indisp = df_ind[df_ind[col_rep_target_ind].astype(str).str[:3].str.strip().isin(lista_codici_target)] if lista_codici_target else pd.DataFrame()
+                if not match_indisp.empty:
+                    ind_sales = float(match_indisp['DA - Sales TT'].sum())
+                    ind_sales_py = float(match_indisp['DA - Sales TT PY Custom Cal'].sum())
+                    ind_colli = float(match_indisp['DA - #Colli'].sum())
+                    ind_colli_py = float(match_indisp['DA - #Colli PY Custom Cal'].sum())
+                    
+                    st.markdown(get_mini_kpi_block("Sales TT (Indispensabili)", ind_sales, ind_sales_py), unsafe_allow_html=True)
+                    st.markdown(get_mini_kpi_block("Volume # Colli (Indispensabili)", ind_colli, ind_colli_py, is_currency=False), unsafe_allow_html=True)
+                    n_articoli = match_indisp['Article'].nunique() if 'Article' in match_indisp.columns else 0
+                    st.markdown(f"""<div style="background-color: #232936; padding: 8px; border-radius: 4px; text-align: center; border: 1px dashed #4a5568; margin-top: 12px;"><span style="color: #cbd5e0; font-size: 0.85rem;">Articoli Chiave Tracciati nel Mix: <b>{n_articoli}</b></span></div>""", unsafe_allow_html=True)
+                else:
+                    st.caption("Nessun articolo indispensabile abbinato ai filtri correnti.")
+
     st.markdown("---")
     st.subheader("👥 Vista Canale e Categoria Cliente (Dati Report CTG)")
     if not dati_ctg_macro.empty:
@@ -257,7 +295,6 @@ with tab1:
             if "Customer Category" in pivot_ctg.columns and "Sales TT" in pivot_ctg.columns:
                 color_col = "CTG" if "CTG" in pivot_ctg.columns else None
                 fig_ctg_bar = px.bar(pivot_ctg, x="Customer Category", y="Sales TT", color=color_col, barmode="group", title="Fatturato per Canale/Categoria Cliente")
-                fig_ctg_bar.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                 st.plotly_chart(fig_ctg_bar, use_container_width=True)
             st.dataframe(pivot_ctg.sort_values(by="Sales TT", ascending=False), use_container_width=True, hide_index=True)
 
@@ -283,6 +320,7 @@ with tab2:
         df_sel_filtrato = df_sel_filtrato[df_sel_filtrato["MPRO Club"].isin(mpro_club)]
     if ricerca_cliente and "Customer" in df_sel.columns:
         df_sel_filtrato = df_sel_filtrato[df_sel_filtrato["Customer"].astype(str).str.contains(ricerca_cliente, case=False, na=False)]
+
     sellout_sales_tot = float(df_sel_filtrato["Sales TT"].sum()) if "Sales TT" in df_sel_filtrato.columns else 0.0
     sellout_margin_tot = float(df_sel_filtrato["Front Margin"].sum()) if "Front Margin" in df_sel_filtrato.columns else 0.0
     sellout_visits_tot = float(df_sel_filtrato["# Visit"].sum()) if "# Visit" in df_sel_filtrato.columns else 0.0
@@ -298,6 +336,7 @@ with tab2:
         st.markdown(get_modern_kpi_card("👣", "Volume Totale Visite", f"{int(sellout_visits_tot):,}", 0.0, "", True, show_delta=False), unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
+
     c_g1, c_g2 = st.columns(2)
     with c_g1:
         if "Venditore" in df_sel_filtrato.columns:
@@ -322,7 +361,7 @@ with tab2:
         
         df_customer_pivoted = df_sel_filtrato.groupby(raggruppamento_cols).agg(agg_dict).reset_index().sort_values(by="Sales TT", ascending=False)
         df_customer_pivoted["Sales TT"] = df_customer_pivoted["Sales TT"].map('€ {:,.2f}'.format)
-        if "Front Margin" in df_customer_pivoted.columns:
-            df_customer_pivoted["Front Margin"] = df_customer_pivoted["Front Margin"].map('€ {:,.2f}'.format)
-            
+        
+    if "Front Margin" in df_customer_pivoted.columns:
+        df_customer_pivoted["Front Margin"] = df_customer_pivoted["Front Margin"].map('€ {:,.2f}'.format)
         st.dataframe(df_customer_pivoted, use_container_width=True, hide_index=True)
