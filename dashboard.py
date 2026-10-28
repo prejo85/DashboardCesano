@@ -23,12 +23,15 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
                 df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
         except:
             df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
-        df.columns = df.columns.str.strip()
+            
+        # PULIZIA COMPLETA DA DOPPI APICI E VIRGOLETTE NEI NOMI DELLE COLONNE
+        df.columns = df.columns.astype(str).str.replace('"', '', regex=False).str.replace("'", "", regex=False).str.strip()
         df = df[df.iloc[:, 0].notna()]
         return df
 
     def parse_numeric(series):
-        series_clean = series.astype(str).str.replace(r'\s+', '', regex=True)
+        # Rimozione sicura di virgolette e formattazione numerica italiana
+        series_clean = series.astype(str).str.replace('"', '', regex=False).str.replace("'", "", regex=False).str.replace(r'\s+', '', regex=True)
         series_clean = series_clean.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
         series_clean = series_clean.replace(['-', '--', 'nan', 'NaN', ''], '0')
         return pd.to_numeric(series_clean, errors='coerce').fillna(0.0)
@@ -58,6 +61,7 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
             df_men[col] = parse_numeric(df_men[col])
 
     return df_rep, df_ctg, df_sel, df_ind, df_men
+
 # -----------------------------------------------------------------------------
 # 3. INTERFACCIA CARICAMENTO NELLA SIDEBAR LATERALE E CREAZIONE TAB
 # -----------------------------------------------------------------------------
@@ -72,12 +76,12 @@ if not (u_rep and u_ctg and u_sel and u_ind and u_men):
     st.info("💡 Carica i 5 report commerciali puliti nel pannello laterale sinistro per attivare l'interfaccia.")
     st.stop()
 
-# Inizializzazione dei dati puliti
+# Inizializzazione dei dataframe e delle schede
 df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel, u_ind, u_men)
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
 
 # -----------------------------------------------------------------------------
-# 4. ENGINE GRAFICO: CONTEMPORARY KPI CARD SENZA REFUSI HTML
+# 4. ENGINE GRAFICO: CONTEMPORARY KPI CARD SENZA REFUSI HTML (RETTIFICATO)
 # -----------------------------------------------------------------------------
 def get_modern_kpi_card(icon, label, value_str, delta_val, py_info_str="", is_positive_good=True, show_delta=True, is_points=False):
     is_positive = delta_val >= 0
@@ -88,31 +92,27 @@ def get_modern_kpi_card(icon, label, value_str, delta_val, py_info_str="", is_po
     icon_color = "#3b82f6" if is_positive_good else "#f59e0b"
     suffix = "p.p. vs PY" if is_points else "% vs PY"
     
-    badge_html = f"""
-    <div style="background-color: {bg_badge}; color: #ffffff; padding: 3px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; display: inline-block; width: fit-content; text-align: center;">
-        {delta_val:+.2f}{suffix}
-    </div>
-    """ if show_delta else ""
-
-    py_html = f'<span style="color: #718096; font-size: 0.75rem; font-weight: 500; margin-top: 2px;">{py_info_str}</span>' if py_info_str else ""
+    badge_html = f'<div style="background-color: {bg_badge}; color: #ffffff; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; width: fit-content; text-align: center; margin-bottom: 4px;">{delta_val:+.2f}{suffix}</div>' if show_delta else ""
+    py_html = f'<div style="color: #718096; font-size: 0.78rem; font-weight: 500; margin-top: 2px;">{py_info_str}</div>' if py_info_str else ""
 
     return f"""
-    <div style="background: linear-gradient(135deg, #1e2530 0%, #161b24 100%); padding: 20px; border-radius: 12px; border: 1px solid #2d3748; box-shadow: 0 4px 15px rgba(0,0,0,0.3); min-height: 155px; display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div style="background: linear-gradient(135deg, #1e2530 0%, #161b24 100%); padding: 20px; border-radius: 12px; border: 1px solid #2d3748; box-shadow: 0 4px 15px rgba(0,0,0,0.3); min-height: 160px; display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
             <span style="color: #a0aec0; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">{label}</span>
             <span style="font-size: 1.3rem; color: {icon_color};">{icon}</span>
         </div>
-        <div style="margin: 6px 0;">
-            <h2 style="font-size: 1.85rem; font-weight: 800; color: #ffffff; margin: 0; letter-spacing: -0.5px;">{value_str}</h2>
+        <div style="margin: 10px 0;">
+            <h2 style="font-size: 1.9rem; font-weight: 800; color: #ffffff; margin: 0; letter-spacing: -0.5px;">{value_str}</h2>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 2px;">
+        <div style="display: flex; flex-direction: column; align-items: flex-start;">
             {badge_html}
             {py_html}
         </div>
     </div>
     """
+
 # =============================================================================
-# SCHEDA 1: PERFORMANCE STRUTTURA STORE, AREE E REPARTI MIX (PARTE A - FILTRI)
+# SCHEDA 4: PERFORMANCE STRUTTURA STORE, AREE E REPARTI MIX (PARTE A - FILTRI)
 # =============================================================================
 with tab1:
     st.header("🏬 Monitoraggio Gerarchico Store & Performance Mix")
