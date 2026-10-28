@@ -249,6 +249,7 @@ with tab1:
             
     else:
         st.warning("Nessun dato corrispondente trovato nel file Mensilizzazione.")
+
     st.markdown("---")
     st.subheader("🔗 Indicatori di Performance dai File Esterni (BMPL & Indispensabili)")
 
@@ -271,6 +272,7 @@ with tab1:
             st.markdown("#### 📈 Sintesi Totale BMPL Reparti")
             col_rep_bmpl = [c for c in df_rep.columns if 'department' in c.lower() or 'reparto' in c.lower()]
             if col_rep_bmpl:
+                # CORREZIONE: Estraiamo l'elemento stringa [0] invece di passare l'intera lista
                 col_rep_target = col_rep_bmpl[0]
                 match_bmpl = df_rep[df_rep[col_rep_target].astype(str).str[:3].str.strip().isin(lista_codici_target)] if lista_codici_target else pd.DataFrame()
                 if not match_bmpl.empty:
@@ -286,11 +288,13 @@ with tab1:
                     st.markdown(get_mini_kpi_block("Volume # Colli (BMPL)", bmpl_colli, bmpl_colli_py, is_currency=False), unsafe_allow_html=True)
                 else:
                     st.caption("Nessun record BMPL associato ai filtri correnti.")
+
     with col_c2:
         with st.container(border=True):
             st.markdown("#### 📌 Sintesi Totale Articoli Indispensabili")
             col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
             if col_rep_ind:
+                # CORREZIONE: Estraiamo l'elemento stringa [0] invece di passare l'intera lista
                 col_rep_target_ind = col_rep_ind[0]
                 match_indisp = df_ind[df_ind[col_rep_target_ind].astype(str).str[:3].str.strip().isin(lista_codici_target)] if lista_codici_target else pd.DataFrame()
                 if not match_indisp.empty:
@@ -319,6 +323,8 @@ with tab1:
                 fig_ctg_bar = px.bar(pivot_ctg, x="Customer Category", y="Sales TT", color=color_col, barmode="group", title="Fatturato per Canale/Categoria Cliente")
                 st.plotly_chart(fig_ctg_bar, use_container_width=True)
             st.dataframe(pivot_ctg.sort_values(by="Sales TT", ascending=False), use_container_width=True, hide_index=True)
+
+
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI (PARTE A)
 # =============================================================================
