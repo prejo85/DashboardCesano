@@ -146,9 +146,25 @@ with tab1:
         shrink_py_tot = float(shrink_py_series.sum())
         avg_stock_tot = float(avg_stock_series.sum())
         
-        # Medie dei giorni di stock
-        val_stock_days = float(stock_days_series.mean()) if not stock_days_series.empty else 0.0
-        val_stock_days_py = float(stock_days_py_series.mean()) if not stock_days_py_series.empty else 0.0
+        # --- CALCOLO CORRETTO DEGLI STOCK DAYS (PONDERATI SUL GIORNO) ---
+        # Creiamo un set temporaneo raggruppato per data con le somme di Stock e Sales
+        df_daily = dati_vista.groupby(dati_vista.columns[0]).agg({
+            dati_vista.columns[13]: lambda x: parse_to_numeric_series(pd.DataFrame(x), 0).sum(),  # DA - Avg Stock
+            dati_vista.columns[5]:  lambda x: parse_to_numeric_series(pd.DataFrame(x), 0).sum(),  # DA - Sales TT
+            dati_vista.columns[6]:  lambda x: parse_to_numeric_series(pd.DataFrame(x), 0).sum()   # DA - Sales TT PY
+        }).reset_index()
+
+        # Divisione dello Stock Giornaliero per le Sales Giornaliere
+        df_daily['Stock_Days_TY'] = df_daily.iloc[:, 1] / df_daily.iloc[:, 2]
+        df_daily['Stock_Days_PY'] = df_daily.iloc[:, 1] / df_daily.iloc[:, 3]
+
+        # Gestione di eventuali divisioni per zero o valori infiniti
+        df_daily = df_daily.replace([float('inf'), float('-inf')], 0.0).fillna(0.0)
+
+        # Calcolo della media finale dei giorni di stock giornalieri complessivi
+        val_stock_days = float(df_daily['Stock_Days_TY'].mean())
+        val_stock_days_py = float(df_daily['Stock_Days_PY'].mean())
+        # -----------------------------------------------------------------
 
         # Calcolo incidenze percentuali correnti e passate per i delta pp
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
