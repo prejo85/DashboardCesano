@@ -185,7 +185,7 @@ with tab1:
             pass
 
 # =============================================================================
-# BLOCCO 3 - PARTE 1: VISUALIZZAZIONE DELLE CARDS KPI SUPERIORI (REVISIONE SHK)
+# BLOCCO 3 - PARTE 1: VISUALIZZAZIONE DELLE CARDS KPI SUPERIORI (5 COLONNE)
 # =============================================================================
         import re
 
@@ -202,7 +202,7 @@ with tab1:
         col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
         
         if col_rep_ind and len(codici_target) > 0:
-            col_ind_nome = col_rep_ind[0]
+            col_ind_nome = col_rep_ind
             df_ind_clean = df_ind.copy()
             df_ind_clean['Codice_Reparto_IND'] = df_ind_clean[col_ind_nome].astype(str).apply(
                 lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
@@ -210,6 +210,7 @@ with tab1:
             match_indisp = df_ind_clean[df_ind_clean['Codice_Reparto_IND'].isin(codici_target)].copy()
             
             if not match_indisp.empty:
+                # Sottofunzione robusta che estrae i numeri rimuovendo formati europei e spazi
                 def parse_indisp_totals(dataframe, col_name):
                     if col_name in dataframe.columns:
                         s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
@@ -218,18 +219,27 @@ with tab1:
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
-                ind_sales = float(parse_indisp_totals(match_indisp, 'DA - Sales TT').sum())
-                ind_sales_py = float(parse_indisp_totals(match_indisp, 'DA - Sales TT PY Custom Cal').sum())
-                ind_colli = float(parse_indisp_totals(match_indisp, 'DA - #Colli').sum())
-                ind_colli_py = float(parse_indisp_totals(match_indisp, 'DA - #Colli PY Custom Cal').sum())
+                # Identificazione flessibile delle colonne per evitare problemi di KeyError o stringhe mancate
+                col_sales = [c for c in match_indisp.columns if 'sales' in c.lower() and 'py' not in c.lower()][0] if [c for c in match_indisp.columns if 'sales' in c.lower() and 'py' not in c.lower()] else 'DA - Sales TT'
+                col_sales_py = [c for c in match_indisp.columns if 'sales' in c.lower() and 'py' in col_lower][0] if [c for c in match_indisp.columns if 'sales' in c.lower() and 'py' in col_lower] else 'DA - Sales TT PY Custom Cal'
+                col_colli = [c for c in match_indisp.columns if 'colli' in c.lower() and 'py' not in c.lower()][0] if [c for c in match_indisp.columns if 'colli' in c.lower() and 'py' not in c.lower()] else 'DA - #Colli'
+                col_colli_py = [c for c in match_indisp.columns if 'colli' in c.lower() and 'py' in col_lower][0] if [c for c in match_indisp.columns if 'colli' in c.lower() and 'py' in col_lower] else 'DA - #Colli PY Custom Cal'
                 
-                # --- TRACCIAMENTO CHIRURGICO DELLE INTESTAZIONI SHK REALI ---
-                ind_shrink = float(parse_indisp_totals(match_indisp, 'DA - Shrinkage NNBP').sum())
-                ind_shrink_py = float(parse_indisp_totals(match_indisp, 'DA - Shrinkage NNBP net PY Custom Cal').sum())
+                # Ricerca dinamica flessibile per lo Shrinkage (Sfrido) TY e PY
+                col_shk = [c for c in match_indisp.columns if 'shrinkage' in c.lower() and 'py' not in c.lower() and 'net' not in c.lower()]
+                col_shk_py = [c for c in match_indisp.columns if 'shrinkage' in c.lower() and ('py' in c.lower() or 'net' in c.lower())]
 
-        # Rendering grafico delle 6 metric cards native in Streamlit
+                ind_sales = float(parse_indisp_totals(match_indisp, col_sales).sum())
+                ind_sales_py = float(parse_indisp_totals(match_indisp, col_sales_py).sum())
+                ind_colli = float(parse_indisp_totals(match_indisp, col_colli).sum())
+                ind_colli_py = float(parse_indisp_totals(match_indisp, col_colli_py).sum())
+                
+                if col_shk: ind_shrink = float(parse_indisp_totals(match_indisp, col_shk[0]).sum())
+                if col_shk_py: ind_shrink_py = float(parse_indisp_totals(match_indisp, col_shk_py[0]).sum())
+
+        # Rendering a cinque colonne in puro Python nativo
         st.markdown("#### 📊 Indicatori Chiave di Performance")
-        m1, m2, m3, m4, m5, m6 = st.columns(6)
+        m1, m2, m3, m4, m5 = st.columns(5)
         
         with m1:
             st.metric(label="💰 Sales TT", value=fmt_valuta_interi(sales_tot), delta=f"{delta_sales_pct:+.2f}% vs PY")
@@ -241,15 +251,6 @@ with tab1:
             st.metric(label="🏬 Avg Stock Last Day", value=fmt_valuta_interi(val_avg_stock_ultimo_giorno), delta=None)
         with m5:  
             st.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
-        with m6:
-            delta_shk_ind = ((ind_shrink - ind_shrink_py) / ind_shrink_py * 100) if ind_shrink_py != 0 else 0.0
-            st.metric(
-                label="🎯 Shk Indispensabili", 
-                value=fmt_valuta_interi(ind_shrink), 
-                delta=f"{delta_shk_ind:+.2f}% vs PY" if ind_shrink_py != 0 else None,
-                delta_color="inverse",
-                help="Valore totale dello Shrinkage calcolato dinamicamente sugli articoli indispensabili."
-            )
 # =============================================================================
 # BLOCCO 3 - PARTE 2: INDICATORI CROSS-REPORT SUI VALORI ASSOLUTI
 # =============================================================================
@@ -293,16 +294,27 @@ with tab1:
             else:
                 st.caption("⚠️ Il file BMPL caricato risulta vuoto.")
 
-        # --- PANNELLO 2: REPORT ARTICOLI INDISPENSABILI (PULIZIA DIRETTA) ---
+        # --- PANNELLO 2: REPORT ARTICOLI INDISPENSABILI (CON CARD SHRINKAGE INSERITA NELLA SEZIONE) ---
         with col_c2:
             st.markdown("#### 📌 Sintesi Articoli Indispensabili nel Mix")
             if not match_indisp.empty:
                 delta_sales_ind = ((ind_sales - ind_sales_py) / ind_sales_py * 100) if ind_sales_py != 0 else 0.0
                 delta_colli_ind = ((ind_colli - ind_colli_py) / ind_colli_py * 100) if ind_colli_py != 0 else 0.0
+                delta_shk_ind = ((ind_shrink - ind_shrink_py) / ind_shrink_py * 100) if ind_shrink_py != 0 else 0.0
 
-                sub_ind1, sub_ind2 = st.columns(2)
-                with sub_ind1: st.metric(label="Sales (Indispensabili)", value=fmt_valuta_interi(ind_sales), delta=f"{delta_sales_ind:+.2f}% vs PY")
-                with sub_ind2: st.metric(label="Volume Colli (Indisp.)", value=f"{int(round(ind_colli)):,}".replace(',', '.'), delta=f"{delta_colli_ind:+.2f}% vs PY")
+                # Generiamo 3 colonne interne nel pannello per mostrare Sales, Colli e lo Sfrido del file
+                sub_ind1, sub_ind2, sub_ind3 = st.columns(3)
+                with sub_ind1: 
+                    st.metric(label="Sales (Indispensabili)", value=fmt_valuta_interi(ind_sales), delta=f"{delta_sales_ind:+.2f}% vs PY")
+                with sub_ind2: 
+                    st.metric(label="Volume Colli (Indisp.)", value=f"{int(round(ind_colli)):,}".replace(',', '.'), delta=f"{delta_colli_ind:+.2f}% vs PY")
+                with sub_ind3: 
+                    st.metric(
+                        label="📉 Shrinkage (Indisp.)", 
+                        value=fmt_valuta_interi(ind_shrink), 
+                        delta=f"{delta_shk_ind:+.2f}% vs PY" if ind_shrink_py != 0 else None,
+                        delta_color="inverse"
+                    )
             else:
                 st.caption("⚠️ Nessun articolo indispensabile trovato per questa selezione.")
 # =============================================================================
