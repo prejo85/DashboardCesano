@@ -78,37 +78,51 @@ tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Pr
 # -----------------------------------------------------------------------------
 # 4. MOTORE GRAFICO DI GENERAZIONE DELLE KPI CARD AD ALTA LEGGIBILITÀ
 # -----------------------------------------------------------------------------
-def get_modern_kpi_card(icon, label, value_str, delta_val, py_info_str="", is_positive_good=True, show_delta=True):
-    is_positive = delta_val >= 0
-    if not is_positive_good:
-        is_positive = not is_positive
+        # --- FUNZIONI DI FORMATTAZIONE VALUTA ITALIANA (Punto per migliaia, virgola per decimali) ---
+        def fmt_valuta(valore):
+            return f"€ {valore:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+
+        def fmt_percentuale(valore):
+            return f"{valore:.2f}%".replace('.', ',')
+
+        def fmt_giorni(valore):
+            return f"{valore:.1f} gg".replace('.', ',')
+
+        # --- RENDERING DELLE CARD IN PURO PYTHON ---
+        st.markdown("### 📊 Indicatori Chiave di Performance")
+        m1, m2, m3, m4 = st.columns(4)
         
-    bg_badge = "#23c45e" if is_positive else "#ef4444"
-    icon_color = "#3b82f6" if is_positive_good else "#f59e0b"
-    
-    badge_html = f"""
-    <div style="background-color: {bg_badge}; color: #ffffff; padding: 3px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; display: inline-block; width: fit-content; text-align: center;">
-        {delta_val:+.2f}% vs PY
-    </div>
-    """ if show_delta else ""
+        with m1:
+            st.metric(
+                label="💰 Sales TT", 
+                value=fmt_valuta(sales_tot), 
+                delta=f"{delta_sales_pct:+.2f}% vs PY",
+                help=f"Anno precedente: {fmt_valuta(sales_py_tot)}"
+            )
+        with m2:
+            st.metric(
+                label="📈 Front Margin %", 
+                value=fmt_percentuale(margin_on_sales), 
+                delta=f"{delta_margin_pct:+.2f}% vs PY",
+                help=f"Valore assoluto: {fmt_valuta(margin_tot)}"
+            )
+        with m3:
+            st.metric(
+                label="📦 Stock Days", 
+                value=fmt_giorni(val_stock_days), 
+                delta=f"{delta_stock_pct:+.2f}% vs PY", 
+                delta_color="inverse", # Rosso se aumenta, verde se diminuisce
+                help=f"Anno precedente: {fmt_giorni(val_stock_days_py)}"
+            )
+        with m4:
+            st.metric(
+                label="📉 Shrinkage (Sfrido)", 
+                value=fmt_percentuale(shrink_on_sales), 
+                delta=f"{delta_shrink_pct:+.2f}% vs PY",
+                delta_color="inverse", # Rosso se aumenta
+                help=f"Valore assoluto: {fmt_valuta(shrink_tot)}"
+            )
 
-    py_html = f'<span style="color: #718096; font-size: 0.75rem; font-weight: 500; margin-top: 2px;">{py_info_str}</span>' if py_info_str else ""
-
-    return f"""
-    <div style="background: linear-gradient(135deg, #1e2530 0%, #161b24 100%); padding: 20px; border-radius: 12px; border: 1px solid #2d3748; box-shadow: 0 4px 15px rgba(0,0,0,0.3); min-height: 155px; display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="color: #a0aec0; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">{label}</span>
-            <span style="font-size: 1.3rem; color: {icon_color};">{icon}</span>
-        </div>
-        <div style="margin: 6px 0;">
-            <h2 style="font-size: 1.85rem; font-weight: 800; color: #ffffff; margin: 0; letter-spacing: -0.5px;">{value_str}</h2>
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 2px;">
-            {badge_html}
-            {py_html}
-        </div>
-    </div>
-    """
 # =============================================================================
 # SCHEDA 1: PERFORMANCE STRUTTURA STORE, AREE E REPARTI
 # =============================================================================
