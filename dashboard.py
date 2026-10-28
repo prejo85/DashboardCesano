@@ -2,20 +2,20 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import os
 
+# -----------------------------------------------------------------------------
 # 1. CONFIGURAZIONE DELLA PAGINA E TITOLO PRINCIPALE
+# -----------------------------------------------------------------------------
 st.set_page_config(page_title="Dashboard Commerciale Avanzata", layout="wide", page_icon="📊")
 
 st.title("📊 Dashboard Commerciale Integrata")
 st.markdown("### Analisi Multilivello: Store, Aree, Reparti e Segmentazione Clienti")
-
-# 2. ENGINE CENTRALIZZATO DI CARICAMENTO AUTOMATICO DA REPOSITORY GITHUB
+# -----------------------------------------------------------------------------
+# 2. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
+# -----------------------------------------------------------------------------
 @st.cache_data
 def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabili, file_mensile):
     def clean_df(file_path):
-        if not os.path.exists(file_path):
-            return pd.DataFrame()
         try:
             df = pd.read_csv(file_path, sep=";", skiprows=0, skip_blank_lines=True)
             if len(df.columns) <= 1:
@@ -40,38 +40,44 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
 
     colonne_valori = ["sales", "margin", "colli", "visite", "visit", "stock", "shrinkage", "sfrido", "accrediti"]
 
-    for df_target in [df_rep, df_ctg, df_sel, df_ind, df_men]:
-        if df_target.empty:
-            continue
-        for col in df_target.columns:
-            # Riconoscimento automatico e conversione delle colonne numeriche
-            if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["customer", "venditore", "gestione", "club", "department", "reparto", "detail", "category", "ctg", "flag", "store", "area", "article"]):
-                df_target[col] = parse_numeric(df_target[col])
+    for col in df_rep.columns:
+        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["department", "reparto"]):
+            df_rep[col] = parse_numeric(df_rep[col])
+    for col in df_ctg.columns:
+        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["department", "reparto", "detail", "category", "ctg", "flag"]):
+            df_ctg[col] = parse_numeric(df_ctg[col])
+    for col in df_sel.columns:
+        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["customer", "venditore", "gestione", "club"]):
+            df_sel[col] = parse_numeric(df_sel[col])
+    for col in df_ind.columns:
+        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["article", "department", "reparto"]):
+            df_ind[col] = parse_numeric(df_ind[col])
+    for col in df_men.columns:
+        if any(k in col.lower() for k in colonne_valori) and not any(x in col.lower() for x in ["store", "department", "area", "reparto"]):
+            df_men[col] = parse_numeric(df_men[col])
 
     return df_rep, df_ctg, df_sel, df_ind, df_men
+# -----------------------------------------------------------------------------
+# 3. INTERFACCIA CARICAMENTO NELLA SIDEBAR LATERALE E CREAZIONE TAB
+# -----------------------------------------------------------------------------
+st.sidebar.header("📁 Caricamento File Sorgente")
+u_rep = st.sidebar.file_uploader("1. File BMPL Reparti (.csv)", type="csv")
+u_ctg = st.sidebar.file_uploader("2. File CTG (.csv)", type="csv")
+u_sel = st.sidebar.file_uploader("3. File Free Analysis Sellout (.csv)", type="csv")
+u_ind = st.sidebar.file_uploader("4. File Indispensabili (.csv)", type="csv")
+u_men = st.sidebar.file_uploader("5. File Mensilizzazione (.csv)", type="csv")
 
-# Mappatura dei file attesi all'interno del repository GitHub
-FILE_REPARTI = "reparti.csv"
-FILE_CTG = "canali_ctg.csv"
-FILE_SELLOUT = "free_analysis.csv"  # Il file Free Analysis Sellout commerciale
-FILE_INDISPENSABILI = "indispensabili.csv"
-FILE_MENSILE = "mensilizzazione.csv"
-
-# Verifica iniziale dei file necessari
-controllo_file = [FILE_REPARTI, FILE_CTG, FILE_SELLOUT, FILE_INDISPENSABILI, FILE_MENSILE]
-file_mancanti = [f for f in controllo_file if not os.path.exists(f)]
-
-if file_mancanti:
-    st.error(f"⚠️ Attenzione! Impossibile avviare la dashboard. Mancano i seguenti file nel repository: {', '.join(file_mancanti)}")
-    st.info("💡 Carica questi file direttamente su GitHub mantenendo esattamente i nomi indicati sopra.")
+if not (u_rep and u_ctg and u_sel and u_ind and u_men):
+    st.info("💡 Carica i 5 report commerciali puliti nel pannello laterale sinistro per attivare l'interfaccia.")
     st.stop()
 
-# Caricamento centralizzato in cache dei dati
-df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(FILE_REPARTI, FILE_CTG, FILE_SELLOUT, FILE_INDISPENSABILI, FILE_MENSILE)
+# Inizializzazione dei dataframe e delle schede
+df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel, u_ind, u_men)
+tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
 
-# Creazione delle schede separate per isolare la parte commerciale
-tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout FASO)"])
-# MOTORE GRAFICO DI GENERAZIONE DELLE KPI CARD AD ALTA LEGGIBILITÀ
+# -----------------------------------------------------------------------------
+# 4. MOTORE GRAFICO DI GENERAZIONE DELLE KPI CARD AD ALTA LEGGIBILITÀ
+# -----------------------------------------------------------------------------
 def get_modern_kpi_card(icon, label, value_str, delta_val, py_info_str="", is_positive_good=True, show_delta=True):
     is_positive = delta_val >= 0
     if not is_positive_good:
@@ -103,9 +109,8 @@ def get_modern_kpi_card(icon, label, value_str, delta_val, py_info_str="", is_po
         </div>
     </div>
     """
-
 # =============================================================================
-# SCHEDA 1: PERFORMANCE STRUTTURA STORE, AREE E REPARTI (Dati aggregati)
+# SCHEDA 1: PERFORMANCE STRUTTURA STORE, AREE E REPARTI
 # =============================================================================
 with tab1:
     st.header("🏬 Monitoraggio Gerarchico Store & Performance Mix")
@@ -205,6 +210,7 @@ with tab1:
             st.markdown(get_modern_kpi_card("📦", "Stock Days", f"{val_stock_days:.1f} gg", delta_stock_pct, f"Prec: {val_stock_days_py:.1f} gg", False), unsafe_allow_html=True)
         with m4:
             st.markdown(get_modern_kpi_card("📉", "Shrinkage (Sfrido)", f"{shrink_on_sales:.2f}%", delta_shrink_pct, f"Valore: € {shrink_tot:,.2f}", False), unsafe_allow_html=True)
+        
         st.markdown("<br>##### 👥 Focus Canali & Qualità Vendite (Dati Report CTG)", unsafe_allow_html=True)
         m_extra1, m_extra2 = st.columns(2)
         with m_extra1:
@@ -221,7 +227,6 @@ with tab1:
         st.dataframe(df_stock_kpi, use_container_width=True, hide_index=True)
     else:
         st.warning("Nessun dato corrispondente trovato nel file Mensilizzazione.")
-        
     st.markdown("---")
     st.subheader("🔗 Indicatori di Performance dai File Esterni (BMPL & Indispensabili)")
 
@@ -292,12 +297,13 @@ with tab1:
                 fig_ctg_bar = px.bar(pivot_ctg, x="Customer Category", y="Sales TT", color=color_col, barmode="group", title="Fatturato per Canale/Categoria Cliente")
                 st.plotly_chart(fig_ctg_bar, use_container_width=True)
             st.dataframe(pivot_ctg.sort_values(by="Sales TT", ascending=False), use_container_width=True, hide_index=True)
+
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI (Free Analysis Sellout)
 # =============================================================================
 with tab2:
-    st.header("👥 Analisi Profilazione e Portafoglio Clienti (Sellout FASO)")
-    st.markdown("Esplorazione analitica e commerciale isolata derivante dal flusso dati *Free Analysis Sellout*.")
+    st.header("👥 Analisi Profilazione e Portafoglio Clienti (Sellout)")
+    st.markdown("Esplorazione analitica delle performance per singolo Cliente basata sul report *Free Analysis Sellout*.")
 
     col_s1, col_f_cust, col_s2 = st.columns(3)
     with col_s1:
@@ -325,7 +331,7 @@ with tab2:
     with ms1:
         st.markdown(get_modern_kpi_card("💼", "Fatturato Portafoglio (Sellout)", f"€ {sellout_sales_tot:,.2f}", 0.0, "", True, show_delta=False), unsafe_allow_html=True)
     with ms2:
-        st.markdown(get_modern_kpi_card("🎯", "Front Margin % Realizzato", f"{sellout_margin_pct:.2f}%", 0.0, f"Valore Assoluto: € {sellout_margin_tot:,.2f}", True, show_delta=False), unsafe_allow_html=True)
+        st.markdown(get_modern_kpi_card("🎯", "Front Margin % Realizzato", f"{sellout_margin_pct:.2f}%", sellout_margin_pct, f"Valore Assoluto: € {sellout_margin_tot:,.2f}", True, show_delta=False), unsafe_allow_html=True)
     with ms3:
         st.markdown(get_modern_kpi_card("👣", "Volume Totale Visite", f"{int(sellout_visits_tot):,}", 0.0, "", True, show_delta=False), unsafe_allow_html=True)
 
@@ -348,6 +354,7 @@ with tab2:
     st.markdown("### 📋 Elenco Analitico Clienti (Ordinati per Fatturato Decrescente)")
     raggruppamento_cols = [c for c in ["Customer", "Customer Category", "Venditore", "MPRO Club"] if c in df_sel_filtrato.columns]
     
+    # ... (resto del codice precedente invariato) ...
     if raggruppamento_cols:
         agg_dict = {"Sales TT": "sum"}
         if "Front Margin" in df_sel_filtrato.columns: agg_dict["Front Margin"] = "sum"
@@ -355,12 +362,12 @@ with tab2:
         
         df_customer_pivoted = df_sel_filtrato.groupby(raggruppamento_cols).agg(agg_dict).reset_index().sort_values(by="Sales TT", ascending=False)
         
-        # Formattazione finale delle stringhe numeriche per la visualizzazione corporate
-        df_customer_presentation = df_customer_pivoted.copy()
-        df_customer_presentation["Sales TT"] = df_customer_presentation["Sales TT"].map('€ {:,.2f}'.format)
-        if "Front Margin" in df_customer_presentation.columns:
-            df_customer_presentation["Front Margin"] = df_customer_presentation["Front Margin"].map('€ {:,.2f}'.format)
-        if "# Visit" in df_customer_presentation.columns:
-            df_customer_presentation["# Visit"] = df_customer_presentation["# Visit"].map('{:,.0f}'.format)
-            
-        st.dataframe(df_customer_presentation, use_container_width=True, hide_index=True)
+        # Formattazione monetaria delle colonne prima della visualizzazione
+        df_customer_pivoted["Sales TT"] = df_customer_pivoted["Sales TT"].map('€ {:,.2f}'.format)
+        if "Front Margin" in df_customer_pivoted.columns:
+            df_customer_pivoted["Front Margin"] = df_customer_pivoted["Front Margin"].map('€ {:,.2f}'.format)
+        if "# Visit" in df_customer_pivoted.columns:
+            df_customer_pivoted["# Visit"] = df_customer_pivoted["# Visit"].map('{:,.0f}'.format)
+
+        # Mostra la tabella (corretto e fuori dall'if di Front Margin)
+        st.dataframe(df_customer_pivoted, use_container_width=True, hide_index=True)
