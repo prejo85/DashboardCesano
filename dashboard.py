@@ -82,12 +82,9 @@ if not (u_rep and u_ctg and u_sel and u_ind and u_men):
 
 # Inizializzazione dei dataframe e delle schede
 df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel, u_ind, u_men)
+
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
 
-# -----------------------------------------------------------------------------
-# 4. MOTORE GRAFICO DI GENERAZIONE DELLE KPI CARD AD ALTA LEGGIBILITÀ
-# -----------------------------------------------------------------------------
-        # --- RENDERING DELLE CARD IN PURO PYTHON ---
         st.markdown("### 📊 Indicatori Chiave di Performance")
         m1, m2, m3, m4 = st.columns(4)
         
@@ -110,7 +107,7 @@ tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Pr
                 label="📦 Stock Days", 
                 value=fmt_giorni(val_stock_days), 
                 delta=f"{delta_stock_pct:+.2f}% vs PY", 
-                delta_color="inverse", # Rosso se aumenta, verde se diminuisce
+                delta_color="inverse",
                 help=f"Anno precedente: {fmt_giorni(val_stock_days_py)}"
             )
         with m4:
@@ -118,7 +115,7 @@ tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Pr
                 label="📉 Shrinkage (Sfrido)", 
                 value=fmt_percentuale(shrink_on_sales), 
                 delta=f"{delta_shrink_pct:+.2f}% vs PY",
-                delta_color="inverse", # Rosso se aumenta
+                delta_color="inverse",
                 help=f"Valore assoluto: {fmt_valuta(shrink_tot)}"
             )
 
