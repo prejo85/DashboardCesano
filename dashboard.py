@@ -68,16 +68,16 @@ df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
 
 # =============================================================================
-# SCHEDA 1: PERFORMANCE STRUTTURA STORE, AREE E REPARTI
+# BLOCCO 1: CONFIGURAZIONE FILTRI E TITOLI DINAMICI
 # =============================================================================
 with tab1:
     st.header("🏬 Monitoraggio Gerarchico Store & Performance Mix")
     
     if len(df_men.columns) >= 5:
         df_men_clean = df_men.copy()
-        df_men_clean.iloc[:, 1] = df_men_clean.iloc[:, 1].astype(str).str.strip() 
-        df_men_clean.iloc[:, 3] = df_men_clean.iloc[:, 3].astype(str).str.strip() 
-        df_men_clean.iloc[:, 4] = df_men_clean.iloc[:, 4].astype(str).str.strip() 
+        df_men_clean.iloc[:, 1] = df_men_clean.iloc[:, 1].astype(str).str.strip() # Store
+        df_men_clean.iloc[:, 3] = df_men_clean.iloc[:, 3].astype(str).str.strip() # Area
+        df_men_clean.iloc[:, 4] = df_men_clean.iloc[:, 4].astype(str).str.strip() # Reparto
         
         col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1:
@@ -96,19 +96,24 @@ with tab1:
                 lista_reparti = ["--- DETTAGLIO RICHIESTO ---"]
             selected_reparto = st.selectbox("Seleziona Reparto:", lista_reparti)
 
+        # Pulizia della stringa dello store per mostrare solo il nome dopo il codice numerico
+        nome_store_pulito = selected_store.split(" - ")[-1] if " - " in str(selected_store) else selected_store
+
         if selected_area == "--- TOTALE STORE ---":
             dati_vista = df_filtrato_store.copy()
-            titolo_vista = f"Visualizzazione: TOTALE STORE {selected_store}"
+            titolo_vista = f"Visualizzazione: TOTALE STORE {nome_store_pulito}"
         elif selected_reparto == "--- TOTALE AREA ---":
             dati_vista = df_filtrato_area.copy()
-            titolo_vista = f"Visualizzazione: TOTALE AREA {selected_area} ({selected_store})"
+            titolo_vista = f"Visualizzazione: TOTALE AREA {selected_area} ({nome_store_pulito})"
         else:
             dati_vista = df_filtrato_area[df_filtrato_area.iloc[:, 4] == selected_reparto]
-            titolo_vista = f"Visualizzazione REPARTO: {selected_reparto} ({selected_store})"
+            titolo_vista = f"Visualizzazione REPARTO: {selected_reparto} ({nome_store_pulito})"
     else:
         dati_vista = pd.DataFrame()
-        st.error("Il file Mensilizzazione non ha colonne sufficienti.")
-
+        st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
+# =============================================================================
+# BLOCCO 2: ENGINE DI CALCOLO COMMERCIALE E CALCOLO STOCK DAYS
+# =============================================================================
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
         
@@ -126,17 +131,19 @@ with tab1:
                 return pd.to_numeric(s, errors='coerce').fillna(0.0)
             return pd.Series(dtype=float, index=dataframe.index)
 
-        # 1. Creiamo colonne numeriche temporanee pulite nel subset filtrato corrente
+        # Estrazione colonne numeriche d'appoggio nel subset filtrato corrente
         df_calc = dati_vista.copy()
         df_calc['Sales_TY_Num'] = parse_to_numeric_series(df_calc, 5)   # Colonna 5: DA - Sales TT
         df_calc['Sales_PY_Num'] = parse_to_numeric_series(df_calc, 6)   # Colonna 6: DA - Sales TT PY Custom Cal
         df_calc['Margin_TY_Num'] = parse_to_numeric_series(df_calc, 11) # Colonna 11: DA - Front Margin
         df_calc['Margin_PY_Num'] = parse_to_numeric_series(df_calc, 12) # Colonna 12: DA - Front Margin PY Custom Cal
         df_calc['Stock_TY_Num'] = parse_to_numeric_series(df_calc, 13)  # Colonna 13: DA - Avg Stock
+        df_calc['Stock_Days_TY'] = parse_to_numeric_series(df_calc, 14) # Colonna 14: DA - Stock Days
+        df_calc['Stock_Days_PY'] = parse_to_numeric_series(df_calc, 15) # Colonna 15: DA - Stock Days PY Custom Cal
         df_calc['Shrink_TY_Num'] = parse_to_numeric_series(df_calc, 16)  # Colonna 16: DA - Shrinkage NNBP
         df_calc['Shrink_PY_Num'] = parse_to_numeric_series(df_calc, 17)  # Colonna 17: DA - Shrinkage NNBP PY Custom Cal
 
-        # Totalizzatori Generali del Periodo
+        # Aggregazioni volumetriche totali del periodo selezionato
         sales_tot = float(df_calc['Sales_TY_Num'].sum())
         sales_py_tot = float(df_calc['Sales_PY_Num'].sum())
         margin_tot = float(df_calc['Margin_TY_Num'].sum())
@@ -145,52 +152,58 @@ with tab1:
         shrink_py_tot = float(df_calc['Shrink_PY_Num'].sum())
         avg_stock_tot = float(df_calc['Stock_TY_Num'].sum())
 
-        # Incidenze percentuali del periodo
+        # Calcolo incidenze percentuali correnti (TY) e passate (PY)
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         margin_on_sales_py = (margin_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
         shrink_on_sales_py = (shrink_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
 
-        # Delta in % ed in Punti Percentuali (pp)
+        # Variazioni classiche (Delta %)
         delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
+
+        # Calcolo scostamenti in Punti Percentuali (Sottrazione diretta pp)
         delta_margin_pp = margin_on_sales - margin_on_sales_py
         delta_shrink_pp = shrink_on_sales - shrink_on_sales_py
 
-        # 2. --- ENGINE DI CALCOLO GIORNALIERO DEGLI STOCK DAYS (REPARTO PER REPARTO COERENTE) ---
-        # Raggruppiamo le colonne numeriche aggregate per la colonna 0 (Date)
-        df_giornaliero = df_calc.groupby(df_calc.columns[0]).agg({
+        # --- ALGORITMO DI CALCOLO STOCK DAYS SU MATRICE GIORNALIERA AGGREGATA ---
+        df_giornaliero = df_calc.groupby(df_calc.iloc[:, 0]).agg({
             'Stock_TY_Num': 'sum',
             'Sales_TY_Num': 'sum',
             'Sales_PY_Num': 'sum'
         }).reset_index()
 
-        # Formula: Valore dello stock del giorno / sales di quel giorno
-        df_giornaliero['Days_TY'] = df_giornaliero['Stock_TY_Num'] / df_giornaliero['Sales_TY_Num']
-        df_giornaliero['Days_PY'] = df_giornaliero['Stock_TY_Num'] / df_giornaliero['Sales_PY_Num']
+        # Divisione analitica giornaliera: Stock del giorno / Vendite del giorno
+        df_giornaliero['Days_TY'] = df_giornaliero.apply(
+            lambda r: r['Stock_TY_Num'] / r['Sales_TY_Num'] if r['Sales_TY_Num'] > 0 else 0.0, axis=1
+        )
+        df_giornaliero['Days_PY'] = df_giornaliero.apply(
+            lambda r: r['Stock_TY_Num'] / r['Sales_PY_Num'] if r['Sales_PY_Num'] > 0 else 0.0, axis=1
+        )
 
-        # Sostituiamo gli infiniti generati da giorni a zero vendite
-        df_giornaliero = df_giornaliero.replace([float('inf'), float('-inf')], 0.0).fillna(0.0)
+        # Filtro di protezione: escludiamo dalla media le giornate senza attività
+        giorni_attivi_ty = df_giornaliero[df_giornaliero['Days_TY'] > 0]
+        giorni_attivi_py = df_giornaliero[df_giornaliero['Days_PY'] > 0]
 
-        # Media aritmetica finale dei rapporti giornalieri
-        val_stock_days = float(df_giornaliero['Days_TY'].mean()) if not df_giornaliero.empty else 0.0
-        val_stock_days_py = float(df_giornaliero['Days_PY'].mean()) if not df_giornaliero.empty else 0.0
+        val_stock_days = float(giorni_attivi_ty['Days_TY'].mean()) if not giorni_attivi_ty.empty else 0.0
+        val_stock_days_py = float(giorni_attivi_py['Days_PY'].mean()) if not giorni_attivi_py.empty else 0.0
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
-        # ---------------------------------------------------------------------------------------
+# =============================================================================
+# BLOCCO 3: FORMATTAZIONE EUROPEA E VISUALIZZAZIONE KPI CARDS
+# =============================================================================
+        # Funzioni di localizzazione e arrotondamento stringhe
+        def fmt_valuta_interi(valore):
+            return f"€ {int(round(valore)):,}".replace(',', '.')
 
+        def fmt_valuta_decimali(valore):
+            return f"€ {valore:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
-        # Calcolo incidenze percentuali correnti e passate per i delta pp
-        margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
-        shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
-        margin_on_sales_py = (margin_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
-        shrink_on_sales_py = (shrink_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
-        
-        # Calcolo dei delta (Variazione in % e in punti percentuali pp)
-        delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
-        delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
-        delta_margin_pp = margin_on_sales - margin_on_sales_py
-        delta_shrink_pp = shrink_on_sales - shrink_on_sales_py
+        def fmt_percentuale(valore):
+            return f"{valore:.2f}%".replace('.', ',')
 
-        # --- RENDERING DEGLI INDICATORI NATIVI ---
+        def fmt_giorni(valore):
+            return f"{valore:.1f} gg".replace('.', ',')
+
+        # Rendering a quattro colonne in puro Python
         st.markdown("#### 📊 Indicatori Chiave di Performance")
         m1, m2, m3, m4 = st.columns(4)
         
@@ -199,14 +212,14 @@ with tab1:
                 label="💰 Sales TT", 
                 value=fmt_valuta_interi(sales_tot), 
                 delta=f"{delta_sales_pct:+.2f}% vs PY",
-                help=f"Anno precedente: {fmt_valuta_interi(sales_py_tot)}"
+                help=f"Fatturato anno precedente: {fmt_valuta_interi(sales_py_tot)}"
             )
         with m2:
             st.metric(
                 label="📈 Front Margin %", 
                 value=fmt_percentuale(margin_on_sales), 
                 delta=f"{delta_margin_pp:+.2f} pp vs PY",
-                help=f"Anno prec: {fmt_percentuale(margin_on_sales_py)} | Valore: {fmt_valuta_decimali(margin_tot)}"
+                help=f"Margine PY: {fmt_percentuale(margin_on_sales_py)} | Valore: {fmt_valuta_decimali(margin_tot)}"
             )
         with m3:
             st.metric(
@@ -214,7 +227,7 @@ with tab1:
                 value=fmt_giorni(val_stock_days), 
                 delta=f"{delta_stock_pct:+.2f}% vs PY", 
                 delta_color="inverse",
-                help=f"Anno precedente: {fmt_giorni(val_stock_days_py)}"
+                help=f"Giacenza PY: {fmt_giorni(val_stock_days_py)}"
             )
         with m4:
             st.metric(
@@ -222,15 +235,17 @@ with tab1:
                 value=fmt_percentuale(shrink_on_sales), 
                 delta=f"{delta_shrink_pp:+.2f} pp vs PY",
                 delta_color="inverse",
-                help=f"Anno prec: {fmt_percentuale(shrink_on_sales_py)} | Valore: {fmt_valuta_decimali(shrink_tot)}"
+                help=f"Sfrido PY: {fmt_percentuale(shrink_on_sales_py)} | Valore: {fmt_valuta_decimali(shrink_tot)}"
             )
 
         st.markdown("<br>#### 📦 Dettaglio Giacenze e Rotazioni", unsafe_allow_html=True)
         df_stock_kpi = pd.DataFrame({
-            "Metrica": ["Giorni di Giacenza Correnti", "Giorni di Giacenza Anno Prec. (PY)", "Stock Medio Corrente Complessivo"],
+            "Metrica": ["Giorni di Giacenza Correnti (Ponderati)", "Giorni di Giacenza Anno Prec. (PY)", "Stock Medio Corrente Complessivo"],
             "Valore": [fmt_giorni(val_stock_days), fmt_giorni(val_stock_days_py), fmt_valuta_interi(avg_stock_tot)]
         })
         st.dataframe(df_stock_kpi, use_container_width=True, hide_index=True)
+    else:
+        st.warning("Nessun record corrispondente rilevato all'interno dei filtri correnti.")
 
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
