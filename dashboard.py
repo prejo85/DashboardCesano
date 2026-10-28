@@ -145,18 +145,23 @@ with tab1:
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
         
-        # --- ESTRAZIONE SICURA DELLE COLONNE (Previene il KeyError) ---
-        sales_tot = float(dati_vista['DA - Sales TT'].sum()) if 'DA - Sales TT' in dati_vista.columns else 0.0
-        sales_py_tot = float(dati_vista['DA - Sales TT PY Custom Cal'].sum()) if 'DA - Sales TT PY Custom Cal' in dati_vista.columns else 0.0
-        margin_tot = float(dati_vista['DA - Front Margin'].sum()) if 'DA - Front Margin' in dati_vista.columns else 0.0
-        margin_py_tot = float(dati_vista['DA - Front Margin PY Custom Cal'].sum()) if 'DA - Front Margin PY Custom Cal' in dati_vista.columns else 0.0
-        shrink_tot = float(dati_vista['DA - Shrinkage NNBP'].sum()) if 'DA - Shrinkage NNBP' in dati_vista.columns else 0.0
-        shrink_py_tot = float(dati_vista['DA - Shrinkage NNBP PY Custom Cal'].sum()) if 'DA - Shrinkage NNBP PY Custom Cal' in dati_vista.columns else 0.0
+        # --- ESTRAZIONE SICURA TRAMITE INDICI NUMERICI (.iloc) ---
+        # Verifichiamo quante colonne sono effettivamente presenti nel dataframe per evitare errori di fuori intervallo
+        num_colonne = len(dati_vista.columns)
+
+        # Mappa i valori basandoti sulla posizione (indice da 0 a N). 
+        # Modifica i numeri tra parentesi quadre se le colonne si trovano in posizioni diverse.
+        sales_tot = float(dati_vista.iloc[:, 4].sum()) if num_colonne > 4 else 0.0          # Esempio: 5ª colonna
+        sales_py_tot = float(dati_vista.iloc[:, 5].sum()) if num_colonne > 5 else 0.0       # Esempio: 6ª colonna
+        margin_tot = float(dati_vista.iloc[:, 6].sum()) if num_colonne > 6 else 0.0         # Esempio: 7ª colonna
+        margin_py_tot = float(dati_vista.iloc[:, 7].sum()) if num_colonne > 7 else 0.0       # Esempio: 8ª colonna
+        shrink_tot = float(dati_vista.iloc[:, 8].sum()) if num_colonne > 8 else 0.0         # Esempio: 9ª colonna
+        shrink_py_tot = float(dati_vista.iloc[:, 9].sum()) if num_colonne > 9 else 0.0       # Esempio: 10ª colonna
         
-        val_stock_days = float(dati_vista['DA - Stock Days'].mean()) if 'DA - Stock Days' in dati_vista.columns else 0.0
-        val_stock_days_py = float(dati_vista['DA - Stock Days PY Custom Cal'].mean()) if 'DA - Stock Days PY Custom Cal' in dati_vista.columns else 0.0
-        avg_stock_tot = float(dati_vista['DA - Avg Stock'].sum()) if 'DA - Avg Stock' in dati_vista.columns else 0.0
-        # ---------------------------------------------------------------
+        val_stock_days = float(dati_vista.iloc[:, 10].mean()) if num_colonne > 10 else 0.0   # Esempio: 11ª colonna
+        val_stock_days_py = float(dati_vista.iloc[:, 11].mean()) if num_colonne > 11 else 0.0# Esempio: 12ª colonna
+        avg_stock_tot = float(dati_vista.iloc[:, 12].sum()) if num_colonne > 12 else 0.0     # Esempio: 13ª colonna
+        # -------------------------------------------------------------------------------------
         
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
@@ -165,6 +170,7 @@ with tab1:
         delta_margin_pct = ((margin_tot - margin_py_tot) / margin_py_tot * 100) if margin_py_tot != 0 else 0.0
         delta_stock_pct = ((val_stock_days - val_stock_days_py) / val_stock_days_py * 100) if val_stock_days_py != 0 else 0.0
         delta_shrink_pct = ((shrink_tot - shrink_py_tot) / shrink_py_tot * 100) if shrink_py_tot != 0 else 0.0
+
 
         reparti_inclusi = dati_vista["Sales Department"].dropna().unique() if "Sales Department" in dati_vista.columns else []
         lista_codici_target = [str(r)[:3].strip() for r in reparti_inclusi if pd.notna(r)]
