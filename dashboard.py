@@ -430,29 +430,6 @@ with tab1:
             else:
                 match_ctg = df_ctg_clean.copy()
             
-            if not match_ctg.empty:
-                # Sottofunzione locale per il parsing numerico corretto delle vendite europee (Colonna H, Indice 7)
-                def parse_ctg_sales_final(dataframe, col_index):
-                    s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
-                    s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
-                    if s.str.count(r'\.').max() > 1:
-                        s = s.str.replace('.', '', regex=False)
-                    elif s.str.contains(r'\.').any() and s.str.contains(',').any():
-                        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                    elif s.str.contains(',').any() and not s.str.contains(r'\.').any():
-                        s = s.str.replace(',', '.', regex=False)
-                    return pd.to_numeric(s, errors='coerce').fillna(0.0)
-
-                # Conversione della colonna Sales TT (Indice 7)
-                match_ctg['Sales_Num'] = parse_ctg_sales_final(match_ctg, 7)
-                
-                # Estrazione e pulizia dei campi testuali descrittivi dal tracciato
-                match_ctg['Channel_Detail'] = match_ctg.iloc[:, 2].astype(str).str.strip()
-                match_ctg['Customer_Category'] = match_ctg.iloc[:, 3].astype(str).str.strip()
-                match_ctg['CTG_Merceologica'] = match_ctg.iloc[:, 4].astype(str).str.strip()
-
-                # Escludiamo dal conteggio eventuali record nulli o a fatturato zero
-                match_ctg = match_ctg[match_ctg['Sales_Num'] > 0]
                 if not match_ctg.empty:
                     # Filtro locale per isolare e analizzare una singola macro Customer Category
                     lista_cust_cat = ["--- TUTTI I TARGET ---"] + sorted(list(match_ctg['Customer_Category'].unique()))
@@ -480,13 +457,13 @@ with tab1:
                             title="Composizione Fatturato per Canale Distribuzione",
                             labels={'Sales_Num': 'Fatturato (€)', 'Channel_Detail': 'Canale di Vendita', 'Customer_Category': 'Target'},
                             template='plotly_dark',
-                            color_discrete_scale=px.colors.qualitative.Pastel
+                            color_discrete_sequence=px.colors.qualitative.Pastel1 # CORRETTO con la palette valida Pastel1
                         )
                         fig_chan.update_layout(height=480, legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5))
                         fig_chan.update_traces(hovertemplate="<b>Canale:</b> %{y}<br><b>Fatturato:</b> € %{x:,.0f}<extra></extra>".replace(',', '.'))
                         st.plotly_chart(fig_chan, use_container_width=True)
 
-                    with g2_col2 if 'g2_col2' in locals() else g_col2:
+                    with g_col2:
                         st.markdown("#### 🍕 Performance Dettaglio CTG per Canale Selezionato")
                         # Raggruppamento per CTG Merceologica e Customer Category per mostrare la segmentazione interna
                         df_ctg_mix = df_filtrato_grafici.groupby(['CTG_Merceologica', 'Customer_Category'])['Sales_Num'].sum().reset_index()
@@ -501,7 +478,7 @@ with tab1:
                             title="Suddivisione del Fatturato per Singola CTG",
                             labels={'Sales_Num': 'Fatturato (€)', 'CTG_Merceologica': 'CTG Merceologica', 'Customer_Category': 'Target'},
                             template='plotly_dark',
-                            color_discrete_scale=px.colors.qualitative.Safe
+                            color_discrete_sequence=px.colors.qualitative.Safe # CORRETTO usando l'argomento nativo della sequenza
                         )
                         fig_ctg.update_layout(height=480, legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5))
                         fig_ctg.update_traces(hovertemplate="<b>CTG:</b> %{y}<br><b>Fatturato:</b> € %{x:,.0f}<extra></extra>".replace(',', '.'))
@@ -512,6 +489,7 @@ with tab1:
                 st.caption("⚠️ Nessun dato merceologico nel file CTG corrisponde ai filtri gerarchici attivi della Mensilizzazione.")
         else:
             st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'esplorazione grafica di canali e categorie.")
+
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
 # =============================================================================
