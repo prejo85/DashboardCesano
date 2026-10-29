@@ -11,8 +11,9 @@ st.set_page_config(page_title="Dashboard Commerciale Avanzata", layout="wide", p
 
 st.title("📊 Dashboard Commerciale Integrata")
 st.markdown("### Analisi Multilivello: Store, Aree, Reparti e Segmentazione Clienti")
+
 # -----------------------------------------------------------------------------
-# 2. FUNZIONI DI FORMATTAZIONE VALUTA E LOGICA DI PARSING CONTABILE ITALIANO
+# 2. FUNZIONI DI FORMATTAZIONE VALUTA ED ESPRESSIONI ITALIANE (PURO PYTHON)
 # -----------------------------------------------------------------------------
 def fmt_valuta_interi(valore):
     return f"€ {int(round(valore)):,}".replace(',', '.')
@@ -25,41 +26,32 @@ def fmt_percentuale(valore):
 
 def fmt_giorni(valore):
     return f"{valore:.1f} gg".replace('.', ',')
-
+# -----------------------------------------------------------------------------
+# PARSER NUMERICO UNIVERSALE PROTETTO
+# -----------------------------------------------------------------------------
 def parse_universal_numeric(series_or_val):
     """
-    Gestisce correttamente lo standard contabile italiano: punto per le migliaia e virgola per i decimali.
-    Risolve le anomalie del report CTG allineando al centesimo i valori di fatturato e visite.
+    Gestisce correttamente lo standard contabile italiano.
+    Previene errori convertendo forzatamente ogni cella in stringa prima della pulizia.
     """
     s = series_or_val.astype(str).str.replace(r'\s+', '', regex=True)
     s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
     
     def clean_string(x):
         x_str = str(x)
-        
-        # Caso 1: Contiene sia punto che virgola (es: 1.234.567,89 oppure 1.234,56)
         if ',' in x_str and '.' in x_str:
             return x_str.replace('.', '').replace(',', '.')
-            
-        # Caso 2: C'è solo la virgola (es: 1234,56)
         elif ',' in x_str:
             return x_str.replace(',', '.')
-            
-        # Caso 3: C'è solo il punto isolato (es: 2229846 o stringhe formattate come 2.229.846 o 24.579)
         elif '.' in x_str:
-            # Dividiamo la stringa per analizzare i segmenti tra i punti
             parti = x_str.split('.')
-            # Se l'ultimo segmento ha lunghezza 3, il punto fungeva da separatore delle migliaia (es. .846)
             if len(parti[-1]) == 3:
                 return x_str.replace('.', '')
-            # Se l'ultimo segmento NON è di 3 cifre, lo tratta come punto decimale standard (es. 12.3)
             return x_str
-            
         return x_str
 
     s = s.apply(clean_string)
     return pd.to_numeric(s, errors='coerce').fillna(0.0)
-
 
 # -----------------------------------------------------------------------------
 # 3. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
@@ -68,7 +60,6 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
     def clean_df(file_path, is_sellout=False):
         if is_sellout:
             try:
-                # Cerca dinamicamente dove inizia la riga di intestazione reale del file Sellout
                 preview = pd.read_csv(file_path, sep=";", nrows=15, header=None)
                 skip_rows = 0
                 for idx, row in preview.iterrows():
@@ -88,7 +79,6 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
                     df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
             except:
                 df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
-        
         df.columns = df.columns.str.strip()
         df = df[df.iloc[:, 0].notna()]
         return df
@@ -113,14 +103,13 @@ if not (u_rep and u_ctg and u_sel and u_ind and u_men):
     st.info("💡 Carica i 5 report commerciali puliti nel pannello laterale sinistro per attivare l'interfaccia.")
     st.stop()
 
-# Inizializzazione controllata dei dataframe
 df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel, u_ind, u_men)
 
-# -----------------------------------------------------------------------------
+# =============================================================================
 # 5. FILTRI GERARCHICI IN ALTO CON LOGICA DI RESET
-# -----------------------------------------------------------------------------
+# =============================================================================
 st.markdown("---")
-col_f1, col_f2, col_f3, col_btn = st.columns([3, 3, 3, 1])
+col_f1, col_f2, col_f3, col_btn = st.columns()
 
 if "reset_clicked" not in st.session_state:
     st.session_state.reset_clicked = False
@@ -176,12 +165,12 @@ else:
 
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
 # =============================================================================
-# TAB 1: VISUALIZZAZIONE DELLE VISTE GENERALI E PERFORMANCE INTEGRATE (Parte A)
+# TAB 1: PERFORMANCE INTEGRATE E ARTICOLI INDISPENSABILI (Parte A - KPI Calcs)
 # =============================================================================
 with tab1:
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
-
+        
         df_calc = dati_vista.copy()
         df_calc['Sales_TY_Num'] = parse_universal_numeric(df_calc.iloc[:, 5])   
         df_calc['Sales_PY_Num'] = parse_universal_numeric(df_calc.iloc[:, 6])   
@@ -208,9 +197,7 @@ with tab1:
         delta_shrink_pp = shrink_on_sales - shrink_on_sales_py
 
         df_giornaliero = df_calc.groupby(df_calc.iloc[:, 0]).agg({
-            'Stock_TY_Num': 'sum',
-            'Sales_TY_Num': 'sum',
-            'Sales_PY_Num': 'sum'
+            'Stock_TY_Num': 'sum', 'Sales_TY_Num': 'sum', 'Sales_PY_Num': 'sum'
         }).reset_index()
 
         df_giornaliero['Days_TY'] = df_giornaliero.apply(lambda r: r['Stock_TY_Num'] / r['Sales_TY_Num'] if r['Sales_TY_Num'] > 0 else 0.0, axis=1)
@@ -230,26 +217,24 @@ with tab1:
             if not df_date_valide.empty:
                 ultima_data_assoluta = df_date_valide['Date_Parsed'].max()
                 val_avg_stock_ultimo_giorno = float(df_date_valide[df_date_valide['Date_Parsed'] == ultima_data_assoluta]['Stock_TY_Num'].sum())
-        except:
-            pass
+        except: pass
 
         reparti_mensilizzazione = dati_vista.iloc[:, 4].dropna().astype(str).str.strip()
         codici_target = set()
         for r in reparti_mensilizzazione:
             match = re.search(r'\d+', r)
             if match: codici_target.add(match.group())
-
-        # Render delle metriche Streamlit in pagina
+        # -----------------------------------------------------------------------------
+        # TAB 1: PERFORMANCE INTEGRATE (Parte B - Metrics & Cross Summary)
+        # -----------------------------------------------------------------------------
         m1, m2, m3, m4, m5 = st.columns(5)
         with m1: st.metric(label="💰 Sales TT", value=fmt_valuta_interi(sales_tot), delta=f"{delta_sales_pct:+.2f}% vs PY")
         with m2: st.metric(label="📈 Front Margin %", value=fmt_percentuale(margin_on_sales), delta=f"{delta_margin_pp:+.2f} pp vs PY")
         with m3: st.metric(label="📦 Stock Days", value=fmt_giorni(val_stock_days), delta=f"{delta_stock_pct:+.2f}% vs PY", delta_color="inverse")
         with m4: st.metric(label="🏬 Avg Stock Last Day", value=fmt_valuta_interi(val_avg_stock_ultimo_giorno))
         with m5: st.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
-        # -----------------------------------------------------------------------------
-        # TAB 1: VISUALIZZAZIONE (Parte B - Cross Performance)
-        # -----------------------------------------------------------------------------
-        st.markdown("<div style='margin-bottom: 25px;'></div>", unsafe_allow_html=True)
+
+        st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("🔗 Indicatori di Performance Cross-Report (BMPL & Indispensabili)")
         col_c1, col_c2 = st.columns(2)
         
@@ -261,7 +246,7 @@ with tab1:
                 if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
                     col_bmpl_rep = [c for c in df_rep_pure.columns if 'department' in c.lower() or 'reparto' in c.lower()]
                     if col_bmpl_rep and len(codici_target) > 0:
-                        df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[col_bmpl_rep[0]].astype(str).apply(
+                        df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[col_bmpl_rep].astype(str).apply(
                             lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
                         )
                         match_bmpl = df_rep_pure[df_rep_pure['Codice_Reparto_BMPL'].isin(codici_target)]
@@ -291,8 +276,12 @@ with tab1:
                 col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
                 match_indisp = pd.DataFrame()
                 if col_rep_ind and len(codici_target) > 0:
-                    df_ind['Codice_Reparto_IND'] = df_ind[col_rep_ind[0]].apply(lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else '')
-                    match_indisp = df_ind[df_ind['Codice_Reparto_IND'].isin(codici_target)].copy()
+                    df_ind_clean = df_ind.copy()
+                    df_ind_clean['Codice_Reparto_IND'] = df_ind_clean[col_rep_ind].apply(
+                        lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
+                    )
+                    match_indisp = df_ind_clean[df_ind_clean['Codice_Reparto_IND'].isin(codici_target)].copy()
+                else: match_indisp = df_ind.copy()
                 
                 if not match_indisp.empty:
                     ind_sales = float(parse_universal_numeric(match_indisp.iloc[:, 5]).sum())       
@@ -300,60 +289,126 @@ with tab1:
                     ind_colli = float(parse_universal_numeric(match_indisp.iloc[:, 7]).sum())       
                     ind_colli_py = float(parse_universal_numeric(match_indisp.iloc[:, 8]).sum())    
                     ind_shrink = float(parse_universal_numeric(match_indisp.iloc[:, 11]).sum())     
+                    ind_shrink_py = float(parse_universal_numeric(match_indisp.iloc[:, 12]).sum())  
 
                     delta_sales_ind = ((ind_sales - ind_sales_py) / ind_sales_py * 100) if ind_sales_py != 0 else 0.0
                     delta_colli_ind = ((ind_colli - ind_colli_py) / ind_colli_py * 100) if ind_colli_py != 0 else 0.0
+                    delta_shk_ind = ((ind_shrink - ind_shrink_py) / ind_shrink_py * 100) if ind_shrink_py != 0 else 0.0
 
                     sub_ind1, sub_ind2, sub_ind3 = st.columns(3)
                     with sub_ind1: st.metric(label="Sales (Indispensabili)", value=fmt_valuta_interi(ind_sales), delta=f"{delta_sales_ind:+.2f}% vs PY")
                     with sub_ind2: st.metric(label="Volume Colli (Indisp.)", value=f"{int(round(ind_colli)):,}".replace(',', '.'), delta=f"{delta_colli_ind:+.2f}% vs PY")
-                    with sub_ind3: st.metric(label="📉 Shrinkage (Indisp.)", value=fmt_valuta_interi(ind_shrink))
+                    with sub_ind3: st.metric(label="📉 Shrinkage (Indisp.)", value=fmt_valuta_interi(ind_shrink), delta=f"{delta_shk_ind:+.2f}% vs PY" if ind_shrink_py != 0 else None, delta_color="inverse")
         # -----------------------------------------------------------------------------
-        # TAB 1: VISUALIZZAZIONE (Parte C - Analisi Grafica Report CTG)
+        # TAB 1: PERFORMANCE INTEGRATE (Parte C - Elenco Prodotti Indispensabili)
         # -----------------------------------------------------------------------------
-        st.markdown("<br>---", unsafe_allow_html=True)
-        st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
-        if not df_ctg.empty:
-            df_ctg_clean = df_ctg.copy()
-            df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.iloc[:, 1].astype(str).apply(
-                lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
-            )
-            match_ctg = df_ctg_clean[df_ctg_clean['Codice_Reparto_CTG'].isin(codici_target)].copy() if len(codici_target) > 0 else df_ctg_clean.copy()
+        st.markdown("<br>#### 📋 Elenco Dettagliato Articoli Indispensabili Rilevati", unsafe_allow_html=True)
+        if not df_ind.empty and not match_indisp.empty:
+            colonne_totali = list(df_ind.columns)
+            try:
+                indice_g2 = colonne_totali.index('G2')
+                colonne_filtrate = [c for c in colonne_totali[indice_g2:] if c != 'Codice_Reparto_IND']
+                df_tabella_indisp = match_indisp[colonne_filtrate].copy()
+            except ValueError:
+                colonne_filtrate = [c for c in colonne_totali[3:] if c != 'Codice_Reparto_IND']
+                df_tabella_indisp = match_indisp[colonne_filtrate].copy()
             
-            if not match_ctg.empty:
-                match_ctg['Sales_TY'] = parse_universal_numeric(match_ctg.iloc[:, 7])
-                match_ctg['Visits_TY'] = parse_universal_numeric(match_ctg.iloc[:, 11])
-                match_ctg['CTG_Label'] = match_ctg['CTG'].astype(str).str.strip().str.replace("'", "", regex=False).replace(['nan', 'None', ''], '-')
-                match_ctg['Channel_Label'] = match_ctg['Channel Detail'].astype(str).str.strip()
+            df_tabella_indisp = df_tabella_indisp.fillna('-')
+            
+            def parse_valuta_indisp(val):
+                v_str = str(val).strip().replace(' ', '')
+                if v_str in ['-', '--', 'nan', 'None', 'NaN', '']: return '-'
+                try:
+                    num = float(v_str.replace('.', '').replace(',', '.')) if ',' in v_str else float(v_str)
+                    return fmt_valuta_decimali(num)
+                except: return v_str
 
-                df_ctg_grouped = match_ctg.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
-                df_ctg_grouped = df_ctg_grouped[df_ctg_grouped['Sales_TY'] > 0].sort_values(by='Sales_TY', ascending=True)
-
-                if not df_ctg_grouped.empty:
-                    g1, g2 = st.columns(2)
-                    with g1:
-                        st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TT)")
-                        fig_sales = px.bar(
-                            df_ctg_grouped, x='Sales_TY', y='CTG_Label', orientation='h',
-                            labels={'Sales_TY': 'Fatturato Corrente (€)', 'CTG_Label': 'Categoria CTG'},
-                            template='plotly_dark', color='Sales_TY', color_continuous_scale='Blues'
-                        )
-                        fig_sales.update_layout(showlegend=False, coloraxis_showscale=False, height=400, margin=dict(l=20, r=20, t=20, b=20))
-                        st.plotly_chart(fig_sales, use_container_width=True)
-                    with g2:
-                        st.markdown("#### 👥 Frequenza e Mix dei Volumi delle Visite")
-                        fig_visits = px.pie(df_ctg_grouped, values='Visits_TY', names='CTG_Label', template='plotly_dark', hole=0.4)
-                        fig_visits.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
-                        st.plotly_chart(fig_visits, use_container_width=True)
+            for col in df_tabella_indisp.columns:
+                if col in ['G2', 'Article']:
+                    df_tabella_indisp[col] = df_tabella_indisp[col].astype(str).replace(['None', 'nan', 'NaN'], '-')
+                    continue
+                if 'shrinkage' in col.lower() or ('margin' in col.lower() and '%' not in col.lower() and 'pp' not in col.lower()):
+                    df_tabella_indisp[col] = df_tabella_indisp[col].apply(parse_valuta_indisp)
                 else:
-                    st.caption("⚠️ I record del file CTG per la selezione corrente contengono volumi pari a zero o vuoti.")
-            else:
-                st.caption("⚠️ Nessun dato nel file CTG corrisponde ai reparti attivi nei filtri gerarchici.")
-        else:
-            st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'analisi grafica merceologica.")
-
+                    df_tabella_indisp[col] = df_tabella_indisp[col].astype(str).apply(lambda x: '-' if x.strip() in ['nan', 'None', 'NaN', ''] else x.strip())
+            
+            st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
 # =============================================================================
-# SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI (Parte A - Filtri e Metrics)
+# ANALISI GRAFICA REPORT CTG (MAPPATURA ESATTA SU EXCEL REALE - Parte A)
+# =============================================================================
+st.markdown("<br>---", unsafe_allow_html=True)
+st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
+
+if not df_ctg.empty:
+    df_ctg_clean = df_ctg.copy()
+    
+    def estrai_primo_codice(row):
+        for col_idx in range(min(4, len(row))):
+            val_str = str(row.iloc[col_idx])
+            match = re.search(r'\d+', val_str)
+            if match: return match.group()
+        return ''
+
+    df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.apply(estrai_primo_codice, axis=1)
+    
+    if selected_area == "--- TOTALE STORE ---":
+        match_ctg = df_ctg_clean.copy()
+    else:
+        match_ctg = df_ctg_clean[df_ctg_clean['Codice_Reparto_CTG'].isin(codici_target)].copy() if len(codici_target) > 0 else df_ctg_clean.copy()
+    
+    if not match_ctg.empty:
+        # MAPPATURA RIGIDA SULLE COLONNE REALI RILEVATE DA EXCEL
+        match_ctg['Sales_TY'] = parse_universal_numeric(match_ctg.iloc[:, 7])   # Colonna H: Sales TY
+        match_ctg['Visits_TY'] = parse_universal_numeric(match_ctg.iloc[:, 11]) # Colonna L: # Visits
+        match_ctg['CTG_Label'] = match_ctg.iloc[:, 4].astype(str).str.strip().str.replace("'", "", regex=False).replace(['nan', 'None', ''], '-') # Colonna E: CTG
+        match_ctg['Channel_Label'] = match_ctg.iloc[:, 2].astype(str).str.strip() # Colonna C: Channel Detail
+
+        df_ctg_grouped = match_ctg.groupby('CTG_Label').agg({
+            'Sales_TY': 'sum',
+            'Visits_TY': 'sum'
+        }).reset_index()
+        
+        df_ctg_grouped = df_ctg_grouped[df_ctg_grouped['Sales_TY'] > 0].sort_values(by='Sales_TY', ascending=True)
+        # -----------------------------------------------------------------------------
+        # ANALISI GRAFICA REPORT CTG (Parte B - Render Grafici Plotly)
+        # -----------------------------------------------------------------------------
+        if not df_ctg_grouped.empty:
+            g1, g2 = st.columns(2)
+            with g1:
+                st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TY)")
+                fig_sales = px.bar(
+                    df_ctg_grouped, x='Sales_TY', y='CTG_Label', orientation='h',
+                    labels={'Sales_TY': 'Fatturato Corrente (€)', 'CTG_Label': 'Categoria CTG'},
+                    template='plotly_dark', color='Sales_TY', color_continuous_scale='Blues'
+                )
+                fig_sales.update_layout(showlegend=False, coloraxis_showscale=False, height=450, margin=dict(l=20, r=20, t=20, b=20))
+                st.plotly_chart(fig_sales, use_container_width=True)
+                
+            with g2:
+                st.markdown("#### 👥 Frequenza e Mix dei Volumi delle Visite")
+                fig_visits = px.pie(df_ctg_grouped, values='Visits_TY', names='CTG_Label', template='plotly_dark', hole=0.4)
+                fig_visits.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20))
+                st.plotly_chart(fig_visits, use_container_width=True)
+
+            st.markdown("<br>#### 🏪 Performance Distribuzione per Canale e Scontrino Medio", unsafe_allow_html=True)
+            df_channel_grouped = match_ctg.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
+            df_channel_grouped['Scontrino_Medio'] = df_channel_grouped.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
+            
+            ch1, ch2 = st.columns(2)
+            with ch1:
+                fig_ch_sales = px.bar(df_channel_grouped, x='Channel_Label', y='Sales_TY', title="Fatturato per Canale", template="plotly_dark", color='Channel_Label')
+                st.plotly_chart(fig_ch_sales, use_container_width=True)
+            with ch2:
+                fig_ch_avg = px.bar(df_channel_grouped, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio (€ per Visita)", template="plotly_dark", color='Channel_Label')
+                st.plotly_chart(fig_ch_avg, use_container_width=True)
+        else:
+            st.caption("⚠️ I record del file CTG per la selezione corrente contengono volumi pari a zero o vuoti.")
+    else:
+        st.caption("⚠️ Nessun dato nel file CTG corrisponde ai reparti attivi nei filtri gerarchici.")
+else:
+    st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'analisi grafica merceologica.")
+# =============================================================================
+# SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI (Parte A - KPI Metrics)
 # =============================================================================
 with tab2:
     st.header("👥 Analisi Profilazione e Portafoglio Clienti (Sellout)")
@@ -362,13 +417,11 @@ with tab2:
     if not df_sel.empty:
         col_s1, col_f_cust, col_s2 = st.columns(3)
         with col_s1:
-            options_gestione = sorted(df_sel["Tipo Gestione"].dropna().unique()) if "Tipo Gestione" in df_sel.columns else []
-            tipo_gestione = st.multiselect("Filtra per Tipo Gestione:", options=options_gestione)
+            tipo_gestione = st.multiselect("Filtra per Tipo Gestione:", options=sorted(df_sel["Tipo Gestione"].dropna().unique()) if "Tipo Gestione" in df_sel.columns else [])
         with col_f_cust:
             ricerca_cliente = st.text_input("🔍 Cerca Ragione Sociale o Codice Cliente Contabile:")
         with col_s2:
-            options_club = sorted(df_sel["MPRO Club"].dropna().unique()) if "MPRO Club" in df_sel.columns else []
-            mpro_club = st.multiselect("Filtra per Stato MPRO Club:", options=options_club)
+            mpro_club = st.multiselect("Filtra per Stato MPRO Club:", options=sorted(df_sel["MPRO Club"].dropna().unique()) if "MPRO Club" in df_sel.columns else [])
 
         df_sel_filtrato = df_sel.copy()
         if tipo_gestione and "Tipo Gestione" in df_sel.columns:
@@ -378,7 +431,6 @@ with tab2:
         if ricerca_cliente and "Customer" in df_sel.columns:
             df_sel_filtrato = df_sel_filtrato[df_sel_filtrato["Customer"].astype(str).str.contains(ricerca_cliente, case=False, na=False)]
 
-        # Conversione coerente e sicura delle metriche di Sellout
         sellout_sales_tot = float(parse_universal_numeric(df_sel_filtrato["Sales TT"]).sum()) if "Sales TT" in df_sel_filtrato.columns else 0.0
         sellout_margin_tot = float(parse_universal_numeric(df_sel_filtrato["Front Margin"]).sum()) if "Front Margin" in df_sel_filtrato.columns else 0.0
         sellout_visits_tot = float(parse_universal_numeric(df_sel_filtrato["# Visit"]).sum()) if "# Visit" in df_sel_filtrato.columns else 0.0
@@ -390,7 +442,7 @@ with tab2:
         with ms2: st.metric(label="🎯 Front Margin % Realizzato", value=fmt_percentuale(sellout_margin_pct), help=f"Valore assoluto: {fmt_valuta_decimali(sellout_margin_tot)}")
         with ms3: st.metric(label="👣 Volume Totale Visite", value=f"{int(sellout_visits_tot):,}".replace(',', '.'))
         # -----------------------------------------------------------------------------
-        # SCHEDA 2: ANALISI PORTAFOGLIO (Parte B - Tabella Analitica Clienti)
+        # SCHEDA 2: ANALISI PORTAFOGLIO (Parte B - Elenco Analitico Clienti)
         # -----------------------------------------------------------------------------
         st.markdown("<br>### 📋 Elenco Analitico Clienti (Ordinati per Fatturato Decrescente)", unsafe_allow_html=True)
         raggruppamento_cols = [c for c in ["Customer", "Customer Category", "Venditore", "MPRO Club"] if c in df_sel_filtrato.columns]
@@ -401,12 +453,9 @@ with tab2:
             if "# Visit" in df_sel_filtrato.columns: agg_dict["# Visit"] = "sum"
             
             df_customer_pivoted = df_sel_filtrato.groupby(raggruppamento_cols).agg(agg_dict).reset_index()
-            
-            # Ordinamento basato su valori numerici reali decrescenti prima della formattazione stringa
             df_customer_pivoted["Sales_Numeric"] = parse_universal_numeric(df_customer_pivoted["Sales TT"])
             df_customer_pivoted = df_customer_pivoted.sort_values(by="Sales_Numeric", ascending=False)
             
-            # Formattazione per la visualizzazione Streamlit
             df_customer_pivoted["Sales TT"] = df_customer_pivoted["Sales_Numeric"].map(fmt_valuta_interi)
             if "Front Margin" in df_customer_pivoted.columns:
                 df_customer_pivoted["Front Margin"] = parse_universal_numeric(df_customer_pivoted["Front Margin"]).map(fmt_valuta_decimali)
