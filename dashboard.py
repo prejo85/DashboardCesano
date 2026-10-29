@@ -69,7 +69,8 @@ df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel
 # 5. FILTRI GERARCHICI IN ALTO CON LOGICA DI RESET IN SESSION STATE
 # =============================================================================
 st.markdown("---")
-col_f1, col_f2, col_f3, col_btn = st.columns()
+# RISOLTO: Passiamo una lista per definire il numero e le proporzioni delle colonne (3 per i filtri, 1 per il pulsante)
+col_f1, col_f2, col_f3, col_btn = st.columns([3, 3, 3, 1])
 
 if "reset_clicked" not in st.session_state:
     st.session_state.reset_clicked = False
@@ -127,7 +128,7 @@ else:
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
 
 # =============================================================================
-# TAB 1: VISUALIZZAZIONE DELLE VISTE GENERALI E CROSS-REPORT SINK
+# TAB 1: VISUALIZZAZIONE DELLE VISTE GENERALI E PERFORMANCE MIX
 # =============================================================================
 with tab1:
     if not dati_vista.empty:
@@ -164,6 +165,7 @@ with tab1:
         margin_py_tot = float(df_calc['Margin_PY_Num'].sum())
         shrink_tot = float(df_calc['Shrink_TY_Num'].sum())
         shrink_py_tot = float(df_calc['Shrink_PY_Num'].sum())
+        avg_stock_tot = float(df_calc['Stock_TY_Num'].sum())
 
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
@@ -227,7 +229,7 @@ with tab1:
                 match_ctg = df_ctg_clean.copy()
             
             if not match_ctg.empty:
-                # MOTORE DI CONVERSIONE AGGIORNATO: casting forzato a str() e pulizia sicura contro i valori nulli (NaN)
+                # MOTORE DI CONVERSIONE UNIVERSALE ANTI-CRASH PER I NUMERI INTERI DEL FILE CTG
                 def parse_ctg_columns_fixed(dataframe, col_index):
                     if len(dataframe.columns) > col_index:
                         s = dataframe.iloc[:, col_index].fillna('0').astype(str).str.replace(r'\s+', '', regex=True)
