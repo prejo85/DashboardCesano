@@ -29,21 +29,31 @@ def fmt_giorni(valore):
 def parse_universal_numeric(series_or_val):
     """
     Gestisce correttamente lo standard contabile italiano: punto per le migliaia e virgola per i decimali.
-    Evita la decimazione delle cifre tonde (es. 5.000 interpretato come 5.0).
-    Previene il TypeError convertendo esplicitamente ogni cella in stringa prima della pulizia.
+    Risolve il bug del report CTG preservando l'integrità dei conteggi interi (es. 24.579 o 224.631).
     """
     s = series_or_val.astype(str).str.replace(r'\s+', '', regex=True)
     s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
     
     def clean_string(x):
-        # Conversione forzata in stringa per evitare TypeError su float/int nativi
         x_str = str(x)
+        
+        # Caso 1: Sono presenti sia punto che virgola (es: 1.234,56)
         if ',' in x_str and '.' in x_str:
             return x_str.replace('.', '').replace(',', '.')
+            
+        # Caso 2: C'è solo la virgola dei decimali (es: 12,34)
         elif ',' in x_str:
             return x_str.replace(',', '.')
+            
+        # Caso 3: C'è solo il punto (es: 24.579 o 224.631)
         elif '.' in x_str:
-            return x_str.replace('.', '')
+            # Se dopo il punto ci sono esattamente 3 cifre, è un separatore di migliaia (standard CTG)
+            parti = x_str.split('.')
+            if len(parti) == 2 and len(parti[1]) == 3:
+                return x_str.replace('.', '')
+            # Altrimenti lo tratta come decimale nativo standard
+            return x_str
+            
         return x_str
 
     s = s.apply(clean_string)
