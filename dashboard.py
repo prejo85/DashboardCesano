@@ -109,7 +109,7 @@ df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel
 # 5. FILTRI GERARCHICI IN ALTO CON LOGICA DI RESET
 # =============================================================================
 st.markdown("---")
-col_f1, col_f2, col_f3, col_btn = st.columns()
+col_f1, col_f2, col_f3, col_btn = st.columns([3, 3, 3, 1])
 
 if "reset_clicked" not in st.session_state:
     st.session_state.reset_clicked = False
