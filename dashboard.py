@@ -69,7 +69,7 @@ df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel
 # 5. FILTRI GERARCHICI IN ALTO CON LOGICA DI RESET IN SESSION STATE
 # =============================================================================
 st.markdown("---")
-col_f1, col_f2, col_f3, col_btn = st.columns([3, 3, 3, 1])
+col_f1, col_f2, col_f3, col_btn = st.columns()
 
 if "reset_clicked" not in st.session_state:
     st.session_state.reset_clicked = False
@@ -127,7 +127,7 @@ else:
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
 
 # =============================================================================
-# TAB 1: VISUALIZZAZIONE DELLE VISTE GENERALI E INTEGRATE
+# TAB 1: VISUALIZZAZIONE DELLE VISTE GENERALI E CROSS-REPORT SINK
 # =============================================================================
 with tab1:
     if not dati_vista.empty:
@@ -164,7 +164,6 @@ with tab1:
         margin_py_tot = float(df_calc['Margin_PY_Num'].sum())
         shrink_tot = float(df_calc['Shrink_TY_Num'].sum())
         shrink_py_tot = float(df_calc['Shrink_PY_Num'].sum())
-        avg_stock_tot = float(df_calc['Stock_TY_Num'].sum())
 
         margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
         shrink_on_sales = (shrink_tot / sales_tot * 100) if sales_tot != 0 else 0.0
@@ -228,13 +227,16 @@ with tab1:
                 match_ctg = df_ctg_clean.copy()
             
             if not match_ctg.empty:
-                # MOTORE DI CONVERSIONE UNIVERSALE: Isola i punti delle migliaia evitando divisioni decimali errate
+                # MOTORE DI CONVERSIONE AGGIORNATO: casting forzato a str() e pulizia sicura contro i valori nulli (NaN)
                 def parse_ctg_columns_fixed(dataframe, col_index):
                     if len(dataframe.columns) > col_index:
-                        s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
-                        s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
+                        s = dataframe.iloc[:, col_index].fillna('0').astype(str).str.replace(r'\s+', '', regex=True)
                         
                         def clean_format(val_str):
+                            val_str = str(val_str).strip()
+                            if val_str in ['-', '--', 'nan', 'NaN', 'None', '']:
+                                return '0'
+                            
                             if ',' in val_str:
                                 return val_str.replace('.', '').replace(',', '.')
                             else:
@@ -318,7 +320,7 @@ with tab2:
         ms1, ms2, ms3 = st.columns(3)
         with ms1: st.metric(label="💼 Fatturato Portafoglio (Sellout)", value=fmt_valuta_interi(sellout_sales_tot))
         with ms2: st.metric(label="🎯 Front Margin % Realizzato", value=fmt_percentuale(sellout_margin_pct))
-        with ms3: st.metric(label="👣 Volume Totale Visites", value=f"{int(sellout_visits_tot):,}".replace(',', '.'))
+        with ms3: st.metric(label="👣 Volume Totale Visite", value=f"{int(sellout_visits_tot):,}".replace(',', '.'))
 
         st.markdown("<br>### 📋 Elenco Analitico Clienti (Ordinati per Fatturato Decrescente)", unsafe_allow_html=True)
         raggruppamento_cols = [c for c in ["Customer", "Customer Category", "Venditore", "MPRO Club"] if c in df_sel_filtrato.columns]
