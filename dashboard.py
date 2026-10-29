@@ -238,27 +238,27 @@ with tab1:
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
-                # 1. Copia pulita dell'intero file senza alcun filtro Food/Non-Food a monte
+                # Forziamo una copia pulita dell'intero set di dati senza filtri di settore preventivi
                 df_rep_pure = df_rep.copy()
                 
-                # 2. Verifica dinamica della colonna Reparto nel file BMPL
-                col_bmpl_rep = [c for c in df_rep_pure.columns if 'department' in c.lower() or 'reparto' in c.lower() or 'sales dept' in c.lower()]
+                # Cerchiamo la colonna identificativa del reparto (es. 'Sales Department')
+                col_bmpl_rep = [c for c in df_rep_pure.columns if any(k in c.lower() for k in ['department', 'reparto', 'sales dept', 'sales depe'])]
                 
-                # 3. Logica di filtraggio gerarchico coerente
+                # Applichiamo il filtro sui reparti target ricavati dalla mensilizzazione solo se non siamo in visione totale store
                 if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
                     if col_bmpl_rep and len(codici_target) > 0:
-                        # CORRETTO: Uso dell'indice [0] per estrarre la serie corretta ed evitare conflitti di DataFrame
-                        df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[col_bmpl_rep[0]].astype(str).apply(
+                        # Estraiamo in modo sicuro la colonna come Series per evitare eccezioni di indicizzazione complessa
+                        nome_colonna_rep = col_bmpl_rep[0]
+                        df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[nome_colonna_rep].astype(str).apply(
                             lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
                         )
                         match_bmpl = df_rep_pure[df_rep_pure['Codice_Reparto_BMPL'].isin(codici_target)]
                     else:
                         match_bmpl = df_rep_pure.copy()
                 else:
-                    # Se siamo sul totale store, prende tutto il file BMPL (Food + Non-Food)
+                    # Totale Store: elabora l'intero file BMPL (Food + Non-Food insieme)
                     match_bmpl = df_rep_pure.copy()
 
-                # 4. Calcolo delle metriche aggregate
                 if not match_bmpl.empty:
                     bmpl_sales = float(parse_bmpl_direct(match_bmpl, 'Sales TT').sum())
                     bmpl_sales_py = float(parse_bmpl_direct(match_bmpl, 'Sales TT PY Custom Cal').sum())
@@ -275,7 +275,6 @@ with tab1:
                 delta_sales_bmpl = ((bmpl_sales - bmpl_sales_py) / bmpl_sales_py * 100) if bmpl_sales_py != 0 else 0.0
                 delta_colli_bmpl = ((bmpl_colli - bmpl_colli_py) / bmpl_colli_py * 100) if bmpl_colli_py != 0 else 0.0
 
-                # 5. Rendering dei KPI aggiornati
                 sub_col1, sub_col2, sub_col3 = st.columns(3)
                 with sub_col1: 
                     st.metric(label="Sales TT (BMPL)", value=fmt_valuta_interi(bmpl_sales), delta=f"{delta_sales_bmpl:+.2f}% vs PY" if bmpl_sales_py != 0 else None)
