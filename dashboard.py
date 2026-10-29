@@ -33,22 +33,13 @@ def fmt_giorni(valore):
 def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabili, file_mensile):
     def clean_df(file_path):
         try:
-            # encoding='utf-8-sig' rimuove eventuali caratteri BOM invisibili all'inizio del file
-            df = pd.read_csv(file_path, sep=";", skiprows=0, skip_blank_lines=True, encoding='utf-8-sig')
+            df = pd.read_csv(file_path, sep=";", skiprows=0, skip_blank_lines=True)
             if len(df.columns) <= 1:
-                df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True, encoding='utf-8-sig')
+                df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
         except:
-            df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True, encoding='utf-8-sig')
-        
-        # Pulizia avanzata delle intestazioni di colonna
-        df.columns = df.columns.str.strip().str.replace(r'\s+', ' ', regex=True)
-        
-        # Sostituiamo stringhe vuote nascoste o spazi con veri NaN per la prima colonna
-        if len(df.columns) > 0:
-            df.iloc[:, 0] = df.iloc[:, 0].astype(str).str.strip()
-            df = df[df.iloc[:, 0].isin(['1 - FOOD', '2 - NON FOOD', 'FOOD', 'NON FOOD']) | df.iloc[:, 0].notna()]
-            # Rimuove righe totalmente vuote che potrebbero essersi generate in fondo al CSV
-            df = df.dropna(how='all')
+            df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
+        df.columns = df.columns.str.strip()
+        df = df[df.iloc[:, 0].notna()]
         return df
 
     df_rep = clean_df(file_reparti)
@@ -244,79 +235,58 @@ with tab1:
             st.metric(label="🏬 Avg Stock Last Day", value=fmt_valuta_interi(val_avg_stock_ultimo_giorno), delta=None)
         with m5:  
             st.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
+
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("🔗 Indicatori di Performance Cross-Report (BMPL & Indispensabili)")
         col_c1, col_c2 = st.columns(2)
         
         with col_c1:
             st.markdown("#### 📈 Sintesi Report BMPL Reparti")
-            if u_rep is not None:
-                try:
-                    u_rep.seek(0)
-                    df_direct = pd.read_csv(u_rep, sep=";", skiprows=0, skip_blank_lines=True, encoding='utf-8-sig')
-                    if len(df_direct.columns) <= 1:
-                        u_rep.seek(0)
-                        df_direct = pd.read_csv(u_rep, sep=",", skiprows=0, skip_blank_lines=True, encoding='utf-8-sig')
-                except Exception as e:
-                    st.error(f"Errore caricamento file: {e}")
-                    df_direct = pd.DataFrame()
+            if not df_rep.empty:
+                def parse_bmpl_direct(dataframe, col_name):
+                    if col_name in dataframe.columns:
+                        s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
+                        s = s.replace(['-', '--', 'nan', 'NaN', ''], '0')
+                        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                        return pd.to_numeric(s, errors='coerce').fillna(0.0)
+                    return pd.Series(0.0, index=dataframe.index)
 
-                if not df_direct.empty:
-                    df_direct.columns = df_direct.columns.str.strip()
-
-                    if selected_area != "--- TOTALE STORE ---" and len(codici_target) > 0:
-                        col_rep_find = [c for c in df_direct.columns if 'department' in c.lower() or 'reparto' in c.lower() or 'sales dep' in c.lower()]
-                        if col_rep_find:
-                            df_direct['_codice_dep'] = df_direct[col_rep_find].astype(str).apply(
-                                lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
-                            )
-                            df_lavorazione = df_direct[df_direct['_codice_dep'].isin(codici_target)].copy()
-                        else:
-                            df_lavorazione = df_direct.copy()
+                df_rep_pure = df_rep[df_rep.iloc[:, 0].astype(str).str.contains('FOOD', case=False, na=False)].copy()
+                if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
+                    col_bmpl_rep = [c for c in df_rep_pure.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+                    if col_bmpl_rep and len(codici_target) > 0:
+                        df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[col_bmpl_rep[0]].astype(str).apply(
+                            lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
+                        )
+                        match_bmpl = df_rep_pure[df_rep_pure['Codice_Reparto_BMPL'].isin(codici_target)]
                     else:
-                        df_lavorazione = df_direct.copy()
-
-                    def parse_pos_col(dataframe, col_index):
-                        if len(dataframe.columns) > col_index:
-                            s = dataframe.iloc[:, col_index]
-                            if pd.api.types.is_numeric_dtype(s):
-                                return s.fillna(0.0)
-                            s_str = s.astype(str).str.replace(r'\s+', '', regex=True)
-                            s_str = s_str.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
-                            if s_str.str.contains(r'\.').any() and s_str.str.contains(',').any():
-                                s_str = s_str.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                            elif s_str.str.contains(',').any() and not s_str.str.contains(r'\.').any():
-                                s_str = s_str.str.replace(',', '.', regex=False)
-                            elif s_str.str.contains(r'\.').any() and not s_str.str.contains(',').any():
-                                s_str = s_str.str.replace('.', '', regex=False)
-                            return pd.to_numeric(s_str, errors='coerce').fillna(0.0)
-                        return pd.Series(0.0, index=dataframe.index)
-
-                    bmpl_sales    = float(parse_pos_col(df_lavorazione, 3).sum())
-                    bmpl_sales_py = float(parse_pos_col(df_lavorazione, 4).sum())
-                    bmpl_colli    = float(parse_pos_col(df_lavorazione, 5).sum())
-                    bmpl_colli_py = float(parse_pos_col(df_lavorazione, 6).sum())
-                    bmpl_margin   = float(parse_pos_col(df_lavorazione, 7).sum())
-                    bmpl_margin_py= float(parse_pos_col(df_lavorazione, 8).sum())
-
-                    margin_pct_ty = (bmpl_margin / bmpl_sales * 100) if bmpl_sales != 0 else 0.0
-                    margin_pct_py = (bmpl_margin_py / bmpl_sales_py * 100) if bmpl_sales_py != 0 else 0.0
-                    
-                    delta_margin_bmpl_pp = margin_pct_ty - margin_pct_py
-                    delta_sales_bmpl = ((bmpl_sales - bmpl_sales_py) / bmpl_sales_py * 100) if bmpl_sales_py != 0 else 0.0
-                    delta_colli_bmpl = ((bmpl_colli - bmpl_colli_py) / bmpl_colli_py * 100) if bmpl_colli_py != 0 else 0.0
-
-                    sub_col1, sub_col2, sub_col3 = st.columns(3)
-                    with sub_col1: 
-                        st.metric(label="Sales TT (BMPL)", value=fmt_valuta_interi(bmpl_sales), delta=f"{delta_sales_bmpl:+.2f}% vs PY" if bmpl_sales_py != 0 else None)
-                    with sub_col2: 
-                        st.metric(label="Front Margin % (BMPL)", value=fmt_percentuale(margin_pct_ty), delta=f"{delta_margin_bmpl_pp:+.2f} pp vs PY")
-                    with sub_col3: 
-                        st.metric(label="Volume Colli (BMPL)", value=f"{int(round(bmpl_colli)):,}".replace(',', '.'), delta=f"{delta_colli_bmpl:+.2f}% vs PY" if bmpl_colli_py != 0 else None)
+                        match_bmpl = df_rep_pure.copy()
                 else:
-                    st.warning("Il file dei reparti caricato risulta vuoto.")
-            else:
-                st.info("Carica il file BMPL Reparti per visualizzare i dati.")
+                    match_bmpl = df_rep_pure.copy()
+
+                if not match_bmpl.empty:
+                    bmpl_sales = float(parse_bmpl_direct(match_bmpl, 'Sales TT').sum())
+                    bmpl_sales_py = float(parse_bmpl_direct(match_bmpl, 'Sales TT PY Custom Cal').sum())
+                    bmpl_margin = float(parse_bmpl_direct(match_bmpl, 'Front Margin').sum())
+                    bmpl_margin_py = float(parse_bmpl_direct(match_bmpl, 'Front Margin PY Custom Cal').sum())
+                    bmpl_colli = float(parse_bmpl_direct(match_bmpl, '# Colli').sum())
+                    bmpl_colli_py = float(parse_bmpl_direct(match_bmpl, '# Colli PY Custom Cal').sum())
+                else:
+                    bmpl_sales, bmpl_sales_py, bmpl_margin, bmpl_margin_py, bmpl_colli, bmpl_colli_py = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+                
+                margin_pct_ty = (bmpl_margin / bmpl_sales * 100) if bmpl_sales != 0 else 0.0
+                margin_pct_py = (bmpl_margin_py / bmpl_sales_py * 100) if bmpl_sales_py != 0 else 0.0
+                delta_margin_bmpl_pp = margin_pct_ty - margin_pct_py
+                delta_sales_bmpl = ((bmpl_sales - bmpl_sales_py) / bmpl_sales_py * 100) if bmpl_sales_py != 0 else 0.0
+                delta_colli_bmpl = ((bmpl_colli - bmpl_colli_py) / bmpl_colli_py * 100) if bmpl_colli_py != 0 else 0.0
+
+                sub_col1, sub_col2, sub_col3 = st.columns(3)
+                with sub_col1: 
+                    st.metric(label="Sales TT (BMPL)", value=fmt_valuta_interi(bmpl_sales), delta=f"{delta_sales_bmpl:+.2f}% vs PY" if bmpl_sales_py != 0 else None)
+                with sub_col2: 
+                    st.metric(label="Front Margin % (BMPL)", value=fmt_percentuale(margin_pct_ty), delta=f"{delta_margin_bmpl_pp:+.2f} pp vs PY")
+                with sub_col3: 
+                    st.metric(label="Volume Colli (BMPL)", value=f"{int(round(bmpl_colli)):,}".replace(',', '.'), delta=f"{delta_colli_bmpl:+.2f}% vs PY" if bmpl_colli_py != 0 else None)
 
         with col_c2:
             st.markdown("#### 📌 Sintesi Articoli Indispensabili nel Mix")
@@ -357,6 +327,7 @@ with tab1:
                     st.metric(label="Volume Colli (Indisp.)", value=f"{int(round(ind_colli)):,}".replace(',', '.'), delta=f"{delta_colli_ind:+.2f}% vs PY")
                 with sub_ind3: 
                     st.metric(label="📉 Shrinkage (Indisp.)", value=fmt_valuta_interi(ind_shrink), delta=f"{delta_shk_ind:+.2f}% vs PY" if ind_shrink_py != 0 else None, delta_color="inverse")
+
         st.markdown("<br>#### 📋 Elenco Dettagliato Articoli Indispensabili Rilevati", unsafe_allow_html=True)
         if not match_indisp.empty:
             colonne_totali = list(df_ind.columns)
@@ -395,11 +366,15 @@ with tab1:
             
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
 
+# =============================================================================
+# BLOCCO 6: MOTORE CORRETTO DI CONVERSIONE (EVITA DIVISIONI PER 1000) SUL FILE CTG
+# =============================================================================
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
 
         if not df_ctg.empty:
             df_ctg_clean = df_ctg.copy()
+            
             df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.iloc[:, 1].astype(str).apply(
                 lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
             )
@@ -414,6 +389,7 @@ with tab1:
                     if len(dataframe.columns) > col_index:
                         s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
                         s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
+                        # RIMOZIONE CHIRURGICA DEL PUNTO DELLE MIGLIAIA: Fondamentale per non falsare le somme contabili italiane
                         s = s.str.replace('.', '', regex=False)
                         s = s.str.replace(',', '.', regex=False)
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
@@ -438,12 +414,18 @@ with tab1:
 
                 if not df_ctg_grouped.empty:
                     g1, g2 = st.columns(2)
+                    
                     with g1:
                         st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TT)")
                         fig_sales = px.bar(
-                            df_ctg_grouped, x='Sales_TY', y='CTG_Label', orientation='h',
+                            df_ctg_grouped,
+                            x='Sales_TY',
+                            y='CTG_Label',
+                            orientation='h',
                             labels={'Sales_TY': 'Fatturato Corrente (€)', 'CTG_Label': 'Categoria CTG'},
-                            template='plotly_dark', color='Sales_TY', color_continuous_scale='Blues'
+                            template='plotly_dark',
+                            color='Sales_TY',
+                            color_continuous_scale='Blues'
                         )
                         fig_sales.update_layout(showlegend=False, coloraxis_showscale=False, height=450, margin=dict(l=20, r=20, t=20, b=20))
                         fig_sales.update_traces(hovertemplate="<b>%{y}</b><br>Fatturato: € %{x:,.0f}<extra></extra>".replace(',', '.'))
@@ -451,13 +433,22 @@ with tab1:
                         
                     with g2:
                         st.markdown("#### 👥 Frequenza e Mix dei Volumi delle Visite")
-                        fig_visits = px.pie(df_ctg_grouped, values='Visits_TY', names='CTG_Label', template='plotly_dark', hole=0.4)
+                        fig_visits = px.pie(
+                            df_ctg_grouped,
+                            values='Visits_TY',
+                            names='CTG_Label',
+                            template='plotly_dark',
+                            hole=0.4
+                        )
                         fig_visits.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20))
                         fig_visits.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="<b>%{label}</b><br>Visite: %{value:,.0f}<br>Incidenza: %{percent}<extra></extra>".replace(',', '.'))
                         st.plotly_chart(fig_visits, use_container_width=True)
 
                     st.markdown("<br>#### 🏪 Performance Distribuzione per Canale e Scontrino Medio (`Sales per Visit`)", unsafe_allow_html=True)
-                    df_channel_grouped = match_ctg.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
+                    df_channel_grouped = match_ctg.groupby('Channel_Label').agg({
+                        'Sales_TY': 'sum',
+                        'Visits_TY': 'sum'
+                    }).reset_index()
                     df_channel_grouped['Scontrino_Medio'] = df_channel_grouped.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
                     
                     ch1, ch2 = st.columns(2)
