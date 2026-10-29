@@ -33,13 +33,22 @@ def fmt_giorni(valore):
 def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabili, file_mensile):
     def clean_df(file_path):
         try:
-            df = pd.read_csv(file_path, sep=";", skiprows=0, skip_blank_lines=True)
+            # encoding='utf-8-sig' rimuove eventuali caratteri BOM invisibili all'inizio del file
+            df = pd.read_csv(file_path, sep=";", skiprows=0, skip_blank_lines=True, encoding='utf-8-sig')
             if len(df.columns) <= 1:
-                df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
+                df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True, encoding='utf-8-sig')
         except:
-            df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
-        df.columns = df.columns.str.strip()
-        df = df[df.iloc[:, 0].notna()]
+            df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True, encoding='utf-8-sig')
+        
+        # Pulizia avanzata delle intestazioni di colonna
+        df.columns = df.columns.str.strip().str.replace(r'\s+', ' ', regex=True)
+        
+        # Sostituiamo stringhe vuote nascoste o spazi con veri NaN per la prima colonna
+        if len(df.columns) > 0:
+            df.iloc[:, 0] = df.iloc[:, 0].astype(str).str.strip()
+            df = df[df.iloc[:, 0].isin(['1 - FOOD', '2 - NON FOOD', 'FOOD', 'NON FOOD']) | df.iloc[:, 0].notna()]
+            # Rimuove righe totalmente vuote che potrebbero essersi generate in fondo al CSV
+            df = df.dropna(how='all')
         return df
 
     df_rep = clean_df(file_reparti)
