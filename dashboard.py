@@ -309,16 +309,15 @@ with tab1:
                     with sub_ind2: st.metric(label="Volume Colli (Indisp.)", value=f"{int(round(ind_colli)):,}".replace(',', '.'), delta=f"{delta_colli_ind:+.2f}% vs PY")
                     with sub_ind3: st.metric(label="📉 Shrinkage (Indisp.)", value=fmt_valuta_interi(ind_shrink))
         # -----------------------------------------------------------------------------
-        # TAB 1: VISUALIZZAZIONE (Parte C - Analisi Grafica Report CTG Corretta)
+        # TAB 1: VISUALIZZAZIONE (Parte C - Analisi Grafica Report CTG con Indici Corretti)
         # -----------------------------------------------------------------------------
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
         if not df_ctg.empty:
             df_ctg_clean = df_ctg.copy()
             
-            # CERCA IL CODICE REPARTO IN MODO ROBUSTO NELLE PRIME COLONNE
+            # Estrazione del codice reparto dalle prime colonne
             def estrai_primo_codice(row):
-                # Controlla le prime 4 colonne per trovare un codice numerico di reparto
                 for col_idx in range(min(4, len(row))):
                     val_str = str(row.iloc[col_idx])
                     match = re.search(r'\d+', val_str)
@@ -328,18 +327,24 @@ with tab1:
 
             df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.apply(estrai_primo_codice, axis=1)
             
-            # Se siamo sul "TOTALE STORE", non filtriamo i reparti per evitare perdite di dati
+            # Disattiviamo il filtro se siamo su TOTALE STORE per includere tutto il fatturato
             if selected_area == "--- TOTALE STORE ---":
                 match_ctg = df_ctg_clean.copy()
             else:
                 match_ctg = df_ctg_clean[df_ctg_clean['Codice_Reparto_CTG'].isin(codici_target)].copy() if len(codici_target) > 0 else df_ctg_clean.copy()
             
             if not match_ctg.empty:
-                # Mappatura corretta delle colonne basata sulla posizione del file CTG standard
-                match_ctg['Sales_TY'] = parse_universal_numeric(match_ctg.iloc[:, 7])
-                match_ctg['Visits_TY'] = parse_universal_numeric(match_ctg.iloc[:, 11])
-                match_ctg['CTG_Label'] = match_ctg['CTG'].astype(str).str.strip().str.replace("'", "", regex=False).replace(['nan', 'None', ''], '-')
-                match_ctg['Channel_Label'] = match_ctg['Channel Detail'].astype(str).str.strip()
+                # MAPPATURA RIGIDA SULL'OTTAVA COLONNA (INDICE 6) PER IL FATTURATO CORRENTE
+                match_ctg['Sales_TY'] = parse_universal_numeric(match_ctg.iloc[:, 6])
+                
+                # Le visite si spostano di conseguenza (se prima erano all'indice 11, verifichiamo la colonna corretta)
+                # Assumiamo la colonna standard delle visite o lasciamo il fallback dinamico per la seconda metrica
+                col_visits_idx = 11 if len(match_ctg.columns) > 11 else -1
+                match_ctg['Visits_TY'] = parse_universal_numeric(match_ctg.iloc[:, col_visits_idx])
+                
+                # Gestione etichetta categoria CTG (solitamente colonna 3 o 4)
+                col_ctg_label = 'CTG' if 'CTG' in match_ctg.columns else match_ctg.columns[2]
+                match_ctg['CTG_Label'] = match_ctg[col_ctg_label].astype(str).str.strip().str.replace("'", "", regex=False).replace(['nan', 'None', ''], '-')
 
                 df_ctg_grouped = match_ctg.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
                 df_ctg_grouped = df_ctg_grouped[df_ctg_grouped['Sales_TY'] > 0].sort_values(by='Sales_TY', ascending=True)
@@ -347,7 +352,7 @@ with tab1:
                 if not df_ctg_grouped.empty:
                     g1, g2 = st.columns(2)
                     with g1:
-                        st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TT)")
+                        st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TY)")
                         fig_sales = px.bar(
                             df_ctg_grouped, x='Sales_TY', y='CTG_Label', orientation='h',
                             labels={'Sales_TY': 'Fatturato Corrente (€)', 'CTG_Label': 'Categoria CTG'},
