@@ -372,13 +372,18 @@ with tab1:
                 match_ctg = df_ctg_clean.copy()
             
             if not match_ctg.empty:
+                # FUNZIONE DI PARSING CORRETTA: Rimuove il punto delle migliaia italiano prima del casting
                 def parse_ctg_columns_fixed(dataframe, col_index):
                     if len(dataframe.columns) > col_index:
+                        # Estrae la stringa e rimuove gli spazi vuoti
                         s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
                         s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
-                        # RIMOZIONE CHIRURGICA DEL PUNTO DELLE MIGLIAIA: Fondamentale per non falsare le somme contabili italiane
+                        
+                        # MODIFICA CHIRURGICA: Rimuoviamo il punto delle migliaia (es. "1.241" diventa "1241")
                         s = s.str.replace('.', '', regex=False)
+                        # Sostituiamo l'eventuale virgola decimale con il punto standard di Python
                         s = s.str.replace(',', '.', regex=False)
+                        
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
