@@ -72,18 +72,16 @@ df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel
 st.markdown("---")
 col_f1, col_f2, col_f3, col_btn = st.columns([3, 3, 3, 1])
 
-# Funzione di callback per resettare i filtri direttamente in session_state
-def reset_filters():
-    st.session_state["sb_store"] = lista_store[0] if 'lista_store' in locals() and lista_store else None
-    if "sb_area" in st.session_state:
-        del st.session_state["sb_area"]
-    if "sb_reparto" in st.session_state:
-        del st.session_state["sb_reparto"]
+# Inizializza il contatore di reset nel session_state se non esiste
+if "reset_counter" not in st.session_state:
+    st.session_state.reset_counter = 0
 
 with col_btn:
     st.markdown("<div style='padding-top: 24px;'></div>", unsafe_allow_html=True)
-    # Al click viene eseguita la funzione di callback e ricaricata la pagina
-    st.button("🔄 Reset", use_container_width=True, on_click=reset_filters)
+    # Al click del bottone, incrementiamo il contatore: questo cambierà le chiavi di TUTTI i selectbox costringendoli al reset completo
+    if st.button("🔄 Reset", use_container_width=True):
+        st.session_state.reset_counter += 1
+        st.rerun()
 
 if len(df_men.columns) >= 5:
     df_men_clean = df_men.copy()
@@ -93,14 +91,23 @@ if len(df_men.columns) >= 5:
     
     lista_store = sorted([x for x in df_men_clean.iloc[:, 1].unique() if x not in ['nan', 'None', '']])
     
+    # Le chiavi dinamiche includono il contatore per forzare il refresh grafico totale
     with col_f1:
-        selected_store = st.selectbox("Seleziona Store:", lista_store, key="sb_store")
+        selected_store = st.selectbox(
+            "Seleziona Store:", 
+            lista_store, 
+            key=f"sb_store_{st.session_state.reset_counter}"
+        )
     
     df_filtrato_store = df_men_clean[df_men_clean.iloc[:, 1] == selected_store]
     lista_aree = ["--- TOTALE STORE ---"] + sorted([x for x in df_filtrato_store.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
     
     with col_f2:
-        selected_area = st.selectbox("Seleziona Area di Vendita:", lista_aree, key="sb_area")
+        selected_area = st.selectbox(
+            "Seleziona Area di Vendita:", 
+            lista_aree, 
+            key=f"sb_area_{st.session_state.reset_counter}"
+        )
     
     if selected_area != "--- TOTALE STORE ---":
         df_filtrato_area = df_filtrato_store[df_filtrato_store.iloc[:, 3] == selected_area]
@@ -110,7 +117,11 @@ if len(df_men.columns) >= 5:
         lista_reparti = ["--- DETTAGLIO RICHIESTO ---"]
         
     with col_f3:
-        selected_reparto = st.selectbox("Seleziona Reparto:", lista_reparti, key="sb_reparto")
+        selected_reparto = st.selectbox(
+            "Seleziona Reparto:", 
+            lista_reparti, 
+            key=f"sb_reparto_{st.session_state.reset_counter}"
+        )
 
     nome_store_pulito = selected_store.split(" - ")[-1] if " - " in str(selected_store) else selected_store
 
