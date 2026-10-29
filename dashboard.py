@@ -243,17 +243,31 @@ with tab1:
         with col_c1:
             st.markdown("#### 📈 Sintesi Report BMPL Reparti")
             if not df_rep.empty:
-                def parse_bmpl_direct(dataframe, col_name):
-                    if col_name in dataframe.columns:
-                        s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
-                        s = s.replace(['-', '--', 'nan', 'NaN', ''], '0')
-                        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                        return pd.to_numeric(s, errors='coerce').fillna(0.0)
+                # Funzione di pulizia numerica robusta (gestisce punti e virgole italiane)
+                def parse_bmpl_column(dataframe, col_identifier):
+                    # Cerca per nome esatto o parziale, altrimenti usa l'indice se passiamo un intero
+                    s = pd.Series(dtype=float)
+                    if isinstance(col_identifier, int) and len(dataframe.columns) > col_identifier:
+                        s = dataframe.iloc[:, col_identifier]
+                    else:
+                        found_cols = [c for c in dataframe.columns if str(col_identifier).lower() in c.lower()]
+                        if found_cols:
+                            s = dataframe[found_cols[0]]
+                    
+                    if not s.empty:
+                        s_str = s.astype(str).str.replace(r'\s+', '', regex=True)
+                        s_str = s_str.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
+                        # Rimuove il punto delle migliaia e converte la virgola decimale
+                        s_str = s_str.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                        return pd.to_numeric(s_str, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
-                df_rep_pure = df_rep[df_rep.iloc[:, 0].astype(str).str.contains('FOOD', case=False, na=False)].copy()
+                # Rimosso il filtro rigido .contains('FOOD'): ora leggiamo TUTTI i reparti dello store
+                df_rep_pure = df_rep.copy()
+                
+                # Applica il filtro gerarchico solo se l'utente ha selezionato un'area o un reparto specifico
                 if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
-                    col_bmpl_rep = [c for c in df_rep_pure.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+                    col_bmpl_rep = [c for c in df_rep_pure.columns if 'department' in c.lower() or 'reparto' in c.lower() or 'sales dep' in c.lower()]
                     if col_bmpl_rep and len(codici_target) > 0:
                         df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[col_bmpl_rep[0]].astype(str).apply(
                             lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
@@ -265,12 +279,25 @@ with tab1:
                     match_bmpl = df_rep_pure.copy()
 
                 if not match_bmpl.empty:
-                    bmpl_sales = float(parse_bmpl_direct(match_bmpl, 'Sales TT').sum())
-                    bmpl_sales_py = float(parse_bmpl_direct(match_bmpl, 'Sales TT PY Custom Cal').sum())
-                    bmpl_margin = float(parse_bmpl_direct(match_bmpl, 'Front Margin').sum())
-                    bmpl_margin_py = float(parse_bmpl_direct(match_bmpl, 'Front Margin PY Custom Cal').sum())
-                    bmpl_colli = float(parse_bmpl_direct(match_bmpl, '# Colli').sum())
-                    bmpl_colli_py = float(parse_bmpl_direct(match_bmpl, '# Colli PY Custom Cal').sum())
+                    # Estrazione posizionale basata sul tracciato Excel fornito:
+                    # Colonna D (Indice 3) -> Sales TT
+                    # Colonna E (Indice 4) -> Sales TT PY
+                    # Colonna F (Indice 5) -> # Colli
+                    # Colonna G (Indice 6) -> # Colli PY
+                    bmpl_sales = float(parse_bmpl_column(match_bmpl, 3).sum())
+                    bmpl_sales_py = float(parse_bmpl_column(match_bmpl, 4).sum())
+                    
+                    # Calcolo del Front Margin (usa la colonna con nome 'Front Margin' o indice 8 per TY)
+                    bmpl_margin = float(parse_bmpl_column(match_bmpl, 'Front Margin').sum())
+                    if bmpl_margin == 0.0 and len(match_bmpl.columns) > 8:
+                        bmpl_margin = float(parse_bmpl_column(match_bmpl, 8).sum())
+                        
+                    bmpl_margin_py = float(parse_bmpl_column(match_bmpl, 'Front Margin PY').sum())
+                    if bmpl_margin_py == 0.0 and len(match_bmpl.columns) > 7:
+                        bmpl_margin_py = float(parse_bmpl_column(match_bmpl, 7).sum())
+                        
+                    bmpl_colli = float(parse_bmpl_column(match_bmpl, 5).sum())
+                    bmpl_colli_py = float(parse_bmpl_column(match_bmpl, 6).sum())
                 else:
                     bmpl_sales, bmpl_sales_py, bmpl_margin, bmpl_margin_py, bmpl_colli, bmpl_colli_py = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
                 
