@@ -238,7 +238,7 @@ with tab1:
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
-                # CORREZIONE: Rimossa la limitazione al solo settore 'FOOD'. Ora include anche il 'NON FOOD'.
+                # Include l'intero assortimento (sia FOOD che NON-FOOD)
                 df_rep_pure = df_rep.copy() 
                 
                 if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
