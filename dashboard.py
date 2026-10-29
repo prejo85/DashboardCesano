@@ -238,7 +238,9 @@ with tab1:
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
-                df_rep_pure = df_rep[df_rep.iloc[:, 0].astype(str).str.contains('FOOD', case=False, na=False)].copy()
+                # CORREZIONE: Rimossa la limitazione al solo settore 'FOOD'. Ora include anche il 'NON FOOD'.
+                df_rep_pure = df_rep.copy() 
+                
                 if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
                     col_bmpl_rep = [c for c in df_rep_pure.columns if 'department' in c.lower() or 'reparto' in c.lower()]
                     if col_bmpl_rep and len(codici_target) > 0:
