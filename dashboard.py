@@ -230,7 +230,8 @@ with tab1:
         with col_c1:
             st.markdown("#### 📈 Sintesi Report BMPL Reparti")
             if not df_rep.empty:
-                def parse_bmpl_direct(dataframe, col_name):
+                # Funzione interna locale per garantire il parsing numerico corretto
+                def parse_bmpl_forzato(dataframe, col_name):
                     if col_name in dataframe.columns:
                         s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
                         s = s.replace(['-', '--', 'nan', 'NaN', ''], '0')
@@ -238,43 +239,25 @@ with tab1:
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
-                # Forziamo una copia pulita dell'intero set di dati senza filtri di settore preventivi
-                df_rep_pure = df_rep.copy()
-                
-                # Cerchiamo la colonna identificativa del reparto (es. 'Sales Department')
-                col_bmpl_rep = [c for c in df_rep_pure.columns if any(k in c.lower() for k in ['department', 'reparto', 'sales dept', 'sales depe'])]
-                
-                # Applichiamo il filtro sui reparti target ricavati dalla mensilizzazione solo se non siamo in visione totale store
-                if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
-                    if col_bmpl_rep and len(codici_target) > 0:
-                        # Estraiamo in modo sicuro la colonna come Series per evitare eccezioni di indicizzazione complessa
-                        nome_colonna_rep = col_bmpl_rep[0]
-                        df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[nome_colonna_rep].astype(str).apply(
-                            lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
-                        )
-                        match_bmpl = df_rep_pure[df_rep_pure['Codice_Reparto_BMPL'].isin(codici_target)]
-                    else:
-                        match_bmpl = df_rep_pure.copy()
-                else:
-                    # Totale Store: elabora l'intero file BMPL (Food + Non-Food insieme)
-                    match_bmpl = df_rep_pure.copy()
+                # Prendiamo il dataset originale bypassando ogni filtro gerarchico o di sessione
+                df_direct_calc = df_rep.copy()
 
-                if not match_bmpl.empty:
-                    bmpl_sales = float(parse_bmpl_direct(match_bmpl, 'Sales TT').sum())
-                    bmpl_sales_py = float(parse_bmpl_direct(match_bmpl, 'Sales TT PY Custom Cal').sum())
-                    bmpl_margin = float(parse_bmpl_direct(match_bmpl, 'Front Margin').sum())
-                    bmpl_margin_py = float(parse_bmpl_direct(match_bmpl, 'Front Margin PY Custom Cal').sum())
-                    bmpl_colli = float(parse_bmpl_direct(match_bmpl, '# Colli').sum())
-                    bmpl_colli_py = float(parse_bmpl_direct(match_bmpl, '# Colli PY Custom Cal').sum())
-                else:
-                    bmpl_sales, bmpl_sales_py, bmpl_margin, bmpl_margin_py, bmpl_colli, bmpl_colli_py = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+                # Calcolo matematico puro e diretto sulle colonne del foglio CSV
+                bmpl_sales = float(parse_bmpl_forzato(df_direct_calc, 'Sales TT').sum())
+                bmpl_sales_py = float(parse_bmpl_forzato(df_direct_calc, 'Sales TT PY Custom Cal').sum())
+                bmpl_margin = float(parse_bmpl_forzato(df_direct_calc, 'Front Margin').sum())
+                bmpl_margin_py = float(parse_bmpl_forzato(df_direct_calc, 'Front Margin PY Custom Cal').sum())
+                bmpl_colli = float(parse_bmpl_forzato(df_direct_calc, '# Colli').sum())
+                bmpl_colli_py = float(parse_bmpl_forzato(df_direct_calc, '# Colli PY Custom Cal').sum())
                 
+                # Formule di performance relative
                 margin_pct_ty = (bmpl_margin / bmpl_sales * 100) if bmpl_sales != 0 else 0.0
                 margin_pct_py = (bmpl_margin_py / bmpl_sales_py * 100) if bmpl_sales_py != 0 else 0.0
                 delta_margin_bmpl_pp = margin_pct_ty - margin_pct_py
                 delta_sales_bmpl = ((bmpl_sales - bmpl_sales_py) / bmpl_sales_py * 100) if bmpl_sales_py != 0 else 0.0
                 delta_colli_bmpl = ((bmpl_colli - bmpl_colli_py) / bmpl_colli_py * 100) if bmpl_colli_py != 0 else 0.0
 
+                # Interfaccia grafica dei KPI
                 sub_col1, sub_col2, sub_col3 = st.columns(3)
                 with sub_col1: 
                     st.metric(label="Sales TT (BMPL)", value=fmt_valuta_interi(bmpl_sales), delta=f"{delta_sales_bmpl:+.2f}% vs PY" if bmpl_sales_py != 0 else None)
