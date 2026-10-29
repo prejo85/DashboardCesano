@@ -30,21 +30,25 @@ def parse_universal_numeric(series_or_val):
     """
     Gestisce correttamente lo standard contabile italiano: punto per le migliaia e virgola per i decimali.
     Evita la decimazione delle cifre tonde (es. 5.000 interpretato come 5.0).
+    Previene il TypeError convertendo esplicitamente ogni cella in stringa prima della pulizia.
     """
     s = series_or_val.astype(str).str.replace(r'\s+', '', regex=True)
     s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
     
     def clean_string(x):
-        if ',' in x and '.' in x:
-            return x.replace('.', '').replace(',', '.')
-        elif ',' in x:
-            return x.replace(',', '.')
-        elif '.' in x:
-            return x.replace('.', '')
-        return x
+        # Conversione forzata in stringa per evitare TypeError su float/int nativi
+        x_str = str(x)
+        if ',' in x_str and '.' in x_str:
+            return x_str.replace('.', '').replace(',', '.')
+        elif ',' in x_str:
+            return x_str.replace(',', '.')
+        elif '.' in x_str:
+            return x_str.replace('.', '')
+        return x_str
 
     s = s.apply(clean_string)
     return pd.to_numeric(s, errors='coerce').fillna(0.0)
+
 # -----------------------------------------------------------------------------
 # 3. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
 # -----------------------------------------------------------------------------
