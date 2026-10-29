@@ -376,27 +376,31 @@ with tab1:
                     if len(dataframe.columns) > col_index:
                         s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
                         s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
-                        
-                        def clean_string(x):
-                            x_str = str(x)
-                            # Caso 1: Sono presenti sia punto che virgola (es: 1.234,56)
-                            if ',' in x_str and '.' in x_str:
-                                return x_str.replace('.', '').replace(',', '.')
-                            # Caso 2: C'è solo la virgola dei decimali (es: 12,34)
-                            elif ',' in x_str:
-                                return x_str.replace(',', '.')
-                            # Caso 3: C'è solo il punto (es: 24.579 o 224.631)
-                            elif '.' in x_str:
-                                parti = x_str.split('.')
-                                # Se dopo il punto ci sono esattamente 3 cifre, è un separatore di migliaia (standard CTG)
-                                if len(parti) == 2 and len(parti[1]) == 3:
-                                    return x_str.replace('.', '')
-                                return x_str
-                            return x_str
-
-                        s = s.apply(clean_string)
+                        # RIMOZIONE CHIRURGICA DEL PUNTO DELLE MIGLIAIA: Fondamentale per non falsare le somme contabili italiane
+                        s = s.str.replace('.', '', regex=False)
+                        s = s.str.replace(',', '.', regex=False)
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
+
+                match_ctg['Sales_TY'] = parse_ctg_columns_fixed(match_ctg, 7)
+                match_ctg['Sales_PY'] = parse_ctg_columns_fixed(match_ctg, 8)
+                match_ctg['Visits_TY'] = parse_ctg_columns_fixed(match_ctg, 11)
+                match_ctg['Sales_Per_Visit'] = parse_ctg_columns_fixed(match_ctg, 13)
+                
+                match_ctg['CTG_Label'] = match_ctg['CTG'].astype(str).str.strip().str.replace("'", "", regex=False).replace(['nan', 'None', ''], '-')
+                match_ctg['Channel_Label'] = match_ctg['Channel Detail'].astype(str).str.strip()
+
+                df_ctg_grouped = match_ctg.groupby('CTG_Label').agg({
+                    'Sales_TY': 'sum',
+                    'Sales_PY': 'sum',
+                    'Visits_TY': 'sum'
+                }).reset_index()
+                
+                df_ctg_grouped = df_ctg_grouped.sort_values(by='Sales_TY', ascending=True)
+                df_ctg_grouped = df_ctg_grouped[df_ctg_grouped['Sales_TY'] > 0]
+
+                if not df_ctg_grouped.empty:
+                    g1, g2 = st.columns(2)
                     
                     with g1:
                         st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TT)")
