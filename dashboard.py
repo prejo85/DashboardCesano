@@ -29,7 +29,7 @@ def fmt_giorni(valore):
 def parse_universal_numeric(series_or_val):
     """
     Gestisce correttamente lo standard contabile italiano: punto per le migliaia e virgola per i decimali.
-    Risolve il bug del report CTG preservando l'integrità dei conteggi interi (es. 24.579 o 224.631).
+    Risolve le anomalie del report CTG allineando al centesimo i valori di fatturato e visite.
     """
     s = series_or_val.astype(str).str.replace(r'\s+', '', regex=True)
     s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
@@ -37,27 +37,29 @@ def parse_universal_numeric(series_or_val):
     def clean_string(x):
         x_str = str(x)
         
-        # Caso 1: Sono presenti sia punto che virgola (es: 1.234,56)
+        # Caso 1: Contiene sia punto che virgola (es: 1.234.567,89 oppure 1.234,56)
         if ',' in x_str and '.' in x_str:
             return x_str.replace('.', '').replace(',', '.')
             
-        # Caso 2: C'è solo la virgola dei decimali (es: 12,34)
+        # Caso 2: C'è solo la virgola (es: 1234,56)
         elif ',' in x_str:
             return x_str.replace(',', '.')
             
-        # Caso 3: C'è solo il punto (es: 24.579 o 224.631)
+        # Caso 3: C'è solo il punto isolato (es: 2229846 o stringhe formattate come 2.229.846 o 24.579)
         elif '.' in x_str:
-            # Se dopo il punto ci sono esattamente 3 cifre, è un separatore di migliaia (standard CTG)
+            # Dividiamo la stringa per analizzare i segmenti tra i punti
             parti = x_str.split('.')
-            if len(parti) == 2 and len(parti[1]) == 3:
+            # Se l'ultimo segmento ha lunghezza 3, il punto fungeva da separatore delle migliaia (es. .846)
+            if len(parti[-1]) == 3:
                 return x_str.replace('.', '')
-            # Altrimenti lo tratta come decimale nativo standard
+            # Se l'ultimo segmento NON è di 3 cifre, lo tratta come punto decimale standard (es. 12.3)
             return x_str
             
         return x_str
 
     s = s.apply(clean_string)
     return pd.to_numeric(s, errors='coerce').fillna(0.0)
+
 
 # -----------------------------------------------------------------------------
 # 3. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
