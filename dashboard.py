@@ -309,44 +309,30 @@ with tab1:
                     with sub_ind2: st.metric(label="Volume Colli (Indisp.)", value=f"{int(round(ind_colli)):,}".replace(',', '.'), delta=f"{delta_colli_ind:+.2f}% vs PY")
                     with sub_ind3: st.metric(label="📉 Shrinkage (Indisp.)", value=fmt_valuta_interi(ind_shrink))
         # -----------------------------------------------------------------------------
-        # TAB 1: VISUALIZZAZIONE (Parte C - Analisi Grafica Report CTG - Mappatura Excel Definitiva)
+        # TAB 1: VISUALIZZAZIONE (Parte C - Analisi Grafica Report CTG)
         # -----------------------------------------------------------------------------
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
         if not df_ctg.empty:
             df_ctg_clean = df_ctg.copy()
-            
-            # Estrazione del codice reparto dalle prime colonne
-            def estrai_primo_codice(row):
-                for col_idx in range(min(4, len(row))):
-                    val_str = str(row.iloc[col_idx])
-                    match = re.search(r'\d+', val_str)
-                    if match:
-                        return match.group()
-                return ''
-
-            df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.apply(estrai_primo_codice, axis=1)
-            
-            # Se siamo su TOTALE STORE, includiamo l'intero set senza filtri sui reparti
-            if selected_area == "--- TOTALE STORE ---":
-                match_ctg = df_ctg_clean.copy()
-            else:
-                match_ctg = df_ctg_clean[df_ctg_clean['Codice_Reparto_CTG'].isin(codici_target)].copy() if len(codici_target) > 0 else df_ctg_clean.copy()
+            df_ctg_clean['Codice_Reparto_CTG'] = df_ctg_clean.iloc[:, 1].astype(str).apply(
+                lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
+            )
+            match_ctg = df_ctg_clean[df_ctg_clean['Codice_Reparto_CTG'].isin(codici_target)].copy() if len(codici_target) > 0 else df_ctg_clean.copy()
             
             if not match_ctg.empty:
-                # MAPPATURA RIGIDA DEFINITIVA BASATA SUL TUO SPREADSHEET
-                match_ctg['Sales_TY'] = parse_universal_numeric(match_ctg.iloc[:, 7])   # Colonna H: Sales TY
-                match_ctg['Visits_TY'] = parse_universal_numeric(match_ctg.iloc[:, 11]) # Colonna L: # Visits TY
-                match_ctg['CTG_Label'] = match_ctg.iloc[:, 4].astype(str).str.strip().str.replace("'", "", regex=False).replace(['nan', 'None', ''], '-') # Colonna E: CTG
+                match_ctg['Sales_TY'] = parse_universal_numeric(match_ctg.iloc[:, 7])
+                match_ctg['Visits_TY'] = parse_universal_numeric(match_ctg.iloc[:, 11])
+                match_ctg['CTG_Label'] = match_ctg['CTG'].astype(str).str.strip().str.replace("'", "", regex=False).replace(['nan', 'None', ''], '-')
+                match_ctg['Channel_Label'] = match_ctg['Channel Detail'].astype(str).str.strip()
 
-                # Aggregazione per Categoria
                 df_ctg_grouped = match_ctg.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
                 df_ctg_grouped = df_ctg_grouped[df_ctg_grouped['Sales_TY'] > 0].sort_values(by='Sales_TY', ascending=True)
 
                 if not df_ctg_grouped.empty:
                     g1, g2 = st.columns(2)
                     with g1:
-                        st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TY)")
+                        st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TT)")
                         fig_sales = px.bar(
                             df_ctg_grouped, x='Sales_TY', y='CTG_Label', orientation='h',
                             labels={'Sales_TY': 'Fatturato Corrente (€)', 'CTG_Label': 'Categoria CTG'},
@@ -360,9 +346,11 @@ with tab1:
                         fig_visits.update_layout(height=400, margin=dict(l=20, r=20, t=20, b=20))
                         st.plotly_chart(fig_visits, use_container_width=True)
                 else:
-                    st.caption("⚠️ I record del file CTG per la selezione corrente contengono volumi pari a zero.")
+                    st.caption("⚠️ I record del file CTG per la selezione corrente contengono volumi pari a zero o vuoti.")
             else:
                 st.caption("⚠️ Nessun dato nel file CTG corrisponde ai reparti attivi nei filtri gerarchici.")
+        else:
+            st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'analisi grafica merceologica.")
 
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI (Parte A - Filtri e Metrics)
