@@ -313,15 +313,23 @@ with tab2:
     
     if not df_sel.empty:
         df_sel_clean = df_sel.copy()
-        df_sel_clean.columns = df_sel_clean.columns.str.strip()
         
-        # ASSOCIAZIONE DELLE CHIAVI ESATTE IDENTIFICATE DALLO SCREENSHOT EXCEL DELL'UTENTE
-        c_rep_name = 'Sales Dep.'
-        c_cust_name = 'Customer'
-        c_cat_name = 'MPRO Cluster'
-        c_chan_name = 'Channel Detail'
+        # 1. Pulizia degli spazi bianchi all'inizio e alla fine dei nomi delle colonne
+        df_sel_clean.columns = df_sel_clean.columns.str.strip().str.replace(r'\s+', ' ', regex=True)
+        
+        # 2. IDENTIFICAZIONE ROBUSTA DELLE COLONNE DI RAGGRUPPAMENTO (CASE-INSENSITIVE)
+        c_rep_name = next((c for c in df_sel_clean.columns if 'department' in c.lower() or 'reparto' in c.lower() or 'sales dep' in c.lower()), None)
+        c_cust_name = next((c for c in df_sel_clean.columns if 'customer' in c.lower() or 'cliente' in c.lower()), None)
+        c_cat_name = next((c for c in df_sel_clean.columns if 'cluster' in c.lower() or 'mpro' in c.lower() or 'category' in c.lower()), None)
+        c_chan_name = next((c for c in df_sel_clean.columns if 'channel' in c.lower() or 'canale' in c.lower()), None)
 
-        # Isolamento gerarchico dei record in base ai reparti attivi nello store
+        # Fallback di sicurezza basati sull'ordine standard se la ricerca testuale fallisce
+        if not c_rep_name: c_rep_name = df_sel_clean.columns[2] if len(df_sel_clean.columns) > 2 else df_sel_clean.columns[0]
+        if not c_chan_name: c_chan_name = df_sel_clean.columns[3] if len(df_sel_clean.columns) > 3 else df_sel_clean.columns[0]
+        if not c_cust_name: c_cust_name = df_sel_clean.columns[4] if len(df_sel_clean.columns) > 4 else df_sel_clean.columns[0]
+        if not c_cat_name: c_cat_name = df_sel_clean.columns[5] if len(df_sel_clean.columns) > 5 else df_sel_clean.columns[0]
+
+        # Estrazione del codice reparto numerico per applicare i filtri gerarchici attivi in cima alla dashboard
         df_sel_clean['Codice_Reparto_SEL'] = df_sel_clean[c_rep_name].astype(str).apply(
             lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
         )
@@ -332,22 +340,27 @@ with tab2:
             match_sel = df_sel_clean.copy()
             
         if not match_sel.empty:
-            def parse_sellout_numeric(dataframe, col_name):
-                if col_name in dataframe.columns:
-                    s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
+            # FUNZIONE DI CONVERSIONE CONTABILE ITALIANA CON RILEVAMENTO DINAMICO DELLA COLONNA
+            def parse_sellout_numeric(dataframe, primary_keyword, secondary_keyword=None):
+                actual_col = next((c for c in dataframe.columns if primary_keyword.lower() in c.lower()), None)
+                if not actual_col and secondary_keyword:
+                    actual_col = next((c for c in dataframe.columns if secondary_keyword.lower() in c.lower()), None)
+                
+                if actual_col:
+                    s = dataframe[actual_col].astype(str).str.replace(r'\s+', '', regex=True)
                     s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
                     s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                     return pd.to_numeric(s, errors='coerce').fillna(0.0)
                 return pd.Series(0.0, index=dataframe.index)
 
-            # Collegamento e normalizzazione contabile dei campi del tracciato FASO
-            match_sel['Sales_TY'] = parse_sellout_numeric(match_sel, 'Sales TT')
-            match_sel['Sales_PY'] = parse_sellout_numeric(match_sel, 'Sales TT PY Custom Cal')
-            match_sel['Colli_TY'] = parse_sellout_numeric(match_sel, '# Colli')
-            match_sel['Visits_TY'] = parse_sellout_numeric(match_sel, '# Visit')
-            match_sel['Margin_TY'] = parse_sellout_numeric(match_sel, 'Front Margin')
+            # Collegamento flessibile alle colonne metriche (gestisce varianti come "Sales TT" o "Sales TT PY Custom Cal")
+            match_sel['Sales_TY'] = parse_sellout_numeric(match_sel, 'Sales TT', 'Sales 1')
+            match_sel['Sales_PY'] = parse_sellout_numeric(match_sel, 'PY Custom Cal', 'Sales per')
+            match_sel['Colli_TY'] = parse_sellout_numeric(match_sel, '# Colli', 'Colli')
+            match_sel['Visits_TY'] = parse_sellout_numeric(match_sel, '# Visit', 'Visit')
+            match_sel['Margin_TY'] = parse_sellout_numeric(match_sel, 'Front Margin', 'Margin')
 
-            # --- GENERAZIONE BOX KPI INDIPENDENTI PER IL TAB 2 ---
+            # --- SINTESI CONTABILE DEI KPI IN ALTO NEL TAB 2 ---
             sel_s_tot = match_sel['Sales_TY'].sum()
             sel_s_py_tot = match_sel['Sales_PY'].sum()
             sel_v_tot = match_sel['Visits_TY'].sum()
@@ -365,16 +378,18 @@ with tab2:
             sg1, sg2 = st.columns(2)
             
             with sg1:
-                st.markdown("#### 🎯 Quota Fatturato Corrente per Customer Category (MPRO Cluster)")
+                st.markdown("#### 🎯 Quota Fatturato Corrente per Customer Category")
                 df_cat_g = match_sel.groupby(c_cat_name)['Sales_TY'].sum().reset_index()
+                df_cat_g = df_cat_g[df_cat_g['Sales_TY'] > 0]
                 st.plotly_chart(px.pie(df_cat_g, values='Sales_TY', names=c_cat_name, template='plotly_dark', hole=0.3, color_discrete_sequence=px.colors.qualitative.Pastel2), use_container_width=True)
                 
             with sg2:
-                st.markdown("#### 🏪 Incidenza Canali Logistici di Vendita (Channel Detail)")
+                st.markdown("#### 🏪 Incidenza Canali Logistici di Vendita")
                 df_cha_g = match_sel.groupby(c_chan_name)['Sales_TY'].sum().reset_index()
+                df_cha_g = df_cha_g[df_cha_g['Sales_TY'] > 0]
                 st.plotly_chart(px.bar(df_cha_g, x=c_chan_name, y='Sales_TY', template='plotly_dark', color=c_chan_name, color_discrete_sequence=px.colors.qualitative.Safe), use_container_width=True)
 
-            # --- TABELLA DETTAGLIATA PORTAFOGLIO ACQUIRENTI ---
+            # --- TABELLA ANALITICA DEI TOP BUYERS ---
             st.markdown("<br>---", unsafe_allow_html=True)
             st.markdown("#### 🏆 Classifica Analitica dei Top Buying Customers (Fatturato Decrescente)")
             
@@ -387,7 +402,7 @@ with tab2:
             df_c_g['Margin_Pct'] = df_c_g.apply(lambda r: (r['Margin_TY'] / r['Sales_TY'] * 100) if r['Sales_TY'] > 0 else 0.0, axis=1)
             df_c_g = df_c_g.sort_values(by='Sales_TY', ascending=False).reset_index(drop=True)
             
-            # Formattazione estetica della visualizzazione dati
+            # Formattazione estetica finale della griglia dati
             df_c_v = df_c_g.copy()
             df_c_v['Sales_TY'] = df_c_v['Sales_TY'].apply(fmt_valuta_decimali)
             df_c_v['Sales_PY'] = df_c_v['Sales_PY'].apply(fmt_valuta_decimali)
@@ -398,7 +413,7 @@ with tab2:
             df_c_v['Visits_TY'] = df_c_v['Visits_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
             
             df_c_v.columns = ['Codice Cliente', 'Cluster', 'Canale Detail', 'Sales TY', 'Sales PY', 'Colli TY', 'Visite', 'Margin €', 'Delta vs PY', 'Scontrino Medio', 'Margin %']
-            st.dataframe(df_c_v[['Codice Cliente', 'Cluster', 'Canale Detail', 'Sales TY', 'Sales PY', 'Delta vs PY', 'Colli TY', 'Visite', 'Scontrino Medio', 'Margin %']], use_container_width=True, hide_index=True)
+            st.dataframe(df_c_v[['Codice Cliente', 'Cluster', 'Canale Detail', 'Sales TY', 'Sales PY', 'Delta vs PY', 'Colli TY', 'Visite', 'Scontrino Medio', 'Margin %']], use_container_width=True, hide_index=False)
         else:
             st.caption("⚠️ Nessun dato nel report Free Analysis Sellout corrisponde ai reparti attivi.")
     else:
