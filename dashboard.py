@@ -657,48 +657,4 @@ with tab2:
                     )
                     st.plotly_chart(fig_pie_gest, use_container_width=True)
                 st.markdown("<br>", unsafe_allow_html=True)
-# =============================================================================
-# PARTE 5.C.5: STRUMENTO DI RICERCA RAPIDA E RENDERING DELLA TABELLA FINALE
-# =============================================================================
-            if not df_final_kpi_table.empty:
-                # 1. Calcolo del dataset aggregato base per anagrafica
-                df_c_g = df_final_kpi_table.groupby([c_cust_name, c_tipo_gestione, c_venditore, c_am_om, 'Mappatura_VP']).agg({
-                    'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Colli_TY': 'sum', 'Margin_TY': 'sum'
-                }).reset_index()
-                
-                df_c_g['Scostamento_vs_PY'] = df_c_g['Sales_TY'] - df_c_g['Sales_PY']
-                df_c_g['Margin_Pct'] = df_c_g.apply(lambda r: (r['Margin_TY'] / r['Sales_TY'] * 100) if r['Sales_TY'] > 0 else 0.0, axis=1)
-                df_c_g = df_c_g.sort_values(by='Sales_TY', ascending=False).reset_index(drop=True)
-                
-                # 2. INSERIMENTO DELLA RICERCA RAPIDA TESTUALE PRIMA DELLA TABELLA
-                st.markdown("##### 🔍 Ricerca Rapida Anagrafica Clienti")
-                search_query = st.text_input(
-                    "Digita il Codice Cliente o la Ragione Sociale per filtrare la tabella sottostante:",
-                    placeholder="Es. 91-17660 oppure HOSTERIA...",
-                    key=f"search_input_t2_{st.session_state.reset_tab2}"
-                ).strip().lower()
-                
-                # Applicazione immediata del filtro digitato dall'utente
-                if search_query:
-                    df_c_g = df_c_g[df_c_g[c_cust_name].astype(str).str.lower().str.contains(search_query, regex=False)]
-                
-                # 3. Conversione estetica con le funzioni di formattazione locale
-                if not df_c_g.empty:
-                    df_c_v = df_c_g.copy()
-                    df_c_v['Sales_TY'] = df_c_v['Sales_TY'].apply(fmt_valuta_decimali)
-                    df_c_v['Sales_PY'] = df_c_v['Sales_PY'].apply(fmt_valuta_decimali)
-                    df_c_v['Scostamento_vs_PY'] = df_c_v['Scostamento_vs_PY'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
-                    df_c_v['Margin_Pct'] = df_c_v['Margin_Pct'].apply(fmt_percentuale)
-                    df_c_v['Colli_TY'] = df_c_v['Colli_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
-                    
-                    df_c_v.columns = ['Ragione Sociale / Cliente', 'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Target VP', 'Fatturato TY (Sales)', 'Fatturato PY', 'Volume TY (Colli)', 'Margine € (Income Omissis)', 'Delta vs PY', 'Margine % (Income)']
-                    
-                    colonne_output = [
-                        'Ragione Sociale / Cliente', 'Fatturato TY (Sales)', 'Volume TY (Colli)', 'Margine % (Income)', 
-                        'Tipo Gestione (H)', 'Responsabile AM-OM (J)', 'Venditore Riferimento (I)', 'Delta vs PY'
-                    ]
-                    st.dataframe(df_c_v[colonne_output], use_container_width=True, hide_index=False)
-                else:
-                    st.info("ℹ️ Nessun cliente corrisponde ai criteri di ricerca digitati.")
-            else:
-                st.caption("⚠️ Nessun record risponde alla combinazione di filtri commerciali selezionata.")
+
