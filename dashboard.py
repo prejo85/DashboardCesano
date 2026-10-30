@@ -8,17 +8,78 @@ import re
 # CONFIGURAZIONE DELLA PAGINA E TITOLO PRINCIPALE
 # -----------------------------------------------------------------------------
 
+# Inserisci tasto di stampa con questo blocco ottimizzato:
 if st.sidebar.button("Stampa / Salva in PDF", use_container_width=True):
     st.components.v1.html(
         """
         <script>
-            // Cerca la finestra principale corretta in cui è renderizzato l'Iframe di Streamlit
-            const mainWin = window.parent || window;
-            mainWin.print();
+            // 1. Inietta gli stili CSS di stampa direttamente nella finestra principale (parent)
+            const mainDoc = window.parent.document;
+            
+            // Rimuove un eventuale stile di stampa precedente per evitare duplicati
+            const oldStyle = mainDoc.getElementById("custom-print-style");
+            if (oldStyle) oldStyle.remove();
+            
+            const style = mainDoc.createElement("style");
+            style.id = "custom-print-style";
+            style.innerHTML = `
+                @media print {
+                    /* Nasconde la sidebar laterale di Streamlit, i menu in alto e i bottoni di reset */
+                    section[data-testid="stSidebar"], 
+                    header, 
+                    footer, 
+                    div[data-testid="stToolbar"],
+                    .stButton,
+                    button {
+                        display: none !important;
+                    }
+                    
+                    /* Forza l'area principale a occupare tutto lo spazio e la centra */
+                    section.main {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        padding: 0 !important;
+                        margin: 0 auto !important;
+                        float: none !important;
+                        background-color: #ffffff !important;
+                        color: #000000 !important;
+                    }
+                    
+                    /* Forza lo sfondo bianco e testi scuri su tutta la pagina e i contenitori */
+                    body, .stApp, div[data-testid="stVerticalBlock"], div[data-testid="stMarkdownContainer"] p, h1, h2, h3, h4, h5, h6 {
+                        background-color: #ffffff !important;
+                        color: #000000 !important;
+                    }
+                    
+                    /* Ottimizzazione per i grafici Plotly: inverte i colori scuri rendendoli trasparenti/chiari */
+                    .js-plotly-plot .main-svg {
+                        background: transparent !important;
+                    }
+                    .js-plotly-plot .bg {
+                        fill: #ffffff !important;
+                    }
+                    .js-plotly-plot text {
+                        fill: #000000 !important;
+                    }
+                    
+                    /* Regola i margini della pagina stampata */
+                    @page {
+                        margin: 15mm;
+                    }
+                }
+            `;
+            mainDoc.head.appendChild(style);
+            
+            // 2. Lancia il comando di stampa sulla finestra principale
+            setTimeout(() => {
+                const mainWin = window.parent || window;
+                mainWin.print();
+            }, 300); // Piccolo delay per garantire l'applicazione del CSS
         </script>
         """,
         height=0,
     )
+
 
 
 st.set_page_config(page_title="Dashboard Commerciale Avanzata", layout="wide", page_icon="📊")
