@@ -470,6 +470,11 @@ with tab2:
             match_sel['Visits_TY'] = parse_sellout_numeric(match_sel, '# Visit', 'Visit')
             match_sel['Margin_TY'] = parse_sellout_numeric(match_sel, 'Front Margin', 'Margin')
 
+            # Mappatura della Colonna F (MPRO CL): VP diventa "Si", tutti gli altri diventano "No"
+            match_sel['Mappatura_VP'] = match_sel[c_cat_name].astype(str).str.strip().str.upper().apply(
+                lambda x: 'Si' if x == 'VP' else 'No'
+            )
+
             sel_s_tot = match_sel['Sales_TY'].sum()
             sel_s_py_tot = match_sel['Sales_PY'].sum()
             sel_v_tot = match_sel['Visits_TY'].sum()
@@ -485,17 +490,16 @@ with tab2:
             with c_sel3: st.metric(label="🎫 Totale Visite/Scontrini", value=f"{int(sel_v_tot):,}".replace(',', '.'))
             with c_sel4: st.metric(label="🛒 Scontrino Medio Portafoglio", value=fmt_valuta_decimali(sc_medio))
             st.markdown("<br>", unsafe_allow_html=True)
-
-
 # =============================================================================
 # PARTE 5.C: SEZIONE GRAFICA SELLOUT E CLASSIFICA TOP CLIENTI COMPLETA
 # =============================================================================
             sg1, sg2 = st.columns(2)
             with sg1:
-                st.markdown("#### 🎯 Quota Fatturato Corrente per Customer Category (MPRO Cluster)")
-                df_cat_g = match_sel.groupby(c_cat_name)['Sales_TY'].sum().reset_index()
+                st.markdown("#### 🎯 Quota Fatturato Corrente per Target (VP = Si / Altri = No)")
+                # Aggregazione basata sulla nuova colonna mappata
+                df_cat_g = match_sel.groupby('Mappatura_VP')['Sales_TY'].sum().reset_index()
                 df_cat_g = df_cat_g[df_cat_g['Sales_TY'] > 0]
-                st.plotly_chart(px.pie(df_cat_g, values='Sales_TY', names=c_cat_name, template='plotly_dark', hole=0.3, color_discrete_sequence=px.colors.qualitative.Pastel2), use_container_width=True)
+                st.plotly_chart(px.pie(df_cat_g, values='Sales_TY', names='Mappatura_VP', template='plotly_dark', hole=0.3, color_discrete_sequence=px.colors.qualitative.Pastel2), use_container_width=True)
                 
             with sg2:
                 st.markdown("#### 🏪 Incidenza Canali Logistici di Vendita (Channel Detail)")
@@ -507,7 +511,8 @@ with tab2:
             st.markdown("<br>---", unsafe_allow_html=True)
             st.markdown("#### 🏆 Classifica Analitica dei Top Buying Customers (Fatturato Decrescente)")
             
-            df_c_g = match_sel.groupby([c_cust_name, c_cat_name, c_chan_name]).agg({
+            # Incluso 'Mappatura_VP' al posto del vecchio nome della colonna F per visualizzare Si/No nella griglia
+            df_c_g = match_sel.groupby([c_cust_name, 'Mappatura_VP', c_chan_name]).agg({
                 'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Colli_TY': 'sum', 'Visits_TY': 'sum', 'Margin_TY': 'sum'
             }).reset_index()
             
@@ -526,9 +531,5 @@ with tab2:
             df_c_v['Colli_TY'] = df_c_v['Colli_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
             df_c_v['Visits_TY'] = df_c_v['Visits_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
             
-            df_c_v.columns = ['Codice Cliente', 'Cluster', 'Canale Detail', 'Sales TY', 'Sales PY', 'Colli TY', 'Visite', 'Margin €', 'Delta vs PY', 'Scontrino Medio', 'Margin %']
-            st.dataframe(df_c_v[['Codice Cliente', 'Cluster', 'Canale Detail', 'Sales TY', 'Sales PY', 'Delta vs PY', 'Colli TY', 'Visite', 'Scontrino Medio', 'Margin %']], use_container_width=True, hide_index=False)
-        else:
-            st.caption("⚠️ Nessun dato nel report Free Analysis Sellout corrisponde ai reparti attivi.")
-    else:
-        st.info("Carica il file Free Analysis Sellout nella barra laterale sinistra per sbloccare il pannello di profilazione clienti.")
+            df_c_v.columns = ['Codice Cliente', 'Target (VP)', 'Canale Detail', 'Sales TY', 'Sales PY', 'Colli TY', 'Visite', 'Margin €', 'Delta vs PY', 'Scontrino Medio', 'Margin %']
+            st.dataframe(df_c_v[['Codice Cliente', 'Target (VP)', 'Canale Detail', 'Sales TY', 'Sales PY', 'Delta vs PY', 'Colli TY', 'Visite', 'Scontrino Medio', 'Margin %']], use_container_width=True, hide_index=False)
