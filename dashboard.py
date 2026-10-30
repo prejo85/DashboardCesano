@@ -65,7 +65,7 @@ if not (u_rep and u_ctg and u_sel and u_ind and u_men):
 
 df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel, u_ind, u_men)
 # =============================================================================
-# 5. FILTRI GERARCHICI IN ALTO CON LOGICA DI RESET IN SESSION STATE
+# 5. FILTRI GERARCHICI IN ALTO CON LOGICA DI RESET E UNIONE SORGENTI
 # =============================================================================
 st.markdown("---")
 col_f1, col_f2, col_f3, col_btn = st.columns(4)
@@ -79,24 +79,38 @@ with col_btn:
         st.session_state.reset_counter += 1
         st.rerun()
 
+# Pulizia preliminare delle colonne e dei dati di Sellout per i filtri
+df_sel_clean = df_sel.copy()
+df_sel_clean.columns = df_sel_clean.columns.str.strip().str.replace(r'\s+', ' ', regex=True)
+c_store_sel = next((c for c in df_sel_clean.columns if 'store' in c.lower()), df_sel_clean.columns[0])
+
 if len(df_men.columns) >= 5:
     df_men_clean = df_men.copy()
     df_men_clean.iloc[:, 1] = df_men_clean.iloc[:, 1].astype(str).str.strip() 
     df_men_clean.iloc[:, 3] = df_men_clean.iloc[:, 3].astype(str).str.strip() 
     df_men_clean.iloc[:, 4] = df_men_clean.iloc[:, 4].astype(str).str.strip() 
     
-    lista_store = sorted([x for x in df_men_clean.iloc[:, 1].unique() if x not in ['nan', 'None', '']])
+    # UNIONE DEGLI STORE: Legge sia da Mensilizzazione sia da Free Analysis Sellout
+    store_men = set(df_men_clean.iloc[:, 1].unique())
+    store_sel = set(df_sel_clean[c_store_sel].astype(str).str.strip().unique()) if c_store_sel in df_sel_clean.columns else set()
+    
+    lista_store = sorted([x for x in store_men.union(store_sel) if x not in ['nan', 'None', '', 'NaN']])
     
     with col_f1:
         selected_store = st.selectbox("Seleziona Store:", lista_store, key=f"sb_store_{st.session_state.reset_counter}")
     
+    # Filtro gerarchico per Aree e Reparti (basato su Mensilizzazione se lo store esiste lì)
     df_filtrato_store = df_men_clean[df_men_clean.iloc[:, 1] == selected_store]
-    lista_aree = ["--- TOTALE STORE ---"] + sorted([x for x in df_filtrato_store.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
     
+    if not df_filtrato_store.empty:
+        lista_aree = ["--- TOTALE STORE ---"] + sorted([x for x in df_filtrato_store.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
+    else:
+        lista_aree = ["--- TOTALE STORE ---"]
+        
     with col_f2:
         selected_area = st.selectbox("Seleziona Area di Vendita:", lista_aree, key=f"sb_area_{st.session_state.reset_counter}")
     
-    if selected_area != "--- TOTALE STORE ---":
+    if selected_area != "--- TOTALE STORE ---" and not df_filtrato_store.empty:
         df_filtrato_area = df_filtrato_store[df_filtrato_store.iloc[:, 3] == selected_area]
         lista_reparti = ["--- TOTALE AREA ---"] + sorted([x for x in df_filtrato_area.iloc[:, 4].unique() if x not in ['nan', 'None', '']])
     else:
@@ -341,12 +355,7 @@ with tab2:
     st.markdown(f"### 👥 Profilazione e Performance Portafoglio Clienti")
     
     if not df_sel.empty:
-        df_sel_clean = df_sel.copy()
-        
-        # 1. Pulizia degli spazi bianchi all'inizio e alla fine dei nomi delle colonne
-        df_sel_clean.columns = df_sel_clean.columns.str.strip().str.replace(r'\s+', ' ', regex=True)
-        
-        # 2. IDENTIFICAZIONE AUTOMATICA DELLE COLONNE TRAMITE PAROLE CHIAVE (CASE-INSENSITIVE)
+        # 1. IDENTIFICAZIONE AUTOMATICA DELLE COLONNE TRAMITE PAROLE CHIAVE (CASE-INSENSITIVE)
         c_rep_name = next((c for c in df_sel_clean.columns if 'department' in c.lower() or 'reparto' in c.lower() or 'sales dep' in c.lower()), None)
         c_cust_name = next((c for c in df_sel_clean.columns if 'customer' in c.lower() or 'cliente' in c.lower()), None)
         c_cat_name = next((c for c in df_sel_clean.columns if 'cluster' in c.lower() or 'mpro' in c.lower() or 'category' in c.lower()), None)
@@ -358,13 +367,17 @@ with tab2:
         if not c_cust_name: c_cust_name = df_sel_clean.columns[4] if len(df_sel_clean.columns) > 4 else df_sel_clean.columns[0]
         if not c_cat_name: c_cat_name = df_sel_clean.columns[5] if len(df_sel_clean.columns) > 5 else df_sel_clean.columns[0]
 
-        # Estrazione del codice reparto numerico per applicare i filtri attivi nella barra superiore
-        df_sel_clean['Codice_Reparto_SEL'] = df_sel_clean[c_rep_name].astype(str).apply(
+        # FILTRO FONDAMENTALE: Filtra i dati di sellout per lo Store correntemente selezionato nel selettore in alto
+        match_sel = df_sel_clean[df_sel_clean[c_store_sel].astype(str).str.strip() == selected_store].copy()
+
+        # Estrazione del codice reparto numerico per applicare i filtri di Area/Reparto se attivi
+        match_sel['Codice_Reparto_SEL'] = match_sel[c_rep_name].astype(str).apply(
             lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
         )
         
         if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
-            match_sel = df_sel_clean[df_sel_clean['Codice_Reparto_SEL'].isin(codici_target)].copy()
+            match_sel = match_sel[match_sel['Codice_Reparto_SEL'].isin(codici_target)].copy()
+
         else:
             match_sel = df_sel_clean.copy()
             
