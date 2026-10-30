@@ -13,68 +13,70 @@ if st.sidebar.button("Stampa / Salva in PDF", use_container_width=True):
     st.components.v1.html(
         """
         <script>
-            // 1. Inietta gli stili CSS di stampa direttamente nella finestra principale (parent)
             const mainDoc = window.parent.document;
             
-            // Rimuove un eventuale stile di stampa precedente per evitare duplicati
-            const oldStyle = mainDoc.getElementById("custom-print-style");
-            if (oldStyle) oldStyle.remove();
-            
-            const style = mainDoc.createElement("style");
-            style.id = "custom-print-style";
-            style.innerHTML = `
-                @media print {
-                    /* Nasconde la sidebar laterale di Streamlit, i menu in alto e i bottoni di reset */
-                    section[data-testid="stSidebar"], 
-                    header, 
-                    footer, 
-                    div[data-testid="stToolbar"],
-                    .stButton,
-                    button {
-                        display: none !important;
+            // 1. CREA IL FOGLIO DI STILE CSS (Nasconde sidebar e controlli, centra la pagina)
+            let printStyle = mainDoc.getElementById("dynamic-print-style");
+            if (!printStyle) {
+                printStyle = mainDoc.createElement("style");
+                printStyle.id = "dynamic-print-style";
+                printStyle.innerHTML = `
+                    @media print {
+                        section[data-testid="stSidebar"], 
+                        header, 
+                        footer, 
+                        div[data-testid="stToolbar"],
+                        .stButton,
+                        button {
+                            display: none !important;
+                        }
+                        section.main {
+                            width: 100% !important;
+                            max-width: 100% !important;
+                            padding: 0 !important;
+                            margin: 0 auto !important;
+                            background-color: #ffffff !important;
+                            color: #000000 !important;
+                        }
+                        body, .stApp, div[data-testid="stVerticalBlock"], div[data-testid="stMarkdownContainer"] p, h1, h2, h3, h4, h5, h6 {
+                            background-color: #ffffff !important;
+                            color: #000000 !important;
+                        }
+                        /* Forza i contenitori dei grafici Plotly a sfondo bianco e testi neri */
+                        .js-plotly-plot .main-svg { background: #ffffff !important; }
+                        .js-plotly-plot .bg { fill: #ffffff !important; }
+                        .js-plotly-plot text { fill: #000000 !important; }
+                        .js-plotly-plot .xtick text, .js-plotly-plot .ytick text { fill: #000000 !important; }
+                        .js-plotly-plot .gtitle { fill: #000000 !important; }
+                        
+                        @page { margin: 15mm; }
                     }
-                    
-                    /* Forza l'area principale a occupare tutto lo spazio e la centra */
-                    section.main {
-                        width: 100% !important;
-                        max-width: 100% !important;
-                        padding: 0 !important;
-                        margin: 0 auto !important;
-                        float: none !important;
-                        background-color: #ffffff !important;
-                        color: #000000 !important;
-                    }
-                    
-                    /* Forza lo sfondo bianco e testi scuri su tutta la pagina e i contenitori */
-                    body, .stApp, div[data-testid="stVerticalBlock"], div[data-testid="stMarkdownContainer"] p, h1, h2, h3, h4, h5, h6 {
-                        background-color: #ffffff !important;
-                        color: #000000 !important;
-                    }
-                    
-                    /* Ottimizzazione per i grafici Plotly: inverte i colori scuri rendendoli trasparenti/chiari */
-                    .js-plotly-plot .main-svg {
-                        background: transparent !important;
-                    }
-                    .js-plotly-plot .bg {
-                        fill: #ffffff !important;
-                    }
-                    .js-plotly-plot text {
-                        fill: #000000 !important;
-                    }
-                    
-                    /* Regola i margini della pagina stampata */
-                    @page {
-                        margin: 15mm;
-                    }
+                `;
+                mainDoc.head.appendChild(printStyle);
+            }
+
+            // 2. FORZA TEMPORANEAMENTE IL TEMA CHIARO SULL'INTERFACCIA PER CATTURARE LA PREVIEW
+            const appContainer = mainDoc.querySelector('.stApp');
+            let originalTheme = "";
+            if (appContainer) {
+                // Rileva se Streamlit ha una classe di tema scuro e la scambia temporaneamente
+                if (appContainer.classList.contains('theme-dark')) {
+                    appContainer.classList.remove('theme-dark');
+                    appContainer.classList.add('theme-light');
+                    originalTheme = "dark";
                 }
-            `;
-            mainDoc.head.appendChild(style);
-            
-            // 2. Lancia il comando di stampa sulla finestra principale
+            }
+
+            // 3. LANCIA LA STAMPA DOPO UN MICRO-RITARDO (permette ai grafici di adattarsi alla luce)
             setTimeout(() => {
-                const mainWin = window.parent || window;
-                mainWin.print();
-            }, 300); // Piccolo delay per garantire l'applicazione del CSS
+                window.parent.print();
+                
+                // 4. RIPRISTINA IMMEDIATAMENTE IL TEMA SCURO A SCHERMO DOPO CHE LA FINESTRA DI STAMPA SI È APERTA
+                if (originalTheme === "dark" && appContainer) {
+                    appContainer.classList.remove('theme-light');
+                    appContainer.classList.add('theme-dark');
+                }
+            }, 250);
         </script>
         """,
         height=0,
