@@ -365,30 +365,30 @@ with tab1:
         st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
         
 # =============================================================================
-# PARTE 5.A: FILTRI DINAMICI E NUOVO FILTRO GESTIONE (TAB 2)
+# PARTE 5.A: FILTRI DINAMICI INTEGRALI ANCORATI AL FILE FREE ANALYSIS (TAB 2)
 # =============================================================================
 with tab2:
     if not df_sel.empty:
+        # Pulizia e formattazione preventiva delle colonne per evitare spazi nascosti
         df_sel_clean = df_sel.copy()
         df_sel_clean.columns = df_sel_clean.columns.str.strip().str.replace(r'\s+', ' ', regex=True)
         
         # Identificazione delle colonne chiave per indice e nome (Case Insensitive)
-        c_store_name = df_sel_clean.columns[0] # La colonna Store (Colonna A)
-        c_area_name = next((c for c in df_sel_clean.columns if 'area' in c.lower()), df_sel_clean.columns[1])
-        c_rep_name = next((c for c in df_sel_clean.columns if 'department' in c.lower() or 'reparto' in c.lower()), df_sel_clean.columns[2])
-        c_cust_name = next((c for c in df_sel_clean.columns if 'customer' in c.lower() or 'cliente' in c.lower()), df_sel_clean.columns[4])
-        c_cat_name = next((c for c in df_sel_clean.columns if 'cluster' in c.lower() or 'mpro' in c.lower()), df_sel_clean.columns[5])
-        c_chan_name = next((c for c in df_sel_clean.columns if 'channel' in c.lower() or 'canale' in c.lower()), df_sel_clean.columns[3])
+        c_store_name = df_sel_clean.columns # La colonna Store (Colonna A)
+        c_area_name = next((c for c in df_sel_clean.columns if 'area' in c.lower()), df_sel_clean.columns)
+        c_rep_name = next((c for c in df_sel_clean.columns if 'department' in c.lower() or 'reparto' in c.lower()), df_sel_clean.columns)
+        c_cust_name = next((c for c in df_sel_clean.columns if 'customer' in c.lower() or 'cliente' in c.lower()), df_sel_clean.columns)
+        c_cat_name = next((c for c in df_sel_clean.columns if 'cluster' in c.lower() or 'mpro' in c.lower()), df_sel_clean.columns)
+        c_chan_name = next((c for c in df_sel_clean.columns if 'channel' in c.lower() or 'canale' in c.lower()), df_sel_clean.columns)
 
         # Identificazione delle colonne H, I, J per indice assoluto
-        c_tipo_gestione = df_sel_clean.columns[7] # Colonna H
-        c_venditore = df_sel_clean.columns[8]      # Colonna I
-        c_am_om = df_sel_clean.columns[9]          # Colonna J
+        c_tipo_gestione = df_sel_clean.columns # Colonna H
+        c_venditore = df_sel_clean.columns      # Colonna I
+        c_am_om = df_sel_clean.columns          # Colonna J
 
         # FUNZIONE DI PULIZIA SPECIFICA PER CAMPI VUOTI O TRATTINI
         def clean_gestione_fields(valore):
             val_str = str(valore).strip()
-            # Rileva stringhe vuote, NaN, o che contengono solo trattini/apici difettosi
             if val_str in ['', 'nan', 'NaN', 'None', '-', "'-", '- ', "'- "]:
                 return "Non Gestito"
             return val_str
@@ -403,10 +403,11 @@ with tab2:
             lambda x: 'Si' if x == 'VP' else 'No'
         )
 
-        # Generazione filtri a cascata per Store
+        # Estrazione degli Store reali presenti all'interno del report Free Analysis Sellout
         stores_sellout = sorted([str(x).strip() for x in df_sel_clean[c_store_name].unique() if str(x).strip() not in ['nan', 'None', '']])
         lista_store_t2 = ["STORE AREA METROPOLITANA"] + stores_sellout
         
+        # Disposizione orizzontale dei selettori gerarchici in alto
         col_f1_t2, col_f2_t2, col_f3_t2, col_btn_t2 = st.columns(4)
         
         with col_btn_t2:
@@ -418,6 +419,7 @@ with tab2:
         with col_f1_t2:
             selected_store_t2 = st.selectbox("Seleziona Store Cliente:", lista_store_t2, key=f"sb_store_t2_{st.session_state.reset_tab2}")
             
+        # Isola lo store selezionato o mantiene l'intero dataset per l'Area Metropolitana (Totalone)
         if selected_store_t2 == "STORE AREA METROPOLITANA":
             df_filtrato_store_t2 = df_sel_clean.copy()
             label_totale_area = "--- TOTALE REGIONE ---"
@@ -425,12 +427,14 @@ with tab2:
             df_filtrato_store_t2 = df_sel_clean[df_sel_clean[c_store_name] == selected_store_t2]
             label_totale_area = "--- TOTALE STORE ---"
         
+        # Estrazione dinamica delle Aree di Vendita associate allo store/totalone scelto
         aree_sellout = sorted([str(x).strip() for x in df_filtrato_store_t2[c_area_name].unique() if str(x).strip() not in ['nan', 'None', '']])
         lista_aree_t2 = [label_totale_area] + aree_sellout
         
         with col_f2_t2:
             selected_area_t2 = st.selectbox("Seleziona Area Clienti:", lista_aree_t2, key=f"sb_area_t2_{st.session_state.reset_tab2}")
             
+        # Esplosione dei Reparti a cascata
         if selected_area_t2 not in ["--- TOTALE STORE ---", "--- TOTALE REGIONE ---"]:
             df_filtrato_area_t2 = df_filtrato_store_t2[df_filtrato_store_t2[c_area_name] == selected_area_t2]
             reparti_sellout = sorted([str(x).strip() for x in df_filtrato_area_t2[c_rep_name].unique() if str(x).strip() not in ['nan', 'None', '']])
@@ -442,43 +446,32 @@ with tab2:
         with col_f3_t2:
             selected_reparto_t2 = st.selectbox("Seleziona Reparto Clienti:", lista_reparti_t2, key=f"sb_reparto_t2_{st.session_state.reset_tab2}")
             
-        # ---------------------------------------------------------------------
-        # NUOVA PULSANTIERA DI SELEZIONE PER IL TIPO GESTIONE (COLONNA H)
-        # ---------------------------------------------------------------------
-        st.markdown("#### 🛠️ Filtra per Tipo Gestione (Colonna H)")
-        opzioni_gestione = ["TUTTI"] + sorted(list(df_filtrato_area_t2[c_tipo_gestione].unique()))
-        selected_gestione = st.radio(
-            "Seleziona il modello di gestione commerciale attivo:",
-            opzioni_gestione,
-            horizontal=True,
-            key=f"radio_gestione_{st.session_state.reset_tab2}"
-        )
-
+        # Definizione del titolo della vista a schermo
         if selected_store_t2 == "STORE AREA METROPOLITANA":
-            titolo_vista_t2 = "Portafoglio Clienti: STORE AREA METROPOLITANA"
+            titolo_vista_t2 = "Portafoglio Clienti: STORE AREA METROPOLITANA (TUTTI)"
         else:
             titolo_vista_t2 = f"Portafoglio Clienti: {selected_store_t2}"
             
         st.markdown("---")
-        st.markdown(f"### 👥 {titolo_vista_t2} ({selected_gestione})")
+        st.markdown(f"### 👥 {titolo_vista_t2}")
 
 # =============================================================================
-# PARTE 5.B: ENGINE DI FILTRAGGIO E CALCOLO QUANTITATIVO
+# PARTE 5.B: ENGINE DI AGGREGAZIONE E CALCOLO METRICHE SELLOUT (TAB 2)
 # =============================================================================
+        # Costruzione del dataset iniziale filtrato esclusivamente in base alle scelte del Tab 2
         match_sel = df_sel_clean.copy()
         
+        # 1. Filtro Store (se non è selezionato il totalone metropolitano)
         if selected_store_t2 != "STORE AREA METROPOLITANA":
             match_sel = match_sel[match_sel[c_store_name] == selected_store_t2]
             
+        # 2. Filtro Area di Vendita
         if selected_area_t2 not in ["--- TOTALE STORE ---", "--- TOTALE REGIONE ---"]:
             match_sel = match_sel[match_sel[c_area_name] == selected_area_t2]
             
+        # 3. Filtro Reparto specifico
         if selected_reparto_t2 not in ["--- TOTALE AREA ---", "--- DETTAGLIO RICHIESTO ---"]:
             match_sel = match_sel[match_sel[c_rep_name] == selected_reparto_t2]
-
-        # Applicazione del filtro della pulsantiera Tipo Gestione (Colonna H)
-        if selected_gestione != "TUTTI":
-            match_sel = match_sel[match_sel[c_tipo_gestione] == selected_gestione]
             
         if not match_sel.empty:
             def parse_sellout_numeric(dataframe, primary_keyword, secondary_keyword=None):
@@ -492,6 +485,7 @@ with tab2:
                     return pd.to_numeric(s, errors='coerce').fillna(0.0)
                 return pd.Series(0.0, index=dataframe.index)
 
+            # Parsing delle metriche contabili del Sellout
             match_sel['Sales_TY'] = parse_sellout_numeric(match_sel, 'Sales TT', 'Sales 1')
             match_sel['Sales_PY'] = parse_sellout_numeric(match_sel, 'PY Custom Cal', 'Sales per')
             match_sel['Colli_TY'] = parse_sellout_numeric(match_sel, '# Colli', 'Colli')
@@ -506,13 +500,16 @@ with tab2:
             sel_delta = ((sel_s_tot - sel_s_py_tot) / sel_s_py_tot * 100) if sel_s_py_tot > 0 else 0.0
             sc_medio = (sel_s_tot / sel_v_tot) if sel_v_tot > 0 else 0.0
 
+            # Stampa orizzontale della griglia KPI superiori del Tab 2
             c_sel1, c_sel2, c_sel3, c_sel4 = st.columns(4)
             with c_sel1: st.metric(label="👥 Buying Customers Unici", value=f"{sel_cust_qty:,}".replace(',', '.'))
             with c_sel2: st.metric(label="💰 Totale Sales (Sellout)", value=fmt_valuta_interi(sel_s_tot), delta=f"{sel_delta:+.2f}% vs PY")
             with c_sel3: st.metric(label="🎫 Totale Visite/Scontrini", value=f"{int(sel_v_tot):,}".replace(',', '.'))
             with c_sel4: st.metric(label="🛒 Scontrino Medio Portafoglio", value=fmt_valuta_decimali(sc_medio))
             st.markdown("<br>", unsafe_allow_html=True)
-            # =============================================================================
+
+
+# =============================================================================
 # PARTE 5.C: SEZIONE GRAFICA SELLOUT E CLASSIFICA CON FILTRI AVANZATI (H, I, J)
 # =============================================================================
             sg1, sg2 = st.columns(2)
