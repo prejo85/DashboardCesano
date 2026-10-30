@@ -510,7 +510,7 @@ with tab2:
             st.markdown("<br>", unsafe_allow_html=True)
 
 # =============================================================================
-# PARTE 5.C: SEZIONE GRAFICA SELLOUT E CLASSIFICA CON FILTRI AVANZATI E RIQUADRI KPI
+# PARTE 5.C: SEZIONE GRAFICA SELLOUT E CLASSIFICA CON MARGINI ESPRESSI IN %
 # =============================================================================
             sg1, sg2 = st.columns(2)
             with sg1:
@@ -570,7 +570,7 @@ with tab2:
                 df_commerciale_filtrato = df_commerciale_filtrato[df_commerciale_filtrato[c_am_om] == selected_amom]
 
             # -----------------------------------------------------------------
-            # NUOVI RIQUADRI RIEPILOGATIVI KPI FORMATTATI (CON BENCHMARK vs PY)
+            # RIQUADRI RIEPILOGATIVI KPI FORMATTATI (MARGINE ESPRESSO IN %)
             # -----------------------------------------------------------------
             st.markdown("<br>", unsafe_allow_html=True)
             if not df_commerciale_filtrato.empty:
@@ -578,12 +578,17 @@ with tab2:
                 kpi_sales_ty = float(df_commerciale_filtrato['Sales_TY'].sum())
                 kpi_sales_py = float(df_commerciale_filtrato['Sales_PY'].sum())
                 kpi_colli_ty = float(df_commerciale_filtrato['Colli_TY'].sum())
-                kpi_colli_py = float(df_commerciale_filtrato['Sales_PY'].sum() / (kpi_sales_ty / kpi_colli_ty if kpi_colli_ty > 0 else 1.0)) # Stima prudenziale o baseline proporzionale
+                kpi_colli_py = float(df_commerciale_filtrato['Sales_PY'].sum() / (kpi_sales_ty / kpi_colli_ty if kpi_colli_ty > 0 else 1.0))
                 kpi_margin_ty = float(df_commerciale_filtrato['Margin_TY'].sum())
+                kpi_margin_py = float(df_commerciale_filtrato['Margin_PY'].sum())
                 
-                # Calcolo scostamenti vs PY
+                # Calcolo indici percentuali e scostamenti (Fatturato, Volumi, Margine %)
                 delta_sales_kpi = ((kpi_sales_ty - kpi_sales_py) / kpi_sales_py * 100) if kpi_sales_py > 0 else 0.0
                 delta_colli_kpi = ((kpi_colli_ty - kpi_colli_py) / kpi_colli_py * 100) if kpi_colli_py > 0 else 0.0
+                
+                margin_pct_ty = (kpi_margin_ty / kpi_sales_ty * 100) if kpi_sales_ty > 0 else 0.0
+                margin_pct_py = (kpi_margin_py / kpi_sales_py * 100) if kpi_sales_py > 0 else 0.0
+                delta_margin_kpi_pp = margin_pct_ty - margin_pct_py
                 
                 # CSS locale per allineamento perfetto font
                 st.markdown("""
@@ -607,9 +612,9 @@ with tab2:
                     delta=f"{delta_colli_kpi:+.2f}% vs PY" if kpi_colli_py > 0 else None
                 )
                 c_kpi3.metric(
-                    label="📈 Margine € (Income)", 
-                    value=fmt_valuta_interi(kpi_margin_ty), 
-                    delta=None
+                    label="📈 Front Margin % (Income)", 
+                    value=fmt_percentuale(margin_pct_ty), 
+                    delta=f"{delta_margin_kpi_pp:+.2f} pp vs PY"
                 )
                 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -630,14 +635,15 @@ with tab2:
                 df_c_v['Sales_PY'] = df_c_v['Sales_PY'].apply(fmt_valuta_decimali)
                 df_c_v['Scostamento_vs_PY'] = df_c_v['Scostamento_vs_PY'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
                 df_c_v['Margin_Pct'] = df_c_v['Margin_Pct'].apply(fmt_percentuale)
-                df_c_v['Margin_TY'] = df_c_v['Margin_TY'].apply(fmt_valuta_decimali)
                 df_c_v['Colli_TY'] = df_c_v['Colli_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
                 
-                df_c_v.columns = ['Ragione Sociale / Cliente', 'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Target VP', 'Fatturato TY (Sales)', 'Fatturato PY', 'Volume TY (Colli)', 'Margine € (Income)', 'Delta vs PY', 'Margine %']
+                # Rinominazione colonne (Margine espresso unicamente in %)
+                df_c_v.columns = ['Ragione Sociale / Cliente', 'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Target VP', 'Fatturato TY (Sales)', 'Fatturato PY', 'Volume TY (Colli)', 'Margine € (Income Omissis)', 'Delta vs PY', 'Margine % (Income)']
                 
+                # Riordino delle colonne per mostrare solo la percentuale richiesta
                 colonne_output = [
-                    'Ragione Sociale / Cliente', 'Fatturato TY (Sales)', 'Volume TY (Colli)', 'Margine € (Income)', 
-                    'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Delta vs PY', 'Margine %'
+                    'Ragione Sociale / Cliente', 'Fatturato TY (Sales)', 'Volume TY (Colli)', 'Margine % (Income)', 
+                    'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Delta vs PY'
                 ]
                 st.dataframe(df_c_v[colonne_output], use_container_width=True, hide_index=False)
             else:
