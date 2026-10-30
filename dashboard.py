@@ -365,21 +365,31 @@ with tab1:
         st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
         
 # =============================================================================
-# PARTE 5.A: FILTRI GERARCHICI COMPLEMENTARI MA INDIPENDENTI PER IL TAB 2
+# PARTE 5.A: FILTRI GERARCHICI COMPLEMENTARI MA INDIPENDENTI PER IL TAB 2 (CORRETTO)
 # =============================================================================
 with tab2:
     if not df_sel.empty:
+        # Pulizia iniziale per garantire che i nomi delle colonne non abbiano spazi extra
         df_sel_clean = df_sel.copy()
         df_sel_clean.columns = df_sel_clean.columns.str.strip().str.replace(r'\s+', ' ', regex=True)
         
-        # Mappatura gerarchica autonoma basata sul file Mensilizzazione per il Tab 2
-        df_men_clean_t2 = df_men.copy()
-        df_men_clean_t2.iloc[:, 1] = df_men_clean_t2.iloc[:, 1].astype(str).str.strip() 
-        df_men_clean_t2.iloc[:, 3] = df_men_clean_t2.iloc[:, 3].astype(str).str.strip() 
-        df_men_clean_t2.iloc[:, 4] = df_men_clean_t2.iloc[:, 4].astype(str).str.strip() 
+        # Identificazione dinamica delle colonne chiave del file di Sellout
+        c_store_name = df_sel_clean.columns[0] # Assumiamo che lo Store sia sempre la prima colonna
+        c_rep_name = next((c for c in df_sel_clean.columns if 'department' in c.lower() or 'reparto' in c.lower() or 'sales dep' in c.lower()), None)
+        c_cust_name = next((c for c in df_sel_clean.columns if 'customer' in c.lower() or 'cliente' in c.lower()), None)
+        c_cat_name = next((c for c in df_sel_clean.columns if 'cluster' in c.lower() or 'mpro' in c.lower() or 'category' in c.lower()), None)
+        c_chan_name = next((c for c in df_sel_clean.columns if 'channel' in c.lower() or 'canale' in c.lower()), None)
+
+        if not c_rep_name: c_rep_name = df_sel_clean.columns[2]
+        if not c_chan_name: c_chan_name = df_sel_clean.columns[3]
+        if not c_cust_name: c_cust_name = df_sel_clean.columns[4]
+        if not c_cat_name: c_cat_name = df_sel_clean.columns[6]
+
+        # Estraiamo gli store UNICI REALI direttamente dal file Free Analysis Sellout caricato
+        stores_reali_sellout = sorted([str(x).strip() for x in df_sel_clean[c_store_name].unique() if str(x).strip() not in ['nan', 'None', '']])
         
-        # Inizializzazione della lista con la dicitura per il Totalone richiesta
-        lista_store_t2 = ["STORE AREA METROPOLITANA"] + sorted([x for x in df_men_clean_t2.iloc[:, 1].unique() if x not in ['nan', 'None', '']])
+        # Creiamo la lista con "STORE AREA METROPOLITANA" come voce iniziale (Default)
+        lista_store_t2 = ["STORE AREA METROPOLITANA"] + stores_reali_sellout
         
         # Disposizione dei filtri in una riga a 4 colonne
         col_f1_t2, col_f2_t2, col_f3_t2, col_btn_t2 = st.columns(4)
@@ -393,20 +403,24 @@ with tab2:
         with col_f1_t2:
             selected_store_t2 = st.selectbox("Seleziona Store Cliente:", lista_store_t2, key=f"sb_store_t2_{st.session_state.reset_tab2}")
             
-        # Logica di ramificazione delle liste gerarchiche in base alla selezione dello Store
+        # Logica di ramificazione delle liste gerarchiche (Area e Reparto) basate sul Sellout
         if selected_store_t2 == "STORE AREA METROPOLITANA":
-            df_filtrato_store_t2 = df_men_clean_t2.copy()
-            lista_aree_t2 = ["--- TOTALE REGIONE ---"] + sorted([x for x in df_filtrato_store_t2.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
+            df_filtrato_store_t2 = df_sel_clean.copy()
         else:
-            df_filtrato_store_t2 = df_men_clean_t2[df_men_clean_t2.iloc[:, 1] == selected_store_t2]
-            lista_aree_t2 = ["--- TOTALE STORE ---"] + sorted([x for x in df_filtrato_store_t2.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
+            df_filtrato_store_t2 = df_sel_clean[df_sel_clean[c_store_name] == selected_store_t2]
+            
+        # Popoliamo Area di Vendita e Reparto estraendoli dinamicamente dal file di Sellout stesso
+        c_area_find = next((c for c in df_sel_clean.columns if 'area' in c.lower() or 'sales area' in c.lower()), df_sel_clean.columns[1])
+        
+        lista_aree_t2 = ["--- TOTALE REGIONE ---" if selected_store_t2 == "STORE AREA METROPOLITANA" else "--- TOTALE STORE ---"] + \
+                        sorted([str(x).strip() for x in df_filtrato_store_t2[c_area_find].unique() if str(x).strip() not in ['nan', 'None', '']])
         
         with col_f2_t2:
             selected_area_t2 = st.selectbox("Seleziona Area Clienti:", lista_aree_t2, key=f"sb_area_t2_{st.session_state.reset_tab2}")
             
         if selected_area_t2 not in ["--- TOTALE STORE ---", "--- TOTALE REGIONE ---"]:
-            df_filtrato_area_t2 = df_filtrato_store_t2[df_filtrato_store_t2.iloc[:, 3] == selected_area_t2]
-            lista_reparti_t2 = ["--- TOTALE AREA ---"] + sorted([x for x in df_filtrato_area_t2.iloc[:, 4].unique() if x not in ['nan', 'None', '']])
+            df_filtrato_area_t2 = df_filtrato_store_t2[df_filtrato_store_t2[c_area_find] == selected_area_t2]
+            lista_reparti_t2 = ["--- TOTALE AREA ---"] + sorted([str(x).strip() for x in df_filtrato_area_t2[c_rep_name].unique() if str(x).strip() not in ['nan', 'None', '']])
         else:
             df_filtrato_area_t2 = df_filtrato_store_t2.copy()
             lista_reparti_t2 = ["--- DETTAGLIO RICHIESTO ---"]
@@ -414,62 +428,34 @@ with tab2:
         with col_f3_t2:
             selected_reparto_t2 = st.selectbox("Seleziona Reparto Clienti:", lista_reparti_t2, key=f"sb_reparto_t2_{st.session_state.reset_tab2}")
             
-        nome_store_pulito_t2 = selected_store_t2.split(" - ")[-1] if " - " in str(selected_store_t2) else selected_store_t2
-        
-        # Estrazione dei codici reparto della gerarchia per filtrare il Sellout
-        codici_target_t2 = set()
-        if selected_store_t2 == "STORE AREA METROPOLITANA" and selected_area_t2 == "--- TOTALE REGIONE ---":
-            dati_vista_t2 = df_men_clean_t2.copy()
+        # Costruzione del Titolo dinamico della vista
+        if selected_store_t2 == "STORE AREA METROPOLITANA":
             titolo_vista_t2 = "Portafoglio Clienti: STORE AREA METROPOLITANA"
-        elif selected_area_t2 in ["--- TOTALE STORE ---", "--- TOTALE REGIONE ---"]:
-            dati_vista_t2 = df_filtrato_store_t2.copy()
-            titolo_vista_t2 = f"Portafoglio Clienti: TOTALE STORE {nome_store_pulito_t2}"
-        elif selected_reparto_t2 == "--- TOTALE AREA ---":
-            dati_vista_t2 = df_filtrato_area_t2.copy()
-            titolo_vista_t2 = f"Portafoglio Clienti: AREA {selected_area_t2} ({nome_store_pulito_t2})"
         else:
-            dati_vista_t2 = df_filtrato_area_t2[df_filtrato_area_t2.iloc[:, 4] == selected_reparto_t2]
-            titolo_vista_t2 = f"Portafoglio Clienti REPARTO: {selected_reparto_t2} ({nome_store_pulito_t2})"
+            titolo_vista_t2 = f"Portafoglio Clienti: {selected_store_t2}"
             
-        for r in dati_vista_t2.iloc[:, 4].dropna().astype(str).str.strip():
-            match = re.search(r'\d+', r)
-            if match: codici_target_t2.add(match.group())
-
         st.markdown("---")
         st.markdown(f"### 👥 {titolo_vista_t2}")
 
 # =============================================================================
-# PARTE 5.B: SCANNING AUTOMATICO COLONNE, PARSING E GRIGLIA METRICHE CLIENTI
+# PARTE 5.B: MOTORE DI APPLICAZIONE DEI FILTRI DIRETTI SUL DATASET DI SELLOUT
 # =============================================================================
-        # Mappatura case-insensitive basata su parole chiave
-        c_rep_name = next((c for c in df_sel_clean.columns if 'department' in c.lower() or 'reparto' in c.lower() or 'sales dep' in c.lower()), None)
-        c_cust_name = next((c for c in df_sel_clean.columns if 'customer' in c.lower() or 'cliente' in c.lower()), None)
-        c_cat_name = next((c for c in df_sel_clean.columns if 'cluster' in c.lower() or 'mpro' in c.lower() or 'category' in c.lower()), None)
-        c_chan_name = next((c for c in df_sel_clean.columns if 'channel' in c.lower() or 'canale' in c.lower()), None)
-
-        if not c_rep_name: c_rep_name = df_sel_clean.columns[2]
-        if not c_chan_name: c_chan_name = df_sel_clean.columns[3]
-        if not c_cust_name: c_cust_name = df_sel_clean.columns[4]
-        if not c_cat_name: c_cat_name = df_sel_clean.columns[5]
-
-        # Standardizzazione codici per il matching (rimozione zeri iniziali e spazi)
-        df_sel_clean['Store_Clean_Match'] = df_sel_clean.iloc[:, 0].astype(str).str.strip().str.lstrip('0')
-        df_sel_clean['Codice_Reparto_SEL'] = df_sel_clean[c_rep_name].astype(str).apply(
-            lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
-        )
-        
-        # --- APPLICAZIONE REALE E COMPLETA DEI FILTRI SUL REPORT DI SELLOUT ---
+        # Costruiamo il dataset finale applicando a cascata le scelte fatte sopra
         match_sel = df_sel_clean.copy()
         
-        # 1. Filtro reale basato sullo Store
+        # 1. Filtro Store (se non è selezionata la voce globale Metropolitana)
         if selected_store_t2 != "STORE AREA METROPOLITANA":
-            codice_store_ricavato = "".join(re.findall(r'^\d+', str(selected_store_t2))).lstrip('0')
-            match_sel = match_sel[match_sel['Store_Clean_Match'] == codice_store_ricavato]
+            match_sel = match_sel[match_sel[c_store_name] == selected_store_t2]
             
-        # 2. Filtro reale basato sui Reparti (estratti da Area / Reparto selezionati)
-        if selected_area_t2 not in ["--- TOTALE STORE ---", "--- TOTALE REGIONE ---"] or selected_reparto_t2 != "--- DETTAGLIO RICHIESTO ---":
-            match_sel = match_sel[match_sel['Codice_Reparto_SEL'].isin(codici_target_t2)]
+        # 2. Filtro Area di Vendita
+        if selected_area_t2 not in ["--- TOTALE STORE ---", "--- TOTALE REGIONE ---"]:
+            match_sel = match_sel[match_sel[c_area_find] == selected_area_t2]
             
+        # 3. Filtro Reparto specifico
+        if selected_reparto_t2 not in ["--- TOTALE AREA ---", "--- DETTAGLIO RICHIESTO ---"]:
+            match_sel = match_sel[match_sel[c_rep_name] == selected_reparto_t2]
+            
+        # Sviluppo analitico e calcolo delle metriche
         if not match_sel.empty:
             def parse_sellout_numeric(dataframe, primary_keyword, secondary_keyword=None):
                 actual_col = next((c for c in dataframe.columns if primary_keyword.lower() in c.lower()), None)
@@ -482,7 +468,6 @@ with tab2:
                     return pd.to_numeric(s, errors='coerce').fillna(0.0)
                 return pd.Series(0.0, index=dataframe.index)
 
-            # Parsing e calcolo delle metriche aggregate finali
             match_sel['Sales_TY'] = parse_sellout_numeric(match_sel, 'Sales TT', 'Sales 1')
             match_sel['Sales_PY'] = parse_sellout_numeric(match_sel, 'PY Custom Cal', 'Sales per')
             match_sel['Colli_TY'] = parse_sellout_numeric(match_sel, '# Colli', 'Colli')
@@ -497,7 +482,7 @@ with tab2:
             sel_delta = ((sel_s_tot - sel_s_py_tot) / sel_s_py_tot * 100) if sel_s_py_tot > 0 else 0.0
             sc_medio = (sel_s_tot / sel_v_tot) if sel_v_tot > 0 else 0.0
 
-            # Disegno dei box KPI aggregati a schermo
+            # Rendering dei box KPI con formattazione corretta
             c_sel1, c_sel2, c_sel3, c_sel4 = st.columns(4)
             with c_sel1: st.metric(label="👥 Buying Customers Unici", value=f"{sel_cust_qty:,}".replace(',', '.'))
             with c_sel2: st.metric(label="💰 Totale Sales (Sellout)", value=fmt_valuta_interi(sel_s_tot), delta=f"{sel_delta:+.2f}% vs PY")
