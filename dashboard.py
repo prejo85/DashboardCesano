@@ -12,18 +12,6 @@ st.set_page_config(page_title="Dashboard Commerciale Avanzata", layout="wide", p
 st.title("📊 Dashboard Commerciale Integrata")
 st.markdown("### Analisi Multilivello: Store, Aree, Reparti e Segmentazione Clienti")
 
-# Inserisci questo codice dove preferisci il tasto (es. in cima alla pagina o nella sidebar)
-st.sidebar.markdown("### 🖨️ Azioni Pagina")
-if st.sidebar.button("Stampa / Salva in PDF", use_container_width=True):
-    st.components.v1.html(
-        """
-        <script>
-            window.print();
-        </script>
-        """,
-        height=0,
-    )
-
 # -----------------------------------------------------------------------------
 # FUNZIONI DI FORMATTAZIONE VALUTA ED ESPRESSIONI ITALIANE
 # -----------------------------------------------------------------------------
@@ -106,6 +94,18 @@ tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Pr
 # PARTE 3.A: FILTRI GERARCHICI COMPLETI DENTRO IL TAB 1
 # =============================================================================
 with tab1:
+    # Inserisci questo codice dove preferisci il tasto (es. in cima alla pagina o nella sidebar)
+    st.sidebar.markdown("### 🖨️ Azioni Pagina")
+    if st.sidebar.button("Stampa / Salva in PDF", use_container_width=True):
+        st.components.v1.html(
+            """
+            <script>
+                window.print();
+             </script>
+            """,
+            height=0,
+        )
+
     if len(df_men.columns) >= 5:
         df_men_clean = df_men.copy()
         df_men_clean.iloc[:, 1] = df_men_clean.iloc[:, 1].astype(str).str.strip() 
