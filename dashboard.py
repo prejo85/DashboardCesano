@@ -418,6 +418,34 @@ with tab1:
                 match_ctg['Sales_PY'] = parse_ctg_columns_fixed(match_ctg, 8)
                 match_ctg['Visits_TY'] = parse_ctg_columns_fixed(match_ctg, 11)
                 
+                # -----------------------------------------------------------------------------
+                # CALCOLO RIPARAMETRATO DINAMICAMENTE SU STORE / AREA / REPARTO
+                # -----------------------------------------------------------------------------
+                col_flag_promo = [c for c in match_ctg.columns if 'promo' in c.lower()]
+                col_flag_hvs = [c for c in match_ctg.columns if 'hvs' in c.lower()]
+                
+                total_filtered_sales_ty = match_ctg['Sales_TY'].sum()
+                total_filtered_sales_py = match_ctg['Sales_PY'].sum()
+                
+                # --- Share Promo condizionato ---
+                if col_flag_promo:
+                    df_promo_filtered = match_ctg[match_ctg[col_flag_promo[0]].astype(str).str.upper().str.strip() == 'PROMO']
+                    promo_filtered_ty = df_promo_filtered['Sales_TY'].sum()
+                    promo_filtered_py = df_promo_filtered['Sales_PY'].sum()
+                    
+                    promo_share_ty = (promo_filtered_ty / total_filtered_sales_ty * 100) if total_filtered_sales_ty > 0 else 0.0
+                    promo_share_py = (promo_filtered_py / total_filtered_sales_py * 100) if total_filtered_sales_py > 0 else 0.0
+                    delta_promo_pp = promo_share_ty - promo_share_py
+                
+                # --- Sales HVS condizionato ---
+                if col_flag_hvs:
+                    df_hvs_filtered = match_ctg[match_ctg[col_flag_hvs[0]].astype(str).str.upper().str.strip() == 'HVS']
+                    hvs_filtered_ty = df_hvs_filtered['Sales_TY'].sum()
+                    hvs_filtered_py = df_hvs_filtered['Sales_PY'].sum()
+                    
+                    hvs_sales_ty = hvs_filtered_ty
+                    delta_hvs_pct = ((hvs_filtered_ty - hvs_filtered_py) / hvs_filtered_py * 100) if hvs_filtered_py > 0 else 0.0
+                
                 match_ctg['CTG_Label'] = match_ctg['CTG'].astype(str).str.strip().str.replace("'", "", regex=False).replace(['nan', 'None', ''], '-')
                 match_ctg['Channel_Label'] = match_ctg['Channel Detail'].astype(str).str.strip()
 
