@@ -12,6 +12,18 @@ st.set_page_config(page_title="Dashboard Commerciale Avanzata", layout="wide", p
 st.title("📊 Dashboard Commerciale Integrata")
 st.markdown("### Analisi Multilivello: Store, Aree, Reparti e Segmentazione Clienti")
 
+# Inserisci questo codice dove preferisci il tasto (es. in cima alla pagina o nella sidebar)
+st.sidebar.markdown("### 🖨️ Azioni Pagina")
+if st.sidebar.button("Stampa / Salva in PDF", use_container_width=True):
+    st.components.v1.html(
+        """
+        <script>
+            window.print();
+        </script>
+        """,
+        height=0,
+    )
+
 # -----------------------------------------------------------------------------
 # FUNZIONI DI FORMATTAZIONE VALUTA ED ESPRESSIONI ITALIANE
 # -----------------------------------------------------------------------------
