@@ -225,8 +225,6 @@ with tab1:
             if match:
                 codici_target.add(match.group())
 
-        st.markdown("#### 📊 Indicatori Chiave di Performance")
-        # --- Inizializzazione variabili globali per i nuovi KPI (evita errori se il file CTG manca) ---
         if 'promo_share_ty' not in locals(): promo_share_ty = 0.0
         if 'delta_promo_pp' not in locals(): delta_promo_pp = 0.0
         if 'hvs_sales_ty' not in locals(): hvs_sales_ty = 0.0
