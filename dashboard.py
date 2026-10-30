@@ -341,15 +341,17 @@ with tab1:
                 else:
                     df_tabella_indisp[col] = df_tabella_indisp[col].astype(str).apply(lambda x: '-' if x.strip() in ['nan', 'None', 'NaN', ''] else x.strip())
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
+
 # =============================================================================
-# BLOCCO 6: PERFORMANCE MIX CATEGORIE E CANALI (CON MACRO E MICRO DETTAGLIO)
+# BLOCCO 6A: ELABORAZIONE DATI INTEGRATI REPORT CTG (PROMO E HVS)
 # =============================================================================
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
 
-        # Inizializzazione variabili di contesto per non lasciare i box in alto vuoti in caso di errore
+        # Inizializzazione variabili di contesto per evitare celle vuote in alto
         promo_share_ty, promo_share_py, delta_promo_pp = 0.0, 0.0, 0.0
         hvs_sales_ty, hvs_filtered_py, delta_hvs_pct = 0.0, 0.0, 0.0
+        match_ctg = pd.DataFrame()
 
         if not df_ctg.empty:
             df_ctg_clean = df_ctg.copy()
@@ -369,7 +371,6 @@ with tab1:
                     if len(dataframe.columns) > col_index:
                         s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
                         s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
-                        # Riconosce la presenza di formattazione con punto delle migliaia italiano
                         if s.str.contains(r'\.').any() and s.str.contains(',').any():
                             s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                         elif s.str.contains(r'\.').any() and not s.str.contains(',').any():
@@ -386,7 +387,7 @@ with tab1:
                 match_ctg['CTG_Label'] = match_ctg['CTG'].astype(str).str.strip().str.replace("'", "", regex=False).replace(['nan', 'None', ''], '-')
                 match_ctg['Channel_Label'] = match_ctg['Channel Detail'].astype(str).str.strip()
 
-                # --- ESTRAZIONE DATI PROMO E HVS RIPARAMETRATI SUI FILTRI ATTIVI ---
+                # --- FIX ATTR_ERROR: Estrazione sicura usando indici di colonna espliciti ---
                 col_flag_promo = [c for c in match_ctg.columns if 'promo' in c.lower()]
                 col_flag_hvs = [c for c in match_ctg.columns if 'hvs' in c.lower()]
                 
@@ -394,7 +395,8 @@ with tab1:
                 total_filtered_sales_py = match_ctg['Sales_PY'].sum()
                 
                 if col_flag_promo:
-                    df_promo_filtered = match_ctg[match_ctg[col_flag_promo].astype(str).str.upper().str.strip() == 'PROMO']
+                    col_promo_name = col_flag_promo[0]  # Prende la stringa pura della colonna
+                    df_promo_filtered = match_ctg[match_ctg[col_promo_name].astype(str).str.upper().str.strip() == 'PROMO']
                     promo_filtered_ty = df_promo_filtered['Sales_TY'].sum()
                     promo_filtered_py = df_promo_filtered['Sales_PY'].sum()
                     promo_share_ty = (promo_filtered_ty / total_filtered_sales_ty * 100) if total_filtered_sales_ty > 0 else 0.0
@@ -402,30 +404,32 @@ with tab1:
                     delta_promo_pp = promo_share_ty - promo_share_py
                 
                 if col_flag_hvs:
-                    df_hvs_filtered = match_ctg[match_ctg[col_flag_hvs].astype(str).str.upper().str.strip() == 'HVS']
+                    col_hvs_name = col_flag_hvs[0]  # Prende la stringa pura della colonna
+                    df_hvs_filtered = match_ctg[match_ctg[col_hvs_name].astype(str).str.upper().str.strip() == 'HVS']
                     hvs_sales_ty = df_hvs_filtered['Sales_TY'].sum()
                     hvs_filtered_py = df_hvs_filtered['Sales_PY'].sum()
                     delta_hvs_pct = ((hvs_sales_ty - hvs_filtered_py) / hvs_filtered_py * 100) if hvs_filtered_py > 0 else 0.0
 
-                # --- STRUTTURAZIONE DELLE MACRO-CATEGORIE (HORECA, SCO, TRADER) ---
-                col_macro = [c for c in match_ctg.columns if 'customer category' in c.lower() or 'segmento' in c.lower() or 'macro' in c.lower()]
-                match_ctg['Macro_Category'] = match_ctg[col_macro].astype(str).str.upper().str.strip() if col_macro else match_ctg.iloc[:, 2].astype(str).str.upper().str.strip()
-
-                def normalizza_macro(val):
-                    val_str = str(val)
-                    if 'HORECA' in val_str: return 'HORECA'
-                    if 'SCO' in val_str: return 'SCO'
-                    if 'TRADER' in val_str: return 'TRADER'
-                    return 'ALTRO / NON CORE'
-                match_ctg['Macro_Category_Clean'] = match_ctg['Macro_Category'].apply(normalizza_macro)
-
-        # Iniezione asincrona dei valori calcolati e corretti nei riquadri 6 e 7 posti in cima al Tab 1
+        # Iniezione asincrona nei riquadri 6 e 7 posti in cima alla pagina
         box_m6.metric(label="🏷️ Share Promo %", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
         box_m7.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
-
-        # --- GENERAZIONE GRAFICI STRUTTURATI ---
+# =============================================================================
+# BLOCCO 6B: COMPONENTI GRAFICI DI PERFORMANCE MIX (HORECA CORRETTO)
+# =============================================================================
         if not df_ctg.empty and not match_ctg.empty:
             st.markdown("#### 🎯 Performance Globale per Canale e Segmento Cliente")
+            
+            col_macro = [c for c in match_ctg.columns if 'customer category' in c.lower() or 'segmento' in c.lower() or 'macro' in c.lower()]
+            match_ctg['Macro_Category'] = match_ctg[col_macro].astype(str).str.upper().str.strip() if col_macro else match_ctg.iloc[:, 2].astype(str).str.upper().str.strip()
+
+            def normalizza_macro(val):
+                val_str = str(val)
+                if 'HORECA' in val_str: return 'HORECA'
+                if 'SCO' in val_str: return 'SCO'
+                if 'TRADER' in val_str: return 'TRADER'
+                return 'ALTRO / NON CORE'
+            match_ctg['Macro_Category_Clean'] = match_ctg['Macro_Category'].apply(normalizza_macro)
+
             df_macro_grouped = match_ctg.groupby('Macro_Category_Clean').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index().sort_values(by='Sales_TY', ascending=False)
             
             mc1, mc2 = st.columns(2)
@@ -440,7 +444,7 @@ with tab1:
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # Sotto-segmentazione ed esplorazione verticale esclusiva per il cluster HORECA
+            # Sotto-segmentazione ed esplorazione verticale per il cluster HORECA
             df_horeca_only = match_ctg[match_ctg['Macro_Category_Clean'] == 'HORECA'].copy()
             df_ctg_grouped = df_horeca_only.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Visits_TY': 'sum'}).reset_index().sort_values(by='Sales_TY', ascending=True)
             df_ctg_grouped = df_ctg_grouped[df_ctg_grouped['Sales_TY'] > 0]
@@ -471,6 +475,7 @@ with tab1:
                     st.plotly_chart(fig_ch_avg, use_container_width=True)
             else:
                 st.caption("⚠️ I record del file CTG per il segmento HORECA contengono volumi pari a zero o vuoti.")
+
             # =============================================================================
             # ESPLORAZIONE VERTICALE ESCLUSIVA PER IL CLUSTER SCO
             # =============================================================================
