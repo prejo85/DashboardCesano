@@ -365,7 +365,7 @@ with tab1:
         st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
         
 # =============================================================================
-# PARTE 5.A: FILTRI DINAMICI INTEGRALI E PUNTAMENTO COLONNE H, I, J (CORRETTO)
+# PARTE 5.A: FILTRI DINAMICI INTEGRALI E PUNTAMENTO COLONNE H, I, J (RISOLTO)
 # =============================================================================
 with tab2:
     if not df_sel.empty:
@@ -455,11 +455,9 @@ with tab2:
         st.markdown("---")
         st.markdown(f"### 👥 {titolo_vista_t2}")
 
-
 # =============================================================================
 # PARTE 5.B: ENGINE DI AGGREGAZIONE E CALCOLO METRICHE SELLOUT (TAB 2)
 # =============================================================================
-        # Costruzione del dataset iniziale filtrato esclusivamente in base alle scelte del Tab 2
         match_sel = df_sel_clean.copy()
         
         # 1. Filtro Store (se non è selezionato il totalone metropolitano)
@@ -492,6 +490,7 @@ with tab2:
             match_sel['Colli_TY'] = parse_sellout_numeric(match_sel, '# Colli', 'Colli')
             match_sel['Visits_TY'] = parse_sellout_numeric(match_sel, '# Visit', 'Visit')
             match_sel['Margin_TY'] = parse_sellout_numeric(match_sel, 'Front Margin', 'Margin')
+            match_sel['Margin_PY'] = parse_sellout_numeric(match_sel, 'PY Front Margin', 'Margin per')
 
             sel_s_tot = match_sel['Sales_TY'].sum()
             sel_s_py_tot = match_sel['Sales_PY'].sum()
@@ -501,16 +500,14 @@ with tab2:
             sel_delta = ((sel_s_tot - sel_s_py_tot) / sel_s_py_tot * 100) if sel_s_py_tot > 0 else 0.0
             sc_medio = (sel_s_tot / sel_v_tot) if sel_v_tot > 0 else 0.0
 
-            # Stampa orizzontale della griglia KPI superiori del Tab 2
             c_sel1, c_sel2, c_sel3, c_sel4 = st.columns(4)
-            with c_sel1: st.metric(label="👥 Buying Customers Unici", value=f"{sel_cust_qty:,}".replace(',', '.'))
-            with c_sel2: st.metric(label="💰 Totale Sales (Sellout)", value=fmt_valuta_interi(sel_s_tot), delta=f"{sel_delta:+.2f}% vs PY")
-            with c_sel3: st.metric(label="🎫 Totale Visite/Scontrini", value=f"{int(sel_v_tot):,}".replace(',', '.'))
-            with c_sel4: st.metric(label="🛒 Scontrino Medio Portafoglio", value=fmt_valuta_decimali(sc_medio))
+            with c_sel1: st.metric(label="👥 Buying Customers Unici (Tot.)", value=f"{sel_cust_qty:,}".replace(',', '.'))
+            with c_sel2: st.metric(label="💰 Totale Sales (Sellout Tot.)", value=fmt_valuta_interi(sel_s_tot), delta=f"{sel_delta:+.2f}% vs PY")
+            with c_sel3: st.metric(label="🎫 Totale Visite/Scontrini (Tot.)", value=f"{int(sel_v_tot):,}".replace(',', '.'))
+            with c_sel4: st.metric(label="🛒 Scontrino Medio Portafoglio (Tot.)", value=fmt_valuta_decimali(sc_medio))
             st.markdown("<br>", unsafe_allow_html=True)
-
 # =============================================================================
-# PARTE 5.C: SEZIONE GRAFICA SELLOUT E CLASSIFICA CON MARGINI ESPRESSI IN %
+# PARTE 5.C: FILTRAGGIO GERARCHICO COMPATTO (AM/OM -> VENDITORE) E KPI
 # =============================================================================
             sg1, sg2 = st.columns(2)
             with sg1:
@@ -545,44 +542,47 @@ with tab2:
             if selected_gestione != "TUTTI":
                 df_commerciale_filtrato = df_commerciale_filtrato[df_commerciale_filtrato[c_tipo_gestione] == selected_gestione]
 
+            # FILTRAGGIO GERARCHICO INVERTITO: PRIMA AM/OM (J), POI VENDITORE (I) ASSOCIATO
             col_v1, col_v2 = st.columns(2)
             
             with col_v1:
-                opzioni_venditori = ["--- TUTTI I VENDITORI ---"] + sorted(list(df_commerciale_filtrato[c_venditore].unique()))
-                selected_venditore = st.selectbox(
-                    "Filtraggio puntuale per Venditore (Colonna I):", 
-                    opzioni_venditori, 
-                    key=f"sb_venditore_t2_{st.session_state.reset_tab2}"
-                )
-                
-            with col_v2:
                 opzioni_amom = ["--- TUTTI GLI AM/OM ---"] + sorted(list(df_commerciale_filtrato[c_am_om].unique()))
                 selected_amom = st.selectbox(
-                    "Filtraggio puntuale per Responsabile AM - OM (Colonna J):", 
+                    "1. Filtraggio per Responsabile AM - OM (Colonna J):", 
                     opzioni_amom, 
                     key=f"sb_amom_t2_{st.session_state.reset_tab2}"
                 )
 
-            if selected_venditore != "--- TUTTI I VENDITORI ---":
-                df_commerciale_filtrato = df_commerciale_filtrato[df_commerciale_filtrato[c_venditore] == selected_venditore]
-                
+            # Il dataset dei venditori si restringe dinamicamente in base all'AM/OM scelto
+            df_venditori_disponibili = df_commerciale_filtrato.copy()
             if selected_amom != "--- TUTTI GLI AM/OM ---":
-                df_commerciale_filtrato = df_commerciale_filtrato[df_commerciale_filtrato[c_am_om] == selected_amom]
+                df_venditori_disponibili = df_venditori_disponibili[df_venditori_disponibili[c_am_om] == selected_amom]
+                
+            with col_v2:
+                opzioni_venditori = ["--- TUTTI I VENDITORI ASSOCIATI ---"] + sorted(list(df_venditori_disponibili[c_venditore].unique()))
+                selected_venditore = st.selectbox(
+                    "2. Filtraggio per Venditore Associato (Colonna I):", 
+                    opzioni_venditori, 
+                    key=f"sb_venditore_t2_{st.session_state.reset_tab2}"
+                )
+
+            # Applicazione definitiva dei filtri a cascata per il calcolo della tabella e dei KPI inferiori
+            df_final_kpi_table = df_venditori_disponibili.copy()
+            if selected_venditore != "--- TUTTI I VENDITORI ASSOCIATI ---":
+                df_final_kpi_table = df_final_kpi_table[df_final_kpi_table[c_venditore] == selected_venditore]
 
             # -----------------------------------------------------------------
             # RIQUADRI RIEPILOGATIVI KPI FORMATTATI (MARGINE ESPRESSO IN %)
             # -----------------------------------------------------------------
             st.markdown("<br>", unsafe_allow_html=True)
-            if not df_commerciale_filtrato.empty:
-                # Estrazione e calcolo somme sui dati correntemente filtrati
-                kpi_sales_ty = float(df_commerciale_filtrato['Sales_TY'].sum())
-                kpi_sales_py = float(df_commerciale_filtrato['Sales_PY'].sum())
-                kpi_colli_ty = float(df_commerciale_filtrato['Colli_TY'].sum())
-                kpi_colli_py = float(df_commerciale_filtrato['Sales_PY'].sum() / (kpi_sales_ty / kpi_colli_ty if kpi_colli_ty > 0 else 1.0))
-                kpi_margin_ty = float(df_commerciale_filtrato['Margin_TY'].sum())
-                kpi_margin_py = float(df_commerciale_filtrato['Margin_PY'].sum())
+            if not df_final_kpi_table.empty:
+                kpi_sales_ty = float(df_final_kpi_table['Sales_TY'].sum())
+                kpi_sales_py = float(df_final_kpi_table['Sales_PY'].sum())
+                kpi_colli_ty = float(df_final_kpi_table['Colli_TY'].sum())
+                kpi_colli_py = float(df_final_kpi_table['Sales_PY'].sum() / (kpi_sales_ty / kpi_colli_ty if kpi_colli_ty > 0 else 1.0))
+                kpi_margin_ty = float(df_final_kpi_table['Margin_TY'].sum())
+                kpi_margin_py = float(df_final_kpi_table['Margin_PY'].sum())
                 
-                # Calcolo indici percentuali e scostamenti (Fatturato, Volumi, Margine %)
                 delta_sales_kpi = ((kpi_sales_ty - kpi_sales_py) / kpi_sales_py * 100) if kpi_sales_py > 0 else 0.0
                 delta_colli_kpi = ((kpi_colli_ty - kpi_colli_py) / kpi_colli_py * 100) if kpi_colli_py > 0 else 0.0
                 
@@ -590,7 +590,6 @@ with tab2:
                 margin_pct_py = (kpi_margin_py / kpi_sales_py * 100) if kpi_sales_py > 0 else 0.0
                 delta_margin_kpi_pp = margin_pct_ty - margin_pct_py
                 
-                # CSS locale per allineamento perfetto font
                 st.markdown("""
                     <style>
                         div[data-testid="stMetricValue"] { font-size: 21px !important; }
@@ -598,7 +597,7 @@ with tab2:
                     </style>
                 """, unsafe_allow_html=True)
 
-                st.markdown("##### 📊 Sintesi Performance Filtro Corrente")
+                st.markdown("##### 📊 Sintesi Performance Selezione Commerciale Corrente")
                 c_kpi1, c_kpi2, c_kpi3 = st.columns(3)
                 
                 c_kpi1.metric(
@@ -621,8 +620,8 @@ with tab2:
             # -----------------------------------------------------------------
             # RENDERING DELLA TABELLA FINALE FORMATTATA
             # -----------------------------------------------------------------
-            if not df_commerciale_filtrato.empty:
-                df_c_g = df_commerciale_filtrato.groupby([c_cust_name, c_tipo_gestione, c_venditore, c_am_om, 'Mappatura_VP']).agg({
+            if not df_final_kpi_table.empty:
+                df_c_g = df_final_kpi_table.groupby([c_cust_name, c_tipo_gestione, c_venditore, c_am_om, 'Mappatura_VP']).agg({
                     'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Colli_TY': 'sum', 'Margin_TY': 'sum'
                 }).reset_index()
                 
@@ -637,14 +636,12 @@ with tab2:
                 df_c_v['Margin_Pct'] = df_c_v['Margin_Pct'].apply(fmt_percentuale)
                 df_c_v['Colli_TY'] = df_c_v['Colli_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
                 
-                # Rinominazione colonne (Margine espresso unicamente in %)
                 df_c_v.columns = ['Ragione Sociale / Cliente', 'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Target VP', 'Fatturato TY (Sales)', 'Fatturato PY', 'Volume TY (Colli)', 'Margine € (Income Omissis)', 'Delta vs PY', 'Margine % (Income)']
                 
-                # Riordino delle colonne per mostrare solo la percentuale richiesta
                 colonne_output = [
                     'Ragione Sociale / Cliente', 'Fatturato TY (Sales)', 'Volume TY (Colli)', 'Margine % (Income)', 
-                    'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Delta vs PY'
+                    'Tipo Gestione (H)', 'Responsabile AM-OM (J)', 'Venditore Riferimento (I)', 'Delta vs PY'
                 ]
                 st.dataframe(df_c_v[colonne_output], use_container_width=True, hide_index=False)
             else:
-                st.caption("⚠️ Nessun record risponde alla combinazione di filtri commerciali (Gestione, Venditore, AM/OM) selezionata.")
+                st.caption("⚠️ Nessun record risponde alla combinazione di filtri commerciali selezionata.")
