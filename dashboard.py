@@ -33,27 +33,20 @@ def fmt_giorni(valore):
 # -----------------------------------------------------------------------------
 # 3. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# 3. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
+# -----------------------------------------------------------------------------
 def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabili, file_mensile):
     def clean_df(file_path):
         try:
-            df = pd.read_csv(file_path, sep=";", skiprows=0, skip_blank_lines=True)
+            # Forziamo la lettura come stringhe (dtype=str) per non perdere gli zeri finali e non confondere i punti
+            df = pd.read_csv(file_path, sep=";", skiprows=0, skip_blank_lines=True, dtype=str)
             if len(df.columns) <= 1:
-                df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
+                df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True, dtype=str)
         except:
-            df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
+            df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True, dtype=str)
         df.columns = df.columns.str.strip()
         df = df[df.iloc[:, 0].notna()]
-        
-        # --- NUOVA LOGICA: Correzione automatica del formato numerico italiano all'importazione ---
-        for col in df.columns:
-            # Identifichiamo le colonne numeriche sporche analizzando i valori non vuoti
-            sample = df[col].dropna().astype(str).str.strip()
-            if sample.str.contains(r'^\d{1,3}(\.\d{3})*(,\d+)?$|^\d{1,3}(\.\d{3})+$').any():
-                # Rimuove il punto delle migliaia italiano e converte la virgola decimale nel punto standard
-                df[col] = df[col].astype(str).str.strip()
-                df[col] = df[col].str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
-                
         return df
 
     df_rep = clean_df(file_reparti)
@@ -260,20 +253,20 @@ with tab1:
             if not df_rep.empty:
                 def parse_bmpl_direct(dataframe, col_name):
                     if col_name in dataframe.columns:
-                        return pd.to_numeric(dataframe[col_name], errors='coerce').fillna(0.0)
+                        s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
+                        s = s.replace(['-', '--', 'nan', 'NaN', ''], '0')
+                        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                        return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
-                # --- MODIFICA 1: Rimosso il filtro forzato che manteneva solo le righe "FOOD" ---
-                df_rep_pure = df_rep.copy() 
-
-                # --- MODIFICA 2: Ottimizzazione del filtro per reparto in base alla selezione dello Store ---
-                col_bmpl_rep = [c for c in df_rep_pure.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+                # Rimosso il filtro rigido sul Food per includere tutti i reparti dello store
+                df_rep_pure = df_rep.copy()
                 
+                col_bmpl_rep = [c for c in df_rep_pure.columns if 'department' in c.lower() or 'reparto' in c.lower()]
                 if col_bmpl_rep and len(codici_target) > 0:
                     df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[col_bmpl_rep[0]].astype(str).apply(
                         lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
                     )
-                    # Mantiene solo i reparti effettivamente attivi per lo store/area selezionati
                     if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
                         match_bmpl = df_rep_pure[df_rep_pure['Codice_Reparto_BMPL'].isin(codici_target)]
                     else:
@@ -305,7 +298,6 @@ with tab1:
                 with sub_col3: 
                     st.metric(label="Volume Colli (BMPL)", value=f"{int(round(bmpl_colli)):,}".replace(',', '.'), delta=f"{delta_colli_bmpl:+.2f}% vs PY" if bmpl_colli_py != 0 else None)
 
-                # --- AGGIUNTA DEBUG: Mostra a schermo i dati considerati per il calcolo ---
                 with st.expander("🔍 Debug: Vedi righe BMPL incluse nel calcolo"):
                     st.dataframe(match_bmpl[[col_bmpl_rep[0], 'Sales TT', '# Colli']], use_container_width=True)
 
