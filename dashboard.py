@@ -657,4 +657,116 @@ with tab2:
                     )
                     st.plotly_chart(fig_pie_gest, use_container_width=True)
                 st.markdown("<br>", unsafe_allow_html=True)
+# =============================================================================
+# PARTE 5.C.5: RICERCA, RENDERING TABELLA E DETTAGLIO GRAFICO DEL CLIENTE SELEZIONATO
+# =============================================================================
+            if not df_final_kpi_table.empty:
+                # 1. Calcolo del dataset aggregato base per anagrafica
+                df_c_g = df_final_kpi_table.groupby([c_cust_name, c_tipo_gestione, c_venditore, c_am_om, 'Mappatura_VP']).agg({
+                    'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Colli_TY': 'sum', 'Margin_TY': 'sum'
+                }).reset_index()
+                
+                df_c_g['Scostamento_vs_PY'] = df_c_g['Sales_TY'] - df_c_g['Sales_PY']
+                df_c_g['Margin_Pct'] = df_c_g.apply(lambda r: (r['Margin_TY'] / r['Sales_TY'] * 100) if r['Sales_TY'] > 0 else 0.0, axis=1)
+                df_c_g = df_c_g.sort_values(by='Sales_TY', ascending=False).reset_index(drop=True)
+                
+                # 2. INSERIMENTO DELLA RICERCA RAPIDA TESTUALE PRIMA DELLA TABELLA
+                st.markdown("##### 🔍 Ricerca Rapida Anagrafica Clienti")
+                search_query = st.text_input(
+                    "Digita il Codice Cliente o la Ragione Sociale per filtrare la tabella sottostante:",
+                    placeholder="Es. 91-17660 oppure HOSTERIA...",
+                    key=f"search_input_t2_{st.session_state.reset_tab2}"
+                ).strip().lower()
+                
+                # Applicazione immediata del filtro digitato dall'utente
+                if search_query:
+                    df_c_g = df_c_g[df_c_g[c_cust_name].astype(str).str.lower().str.contains(search_query, regex=False)]
+                
+                # 3. Conversione estetica con le funzioni di formattazione locale
+                if not df_c_g.empty:
+                    df_c_v = df_c_g.copy()
+                    df_c_v['Sales_TY'] = df_c_v['Sales_TY'].apply(fmt_valuta_decimali)
+                    df_c_v['Sales_PY'] = df_c_v['Sales_PY'].apply(fmt_valuta_decimali)
+                    df_c_v['Scostamento_vs_PY'] = df_c_v['Scostamento_vs_PY'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
+                    df_c_v['Margin_Pct'] = df_c_v['Margin_Pct'].apply(fmt_percentuale)
+                    df_c_v['Colli_TY'] = df_c_v['Colli_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                    
+                    df_c_v.columns = ['Ragione Sociale / Cliente', 'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Target VP', 'Fatturato TY (Sales)', 'Fatturato PY', 'Volume TY (Colli)', 'Margine € (Income Omissis)', 'Delta vs PY', 'Margine % (Income)']
+                    
+                    colonne_output = [
+                        'Ragione Sociale / Cliente', 'Fatturato TY (Sales)', 'Volume TY (Colli)', 'Margine % (Income)', 
+                        'Tipo Gestione (H)', 'Responsabile AM-OM (J)', 'Venditore Riferimento (I)', 'Delta vs PY'
+                    ]
+                    
+                    # Configurazione della tabella interattiva a selezione singola
+                    st.markdown("👉 *Clicca sulla riga di un cliente nella tabella per visualizzare l'approfondimento dei suoi acquisti in basso.*")
+                    selection = st.dataframe(
+                        df_c_v[colonne_output], 
+                        use_container_width=True, 
+                        hide_index=False,
+                        on_select="rerun",
+                        selection_mode="single-row"
+                    )
+                    
+                    # 4. LOGICA DI RENDERING DETTAGLIO ACQUISTI DEL CLIENTE SELEZIONATO
+                    # Se l'utente ha cliccato su una riga della tabella, estraiamo i dati di quel cliente specifico
+                    if selection and len(selection.get("selection", {}).get("rows", [])) > 0:
+                        selected_row_idx = selection["selection"]["rows"][0]
+                        cliente_selezionato = df_c_g.iloc[selected_row_idx][c_cust_name]
+                        
+                        st.markdown(f"### 📈 Dettaglio Acquisti Cliente: {cliente_selezionato}")
+                        
+                        # Isoliamo le righe nel dataset commerciale relative solo a questo cliente
+                        df_singolo_cliente = df_final_kpi_table[df_final_kpi_table[c_cust_name] == cliente_selezionato].copy()
+                        
+                        # Generazione delle colonne grafiche per l'esplosione dei dati
+                        col_det1, col_det2 = st.columns(2)
+                        
+                        with col_det1:
+                            st.markdown("##### 📦 Distribuzione Fatturato per Reparto")
+                            df_rep_dettaglio = df_singolo_cliente.groupby(c_rep_name)['Sales_TY'].sum().reset_index().sort_values(by='Sales_TY', ascending=True)
+                            df_rep_dettaglio = df_rep_dettaglio[df_rep_dettaglio['Sales_TY'] > 0]
+                            
+                            if not df_rep_dettaglio.empty:
+                                fig_rep_det = px.bar(
+                                    df_rep_dettaglio,
+                                    x='Sales_TY',
+                                    y=c_rep_name,
+                                    orientation='h',
+                                    template='plotly_dark',
+                                    color='Sales_TY',
+                                    color_continuous_scale='Blues',
+                                    text_auto='.2s',
+                                    labels={'Sales_TY': 'Sales TY (€)', c_rep_name: 'Reparto'}
+                                )
+                                fig_rep_det.update_layout(coloraxis_showscale=False)
+                                fig_rep_det.update_traces(textposition='outside')
+                                st.plotly_chart(fig_rep_det, use_container_width=True)
+                            else:
+                                st.caption("Nessun dato di fatturato sui reparti per il cliente corrente.")
+                                
+                        with col_det2:
+                            st.markdown("##### 🏪 Mix Acquisti per Canale (Channel Detail)")
+                            df_chan_dettaglio = df_singolo_cliente.groupby(c_chan_name)['Sales_TY'].sum().reset_index()
+                            df_chan_dettaglio = df_chan_dettaglio[df_chan_dettaglio['Sales_TY'] > 0]
+                            
+                            if not df_chan_dettaglio.empty:
+                                fig_chan_det = px.pie(
+                                    df_chan_dettaglio,
+                                    values='Sales_TY',
+                                    names=c_chan_name,
+                                    template='plotly_dark',
+                                    hole=0.4,
+                                    color_discrete_sequence=px.colors.qualitative.Pastel
+                                )
+                                st.plotly_chart(fig_chan_det, use_container_width=True)
+                            else:
+                                st.caption("Nessun dato di fatturato sui canali per il cliente corrente.")
+                    else:
+                        # Messaggio di fallback se la tabella è popolata ma non è ancora stato selezionato un cliente specifico
+                        st.info("💡 Seleziona un cliente cliccando sul quadratino a sinistra nella tabella per sbloccare i grafici di dettaglio su Reparti e Canali.")
+                else:
+                    st.info("ℹ️ Nessun cliente corrisponde ai criteri di ricerca digitati.")
+            else:
+                st.caption("⚠️ Nessun record risponde alla combinazione di filtri commerciali selezionata.")
 
