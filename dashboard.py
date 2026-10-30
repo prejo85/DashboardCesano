@@ -658,7 +658,7 @@ with tab2:
                     st.plotly_chart(fig_pie_gest, use_container_width=True)
                 st.markdown("<br>", unsafe_allow_html=True)
 # =============================================================================
-# PARTE 5.C.5: RENDERING TABELLA, SELEZIONE E DETTAGLIO GRAFICO CON BENCHMARK PY
+# PARTE 5.C.5: RENDERING TABELLA, SELEZIONE E DETTAGLIO GRAFICO CON BENCHMARK PY (RISOLTO)
 # =============================================================================
             if not df_final_kpi_table.empty:
                 # 1. Calcolo del dataset aggregato base per anagrafica
@@ -707,32 +707,30 @@ with tab2:
                         selection_mode="single-row"
                     )
                     
-                    # 4. LOGICA DI RENDERING DETTAGLIO ACQUISTI DEL CLIENTE CON CONFRONTO STORICO (BENCHMARK PY)
+                    # 4. LOGICA DI RENDERING DETTAGLIO CON PUNTARE ESTRATTO COME STRINGA PURA
                     if selection and len(selection.get("selection", {}).get("rows", [])) > 0:
-                        selected_row_idx = selection["selection"]["rows"]
-                        cliente_selezionato = df_c_g.iloc[selected_row_idx][c_cust_name]
+                        selected_row_idx = selection["selection"]["rows"][0]
+                        # Estrazione pulita del valore stringa nativo evitando Series con indici disallineati
+                        cliente_selezionato = str(df_c_g.iloc[selected_row_idx][c_cust_name]).strip()
                         
                         st.markdown(f"### 📈 Dettaglio Acquisti e Confronto Storico Cliente: {cliente_selezionato}")
                         
-                        # Isoliamo i record commerciali relativi unicamente a questo cliente
-                        df_singolo_cliente = df_final_kpi_table[df_final_kpi_table[c_cust_name] == cliente_selezionato].copy()
+                        # Il confronto tramite stringa ora non genera più il KeyError / ValueError
+                        df_singolo_cliente = df_final_kpi_table[df_final_kpi_table[c_cust_name].astype(str).str.strip() == cliente_selezionato].copy()
                         
                         col_det1, col_det2 = st.columns(2)
                         
                         with col_det1:
                             st.markdown("##### 📦 Distribuzione Fatturato per Reparto (TY vs PY)")
-                            # Raggruppamento e parsing accurato di TY e PY per reparto
                             df_rep_dettaglio = df_singolo_cliente.groupby(c_rep_name).agg({
                                 'Sales_TY': 'sum',
                                 'Sales_PY': 'sum'
                             }).reset_index()
                             
-                            # Filtriamo le righe che hanno registrato vendite in almeno uno dei due anni
                             df_rep_dettaglio = df_rep_dettaglio[(df_rep_dettaglio['Sales_TY'] > 0) | (df_rep_dettaglio['Sales_PY'] > 0)]
                             df_rep_dettaglio = df_rep_dettaglio.sort_values(by='Sales_TY', ascending=True)
                             
                             if not df_rep_dettaglio.empty:
-                                # Modello fuso (melt) per permettere la visualizzazione a barre affiancate (TY vs PY)
                                 df_rep_melt = df_rep_dettaglio.melt(
                                     id_vars=[c_rep_name], 
                                     value_vars=['Sales_TY', 'Sales_PY'],
@@ -761,7 +759,6 @@ with tab2:
                                 
                         with col_det2:
                             st.markdown("##### 🏪 Confronto Acquisti per Canale Logistico (TY vs PY)")
-                            # Raggruppamento e parsing accurato di TY e PY per canale logistico
                             df_chan_dettaglio = df_singolo_cliente.groupby(c_chan_name).agg({
                                 'Sales_TY': 'sum',
                                 'Sales_PY': 'sum'
@@ -771,7 +768,6 @@ with tab2:
                             df_chan_dettaglio = df_chan_dettaglio.sort_values(by='Sales_TY', ascending=False)
                             
                             if not df_chan_dettaglio.empty:
-                                # Modello fuso (melt) per barre affiancate sui canali logistici
                                 df_chan_melt = df_chan_dettaglio.melt(
                                     id_vars=[c_chan_name], 
                                     value_vars=['Sales_TY', 'Sales_PY'],
@@ -797,10 +793,8 @@ with tab2:
                             else:
                                 st.caption("Nessun dato storico commerciale sui canali per il cliente corrente.")
                     else:
-                        # Messaggio di fallback se la tabella è popolata ma non è ancora stato selezionato un cliente specifico
-                        st.info("💡 Seleziona un cliente cliccando sul quadratino a sinistra nella tabella per sbloccare i grafici di dettaglio su Reparti e Canali.")
+                        st.info("💡 Seleziona un cliente cliccando sulla casella a sinistra nella tabella per sbloccare i grafici di dettaglio comparativi TY vs PY.")
                 else:
                     st.info("ℹ️ Nessun cliente corrisponde ai criteri di ricerca digitati.")
             else:
                 st.caption("⚠️ Nessun record risponde alla combinazione di filtri commerciali selezionata.")
-
