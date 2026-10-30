@@ -251,13 +251,18 @@ with tab1:
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
-                df_rep_pure = df_rep[df_rep.iloc[:, 0].astype(str).str.contains('FOOD', case=False, na=False)].copy()
-                if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
-                    col_bmpl_rep = [c for c in df_rep_pure.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-                    if col_bmpl_rep and len(codici_target) > 0:
-                        df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[col_bmpl_rep[0]].astype(str).apply(
-                            lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
-                        )
+                # --- MODIFICA 1: Rimosso il filtro forzato che manteneva solo le righe "FOOD" ---
+                df_rep_pure = df_rep.copy() 
+
+                # --- MODIFICA 2: Ottimizzazione del filtro per reparto in base alla selezione dello Store ---
+                col_bmpl_rep = [c for c in df_rep_pure.columns if 'department' in c.lower() or 'reparto' in c.lower()]
+                
+                if col_bmpl_rep and len(codici_target) > 0:
+                    df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[col_bmpl_rep[0]].astype(str).apply(
+                        lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
+                    )
+                    # Mantiene solo i reparti effettivamente attivi per lo store/area selezionati
+                    if selected_area != "--- TOTALE STORE ---" or (selected_reparto != "--- DETTAGLIO RICHIESTO ---" and selected_reparto != "--- TOTALE AREA ---"):
                         match_bmpl = df_rep_pure[df_rep_pure['Codice_Reparto_BMPL'].isin(codici_target)]
                     else:
                         match_bmpl = df_rep_pure.copy()
@@ -287,6 +292,10 @@ with tab1:
                     st.metric(label="Front Margin % (BMPL)", value=fmt_percentuale(margin_pct_ty), delta=f"{delta_margin_bmpl_pp:+.2f} pp vs PY")
                 with sub_col3: 
                     st.metric(label="Volume Colli (BMPL)", value=f"{int(round(bmpl_colli)):,}".replace(',', '.'), delta=f"{delta_colli_bmpl:+.2f}% vs PY" if bmpl_colli_py != 0 else None)
+
+                # --- AGGIUNTA DEBUG: Mostra a schermo i dati considerati per il calcolo ---
+                with st.expander("🔍 Debug: Vedi righe BMPL incluse nel calcolo"):
+                    st.dataframe(match_bmpl[[col_bmpl_rep[0], 'Sales TT', '# Colli']], use_container_width=True)
 
         with col_c2:
             st.markdown("#### 📌 Sintesi Articoli Indispensabili nel Mix")
