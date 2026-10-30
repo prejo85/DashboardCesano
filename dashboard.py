@@ -616,14 +616,18 @@ with tab2:
                 )
                 st.markdown("<br>", unsafe_allow_html=True)
 # =============================================================================
-# PARTE 5.C.4: NUOVA SEZIONE GRAFICA: ISTOGRAMMA AM/OM E TORTA GESTIONE
+# PARTE 5.C.4: NUOVA SEZIONE GRAFICA: ISTOGRAMMA AM/OM (TOP 10 CON VALORI) E TORTA GESTIONE
 # =============================================================================
                 g_comm1, g_comm2 = st.columns(2)
                 
                 with g_comm1:
-                    st.markdown("##### 📊 Classifica Sales per Responsabile AM / OM")
-                    df_sales_amom = df_final_kpi_table.groupby(c_am_om)['Sales_TY'].sum().reset_index().sort_values(by='Sales_TY', ascending=True)
+                    st.markdown("##### 📊 Top 10 Sales per Responsabile AM / OM")
+                    # Raggruppamento e selezione rigorosa dei primi 10 nominativi per fatturato decrescente
+                    df_sales_amom = df_final_kpi_table.groupby(c_am_om)['Sales_TY'].sum().reset_index()
                     df_sales_amom = df_sales_amom[df_sales_amom['Sales_TY'] > 0]
+                    df_sales_amom = df_sales_amom.sort_values(by='Sales_TY', ascending=False).head(10)
+                    df_sales_amom = df_sales_amom.sort_values(by='Sales_TY', ascending=True) # Per mostrare il più alto in cima nel grafico orizzontale
+                    
                     fig_bar_amom = px.bar(
                         df_sales_amom, 
                         x='Sales_TY', 
@@ -632,9 +636,11 @@ with tab2:
                         template='plotly_dark',
                         color='Sales_TY',
                         color_continuous_scale='Purples',
+                        text_auto='.2s', # Mostra automaticamente i valori sulle barre formattati in modo compatto (es. 1.2M, 450k)
                         labels={'Sales_TY': 'Fatturato Corrente (€)', c_am_om: 'Responsabile AM/OM'}
                     )
                     fig_bar_amom.update_layout(coloraxis_showscale=False)
+                    fig_bar_amom.update_traces(textposition='outside') # Posiziona il testo all'esterno delle barre per miglior leggibilità
                     st.plotly_chart(fig_bar_amom, use_container_width=True)
                     
                 with g_comm2:
@@ -652,9 +658,10 @@ with tab2:
                     st.plotly_chart(fig_pie_gest, use_container_width=True)
                 st.markdown("<br>", unsafe_allow_html=True)
 # =============================================================================
-# PARTE 5.C.5: RENDERING DELLA TABELLA FINALE FORMATTATA
+# PARTE 5.C.5: STRUMENTO DI RICERCA RAPIDA E RENDERING DELLA TABELLA FINALE
 # =============================================================================
             if not df_final_kpi_table.empty:
+                # 1. Calcolo del dataset aggregato base per anagrafica
                 df_c_g = df_final_kpi_table.groupby([c_cust_name, c_tipo_gestione, c_venditore, c_am_om, 'Mappatura_VP']).agg({
                     'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Colli_TY': 'sum', 'Margin_TY': 'sum'
                 }).reset_index()
@@ -663,19 +670,35 @@ with tab2:
                 df_c_g['Margin_Pct'] = df_c_g.apply(lambda r: (r['Margin_TY'] / r['Sales_TY'] * 100) if r['Sales_TY'] > 0 else 0.0, axis=1)
                 df_c_g = df_c_g.sort_values(by='Sales_TY', ascending=False).reset_index(drop=True)
                 
-                df_c_v = df_c_g.copy()
-                df_c_v['Sales_TY'] = df_c_v['Sales_TY'].apply(fmt_valuta_decimali)
-                df_c_v['Sales_PY'] = df_c_v['Sales_PY'].apply(fmt_valuta_decimali)
-                df_c_v['Scostamento_vs_PY'] = df_c_v['Scostamento_vs_PY'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
-                df_c_v['Margin_Pct'] = df_c_v['Margin_Pct'].apply(fmt_percentuale)
-                df_c_v['Colli_TY'] = df_c_v['Colli_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                # 2. INSERIMENTO DELLA RICERCA RAPIDA TESTUALE PRIMA DELLA TABELLA
+                st.markdown("##### 🔍 Ricerca Rapida Anagrafica Clienti")
+                search_query = st.text_input(
+                    "Digita il Codice Cliente o la Ragione Sociale per filtrare la tabella sottostante:",
+                    placeholder="Es. 91-17660 oppure HOSTERIA...",
+                    key=f"search_input_t2_{st.session_state.reset_tab2}"
+                ).strip().lower()
                 
-                df_c_v.columns = ['Ragione Sociale / Cliente', 'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Target VP', 'Fatturato TY (Sales)', 'Fatturato PY', 'Volume TY (Colli)', 'Margine € (Income Omissis)', 'Delta vs PY', 'Margine % (Income)']
+                # Applicazione immediata del filtro digitato dall'utente
+                if search_query:
+                    df_c_g = df_c_g[df_c_g[c_cust_name].astype(str).str.lower().str.contains(search_query, regex=False)]
                 
-                colonne_output = [
-                    'Ragione Sociale / Cliente', 'Fatturato TY (Sales)', 'Volume TY (Colli)', 'Margine % (Income)', 
-                    'Tipo Gestione (H)', 'Responsabile AM-OM (J)', 'Venditore Riferimento (I)', 'Delta vs PY'
-                ]
-                st.dataframe(df_c_v[colonne_output], use_container_width=True, hide_index=False)
+                # 3. Conversione estetica con le funzioni di formattazione locale
+                if not df_c_g.empty:
+                    df_c_v = df_c_g.copy()
+                    df_c_v['Sales_TY'] = df_c_v['Sales_TY'].apply(fmt_valuta_decimali)
+                    df_c_v['Sales_PY'] = df_c_v['Sales_PY'].apply(fmt_valuta_decimali)
+                    df_c_v['Scostamento_vs_PY'] = df_c_v['Scostamento_vs_PY'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
+                    df_c_v['Margin_Pct'] = df_c_v['Margin_Pct'].apply(fmt_percentuale)
+                    df_c_v['Colli_TY'] = df_c_v['Colli_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                    
+                    df_c_v.columns = ['Ragione Sociale / Cliente', 'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Target VP', 'Fatturato TY (Sales)', 'Fatturato PY', 'Volume TY (Colli)', 'Margine € (Income Omissis)', 'Delta vs PY', 'Margine % (Income)']
+                    
+                    colonne_output = [
+                        'Ragione Sociale / Cliente', 'Fatturato TY (Sales)', 'Volume TY (Colli)', 'Margine % (Income)', 
+                        'Tipo Gestione (H)', 'Responsabile AM-OM (J)', 'Venditore Riferimento (I)', 'Delta vs PY'
+                    ]
+                    st.dataframe(df_c_v[colonne_output], use_container_width=True, hide_index=False)
+                else:
+                    st.info("ℹ️ Nessun cliente corrisponde ai criteri di ricerca digitati.")
             else:
                 st.caption("⚠️ Nessun record risponde alla combinazione di filtri commerciali selezionata.")
