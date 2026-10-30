@@ -69,7 +69,6 @@ df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel
 # 5. FILTRI GERARCHICI IN ALTO CON LOGICA DI RESET IN SESSION STATE
 # =============================================================================
 st.markdown("---")
-# --- CORREZIONE: Inserito l'argomento 4 dentro st.columns() ---
 col_f1, col_f2, col_f3, col_btn = st.columns(4)
 
 if "reset_counter" not in st.session_state:
@@ -125,9 +124,6 @@ else:
 
 # CREAZIONE DEI DUE PANNELLI PRINCIPALI COME SCHEDE AUTONOME
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
-
-        st.session_state.reset_counter += 1
-        st.rerun()
 
 if len(df_men.columns) >= 5:
     df_men_clean = df_men.copy()
