@@ -226,7 +226,14 @@ with tab1:
                 codici_target.add(match.group())
 
         st.markdown("#### 📊 Indicatori Chiave di Performance")
-        m1, m2, m3, m4, m5 = st.columns(5)
+        # --- Inizializzazione variabili globali per i nuovi KPI (evita errori se il file CTG manca) ---
+        if 'promo_share_ty' not in locals(): promo_share_ty = 0.0
+        if 'delta_promo_pp' not in locals(): delta_promo_pp = 0.0
+        if 'hvs_sales_ty' not in locals(): hvs_sales_ty = 0.0
+        if 'delta_hvs_pct' not in locals(): delta_hvs_pct = 0.0
+
+        st.markdown("#### 📊 Indicatori Chiave di Performance")
+        m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
         with m1:
             st.metric(label="💰 Sales TT", value=fmt_valuta_interi(sales_tot), delta=f"{delta_sales_pct:+.2f}% vs PY")
         with m2:
@@ -237,6 +244,12 @@ with tab1:
             st.metric(label="🏬 Avg Stock Last Day", value=fmt_valuta_interi(val_avg_stock_ultimo_giorno), delta=None)
         with m5:  
             st.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
+        
+        # I due nuovi riquadri riparametrati rispetto ai filtri Store/Area/Reparto
+        with m6:
+            st.metric(label="🏷️ Share Promo %", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
+        with m7:
+            st.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
 
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("🔗 Indicatori di Performance Cross-Report (BMPL & Indispensabili)")
