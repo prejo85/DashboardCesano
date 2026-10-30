@@ -30,12 +30,6 @@ def fmt_giorni(valore):
 # -----------------------------------------------------------------------------
 # 3. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
 # -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# 3. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# 3. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
-# -----------------------------------------------------------------------------
 def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabili, file_mensile):
     def clean_df(file_path):
         try:
@@ -380,7 +374,7 @@ with tab1:
             st.dataframe(df_tabella_indisp, use_container_width=True, hide_index=True)
 
 # =============================================================================
-# BLOCCO 6: MOTORE CORRETTO DI CONVERSIONE (EVITA DIVISIONI PER 1000) SUL FILE CTG
+# BLOCCO 6: PERFORMANCE MIX CATEGORIE E CANALI (CON MACRO E MICRO DETTAGLIO)
 # =============================================================================
         st.markdown("<br>---", unsafe_allow_html=True)
         st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
@@ -402,7 +396,6 @@ with tab1:
                     if len(dataframe.columns) > col_index:
                         s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
                         s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
-                        # RIMOZIONE CHIRURGICA DEL PUNTO DELLE MIGLIAIA: Fondamentale per non falsare le somme contabili italiane
                         s = s.str.replace('.', '', regex=False)
                         s = s.str.replace(',', '.', regex=False)
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
@@ -411,41 +404,103 @@ with tab1:
                 match_ctg['Sales_TY'] = parse_ctg_columns_fixed(match_ctg, 7)
                 match_ctg['Sales_PY'] = parse_ctg_columns_fixed(match_ctg, 8)
                 match_ctg['Visits_TY'] = parse_ctg_columns_fixed(match_ctg, 11)
-                match_ctg['Sales_Per_Visit'] = parse_ctg_columns_fixed(match_ctg, 13)
                 
                 match_ctg['CTG_Label'] = match_ctg['CTG'].astype(str).str.strip().str.replace("'", "", regex=False).replace(['nan', 'None', ''], '-')
-                match_ctg['Channel_Label'] = match_ctg['Channel Detail'].astype(str).str.strip()
+                
+                # Identificazione dinamica della colonna della macro categoria (Horeca, Sco, Trader)
+                # Solitamente si trova nelle prime colonne del file CTG (es. colonna 2 o 3 o 4) o ricavabile dalla stringa.
+                # Creiamo una colonna robusta mappandola o pulendola dalle Customer Category del report
+                col_macro = [c for c in match_ctg.columns if 'customer category' in c.lower() or 'segmento' in c.lower() or 'macro' in c.lower()]
+                if col_macro:
+                    match_ctg['Macro_Category'] = match_ctg[col_macro[0]].astype(str).str.upper().str.strip()
+                else:
+                    # Logica fallback se non trova una colonna esplicita: deduce dai testi o usa la colonna 2/3
+                    match_ctg['Macro_Category'] = match_ctg.iloc[:, 2].astype(str).str.upper().str.strip()
 
-                df_ctg_grouped = match_ctg.groupby('CTG_Label').agg({
+                # Normalizzazione delle label principali per evitare disallineamenti di stringa
+                def normalizza_macro(val):
+                    val_str = str(val)
+                    if 'HORECA' in val_str: return 'HORECA'
+                    if 'SCO' in val_str: return 'SCO'
+                    if 'TRADER' in val_str: return 'TRADER'
+                    return 'ALTRO / NON CORE'
+                
+                match_ctg['Macro_Category_Clean'] = match_ctg['Macro_Category'].apply(normalizza_macro)
+
+                # 1. NUOVO GRAFICO: CONFRONTO MACRO CATEGORIE (HORECA vs SCO vs TRADER)
+                st.markdown("#### 🎯 Performance Globale per Canale e Segmento Cliente")
+                
+                df_macro_grouped = match_ctg.groupby('Macro_Category_Clean').agg({
+                    'Sales_TY': 'sum',
+                    'Visits_TY': 'sum'
+                }).reset_index().sort_values(by='Sales_TY', ascending=False)
+                
+                mc1, mc2 = st.columns(2)
+                with mc1:
+                    fig_macro_sales = px.bar(
+                        df_macro_grouped,
+                        x='Macro_Category_Clean',
+                        y='Sales_TY',
+                        labels={'Sales_TY': 'Fatturato Corrente (€)', 'Macro_Category_Clean': 'Macro Segmento'},
+                        title="Fatturato per Macro Categoria (HORECA, SCO, TRADER)",
+                        template='plotly_dark',
+                        color='Macro_Category_Clean',
+                        color_discrete_sequence=px.colors.qualitative.Pastel
+                    )
+                    fig_macro_sales.update_layout(showlegend=False, height=350)
+                    fig_macro_sales.update_traces(hovertemplate="<b>% {x}</b><br>Fatturato: € %{y:,.0f}<extra></extra>".replace(',', '.'))
+                    st.plotly_chart(fig_macro_sales, use_container_width=True)
+                    
+                with mc2:
+                    fig_macro_visits = px.pie(
+                        df_macro_grouped,
+                        values='Visits_TY',
+                        names='Macro_Category_Clean',
+                        title="Mix Incidenza Volumi Visite sui Macro Segmenti",
+                        template='plotly_dark',
+                        hole=0.4,
+                        color_discrete_sequence=px.colors.qualitative.Pastel
+                    )
+                    fig_macro_visits.update_layout(height=350)
+                    fig_macro_visits.update_traces(textposition='inside', textinfo='percent+label')
+                    st.plotly_chart(fig_macro_visits, use_container_width=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # 2. GRAFICI DI DETTAGLIO SPECIFICI PER IL CLUSTER HORECA
+                # Filtriamo il set di dati mantenendo solo le sottocategorie legate all'HORECA (Ristoranti, Pizzerie, Bar, Hotel, ecc.)
+                df_horeca_only = match_ctg[match_ctg['Macro_Category_Clean'] == 'HORECA'].copy()
+                
+                df_ctg_grouped = df_horeca_only.groupby('CTG_Label').agg({
                     'Sales_TY': 'sum',
                     'Sales_PY': 'sum',
                     'Visits_TY': 'sum'
-                }).reset_index()
+                }).reset_index().sort_values(by='Sales_TY', ascending=True)
                 
-                df_ctg_grouped = df_ctg_grouped.sort_values(by='Sales_TY', ascending=True)
                 df_ctg_grouped = df_ctg_grouped[df_ctg_grouped['Sales_TY'] > 0]
 
                 if not df_ctg_grouped.empty:
                     g1, g2 = st.columns(2)
                     
                     with g1:
-                        st.markdown("#### 💰 Volume di Fatturato per Categoria (Sales TT)")
+                        # Rinominato l'istogramma specificando che fa riferimento solo all'Horeca
+                        st.markdown("#### 💰 Volume di Fatturato per Categoria - Dettaglio HORECA (Sales TT)")
                         fig_sales = px.bar(
                             df_ctg_grouped,
                             x='Sales_TY',
                             y='CTG_Label',
                             orientation='h',
-                            labels={'Sales_TY': 'Fatturato Corrente (€)', 'CTG_Label': 'Categoria CTG'},
+                            labels={'Sales_TY': 'Fatturato Corrente (€)', 'CTG_Label': 'Sotto-Categoria HORECA'},
                             template='plotly_dark',
                             color='Sales_TY',
                             color_continuous_scale='Blues'
                         )
                         fig_sales.update_layout(showlegend=False, coloraxis_showscale=False, height=450, margin=dict(l=20, r=20, t=20, b=20))
-                        fig_sales.update_traces(hovertemplate="<b>%{y}</b><br>Fatturato: € %{x:,.0f}<extra></extra>".replace(',', '.'))
+                        fig_sales.update_traces(hovertemplate="<b>%{y}</b><br>Fatturato Horeca: € %{x:,.0f}<extra></extra>".replace(',', '.'))
                         st.plotly_chart(fig_sales, use_container_width=True)
                         
                     with g2:
-                        st.markdown("#### 👥 Frequenza e Mix dei Volumi delle Visite")
+                        st.markdown("#### 👥 Frequenza e Mix dei Volumi delle Visite (HORECA)")
                         fig_visits = px.pie(
                             df_ctg_grouped,
                             values='Visits_TY',
@@ -457,8 +512,8 @@ with tab1:
                         fig_visits.update_traces(textposition='inside', textinfo='percent+label', hovertemplate="<b>%{label}</b><br>Visite: %{value:,.0f}<br>Incidenza: %{percent}<extra></extra>".replace(',', '.'))
                         st.plotly_chart(fig_visits, use_container_width=True)
 
-                    st.markdown("<br>#### 🏪 Performance Distribuzione per Canale e Scontrino Medio (`Sales per Visit`)", unsafe_allow_html=True)
-                    df_channel_grouped = match_ctg.groupby('Channel_Label').agg({
+                    st.markdown("<br>#### 🏪 Performance Distribuzione per Canale e Scontrino Medio HORECA (`Sales per Visit`)", unsafe_allow_html=True)
+                    df_channel_grouped = df_horeca_only.groupby('Channel_Label').agg({
                         'Sales_TY': 'sum',
                         'Visits_TY': 'sum'
                     }).reset_index()
@@ -466,18 +521,17 @@ with tab1:
                     
                     ch1, ch2 = st.columns(2)
                     with ch1:
-                        fig_ch_sales = px.bar(df_channel_grouped, x='Channel_Label', y='Sales_TY', title="Fatturato per Canale", template="plotly_dark", color='Channel_Label')
+                        fig_ch_sales = px.bar(df_channel_grouped, x='Channel_Label', y='Sales_TY', title="Fatturato HORECA per Canale", template="plotly_dark", color='Channel_Label')
                         st.plotly_chart(fig_ch_sales, use_container_width=True)
                     with ch2:
-                        fig_ch_avg = px.bar(df_channel_grouped, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio (€ per Visita)", template="plotly_dark", color='Channel_Label')
+                        fig_ch_avg = px.bar(df_channel_grouped, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio HORECA (€ per Visita)", template="plotly_dark", color='Channel_Label')
                         st.plotly_chart(fig_ch_avg, use_container_width=True)
                 else:
-                    st.caption("⚠️ I record del file CTG per la selezione corrente contengono volumi pari a zero o vuoti.")
+                    st.caption("⚠️ I record del file CTG per il segmento HORECA contengono volumi pari a zero o vuoti.")
             else:
                 st.caption("⚠️ Nessun dato nel file CTG corrisponde ai reparti attivi nei filtri gerarchici.")
         else:
             st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'analisi grafica merceologica.")
-
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
 # =============================================================================
