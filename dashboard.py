@@ -7,17 +7,19 @@ import re
 # -----------------------------------------------------------------------------
 # CONFIGURAZIONE DELLA PAGINA E TITOLO PRINCIPALE
 # -----------------------------------------------------------------------------
-# Inserisci questo codice dove preferisci il tasto (es. in cima alla pagina o nella sidebar)
-st.sidebar.markdown("### 🖨️ Azioni Pagina")
+
 if st.sidebar.button("Stampa / Salva in PDF", use_container_width=True):
     st.components.v1.html(
         """
         <script>
-            window.print();
+            // Cerca la finestra principale corretta in cui è renderizzato l'Iframe di Streamlit
+            const mainWin = window.parent || window;
+            mainWin.print();
         </script>
         """,
         height=0,
     )
+
 
 st.set_page_config(page_title="Dashboard Commerciale Avanzata", layout="wide", page_icon="📊")
 
