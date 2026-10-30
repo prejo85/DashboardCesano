@@ -495,7 +495,7 @@ with tab2:
 # =============================================================================
             sg1, sg2 = st.columns(2)
             with sg1:
-                st.markdown("#### 🎯 Quota Fatturato Corrente per Target (VP = Si / Altri = No)")
+                st.markdown("#### 🎯 Quota Clienti con Accordo Commerciale attivo")
                 # Aggregazione basata sulla nuova colonna mappata
                 df_cat_g = match_sel.groupby('Mappatura_VP')['Sales_TY'].sum().reset_index()
                 df_cat_g = df_cat_g[df_cat_g['Sales_TY'] > 0]
