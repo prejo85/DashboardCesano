@@ -506,8 +506,9 @@ with tab2:
             with c_sel3: st.metric(label="🎫 Totale Visite/Scontrini (Tot.)", value=f"{int(sel_v_tot):,}".replace(',', '.'))
             with c_sel4: st.metric(label="🛒 Scontrino Medio Portafoglio (Tot.)", value=fmt_valuta_decimali(sc_medio))
             st.markdown("<br>", unsafe_allow_html=True)
+
 # =============================================================================
-# PARTE 5.C: FILTRAGGIO GERARCHICO COMPATTO (AM/OM -> VENDITORE) E KPI
+# PARTE 5.C.1: GRAFICI STORICI DEL TAB 2 (TARGET VP E CANALI LOGISTICI)
 # =============================================================================
             sg1, sg2 = st.columns(2)
             with sg1:
@@ -524,10 +525,9 @@ with tab2:
 
             st.markdown("<br><br>---", unsafe_allow_html=True)
             st.markdown("### 🏆 Classifica Analitica Clienti con Dettaglio Commerciale")
-
-            # -----------------------------------------------------------------
-            # SEZIONE FILTRI COMMERCIALI SPOSTATI PRIMA DELLA TABELLA
-            # -----------------------------------------------------------------
+# =============================================================================
+# PARTE 5.C.2: SEZIONE FILTRI COMMERCIALI SPOSTATI PRIMA DELLA TABELLA
+# =============================================================================
             st.markdown("##### 🛠️ Modello di Gestione Commerciale (Colonna H)")
             opzioni_gestione = ["TUTTI"] + sorted(list(match_sel[c_tipo_gestione].unique()))
             
@@ -570,10 +570,9 @@ with tab2:
             df_final_kpi_table = df_venditori_disponibili.copy()
             if selected_venditore != "--- TUTTI I VENDITORI ASSOCIATI ---":
                 df_final_kpi_table = df_final_kpi_table[df_final_kpi_table[c_venditore] == selected_venditore]
-
-            # -----------------------------------------------------------------
-            # RIQUADRI RIEPILOGATIVI KPI FORMATTATI (MARGINE ESPRESSO IN %)
-            # -----------------------------------------------------------------
+# =============================================================================
+# PARTE 5.C.3: RIQUADRI RIEPILOGATIVI KPI FORMATTATI (MARGINE ESPRESSO IN %)
+# =============================================================================
             st.markdown("<br>", unsafe_allow_html=True)
             if not df_final_kpi_table.empty:
                 kpi_sales_ty = float(df_final_kpi_table['Sales_TY'].sum())
@@ -616,10 +615,45 @@ with tab2:
                     delta=f"{delta_margin_kpi_pp:+.2f} pp vs PY"
                 )
                 st.markdown("<br>", unsafe_allow_html=True)
-
-            # -----------------------------------------------------------------
-            # RENDERING DELLA TABELLA FINALE FORMATTATA
-            # -----------------------------------------------------------------
+# =============================================================================
+# PARTE 5.C.4: NUOVA SEZIONE GRAFICA: ISTOGRAMMA AM/OM E TORTA GESTIONE
+# =============================================================================
+                g_comm1, g_comm2 = st.columns(2)
+                
+                with g_comm1:
+                    st.markdown("##### 📊 Classifica Sales per Responsabile AM / OM")
+                    df_sales_amom = df_final_kpi_table.groupby(c_am_om)['Sales_TY'].sum().reset_index().sort_values(by='Sales_TY', ascending=True)
+                    df_sales_amom = df_sales_amom[df_sales_amom['Sales_TY'] > 0]
+                    fig_bar_amom = px.bar(
+                        df_sales_amom, 
+                        x='Sales_TY', 
+                        y=c_am_om, 
+                        orientation='h',
+                        template='plotly_dark',
+                        color='Sales_TY',
+                        color_continuous_scale='Purples',
+                        labels={'Sales_TY': 'Fatturato Corrente (€)', c_am_om: 'Responsabile AM/OM'}
+                    )
+                    fig_bar_amom.update_layout(coloraxis_showscale=False)
+                    st.plotly_chart(fig_bar_amom, use_container_width=True)
+                    
+                with g_comm2:
+                    st.markdown("##### 🍕 Mix Fatturato per Modello Gestione Commerciale")
+                    df_sales_gest = df_final_kpi_table.groupby(c_tipo_gestione)['Sales_TY'].sum().reset_index()
+                    df_sales_gest = df_sales_gest[df_sales_gest['Sales_TY'] > 0]
+                    fig_pie_gest = px.pie(
+                        df_sales_gest, 
+                        values='Sales_TY', 
+                        names=c_tipo_gestione, 
+                        template='plotly_dark', 
+                        hole=0.4,
+                        color_discrete_sequence=px.colors.qualitative.Bold
+                    )
+                    st.plotly_chart(fig_pie_gest, use_container_width=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+# =============================================================================
+# PARTE 5.C.5: RENDERING DELLA TABELLA FINALE FORMATTATA
+# =============================================================================
             if not df_final_kpi_table.empty:
                 df_c_g = df_final_kpi_table.groupby([c_cust_name, c_tipo_gestione, c_venditore, c_am_om, 'Mappatura_VP']).agg({
                     'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Colli_TY': 'sum', 'Margin_TY': 'sum'
