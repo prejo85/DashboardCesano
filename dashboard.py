@@ -406,18 +406,16 @@ with tab1:
                 match_ctg['Visits_TY'] = parse_ctg_columns_fixed(match_ctg, 11)
                 
                 match_ctg['CTG_Label'] = match_ctg['CTG'].astype(str).str.strip().str.replace("'", "", regex=False).replace(['nan', 'None', ''], '-')
-                
+                match_ctg['Channel_Label'] = match_ctg['Channel Detail'].astype(str).str.strip()
+
                 # Identificazione dinamica della colonna della macro categoria (Horeca, Sco, Trader)
-                # Solitamente si trova nelle prime colonne del file CTG (es. colonna 2 o 3 o 4) o ricavabile dalla stringa.
-                # Creiamo una colonna robusta mappandola o pulendola dalle Customer Category del report
                 col_macro = [c for c in match_ctg.columns if 'customer category' in c.lower() or 'segmento' in c.lower() or 'macro' in c.lower()]
                 if col_macro:
                     match_ctg['Macro_Category'] = match_ctg[col_macro[0]].astype(str).str.upper().str.strip()
                 else:
-                    # Logica fallback se non trova una colonna esplicita: deduce dai testi o usa la colonna 2/3
                     match_ctg['Macro_Category'] = match_ctg.iloc[:, 2].astype(str).str.upper().str.strip()
 
-                # Normalizzazione delle label principali per evitare disallineamenti di stringa
+                # Normalizzazione delle label per evitare disallineamenti di stringa
                 def normalizza_macro(val):
                     val_str = str(val)
                     if 'HORECA' in val_str: return 'HORECA'
@@ -427,7 +425,7 @@ with tab1:
                 
                 match_ctg['Macro_Category_Clean'] = match_ctg['Macro_Category'].apply(normalizza_macro)
 
-                # 1. NUOVO GRAFICO: CONFRONTO MACRO CATEGORIE (HORECA vs SCO vs TRADER)
+                # 1. GRAFICO MACRO: CONFRONTO MACRO CATEGORIE (HORECA vs SCO vs TRADER)
                 st.markdown("#### 🎯 Performance Globale per Canale e Segmento Cliente")
                 
                 df_macro_grouped = match_ctg.groupby('Macro_Category_Clean').agg({
@@ -448,7 +446,7 @@ with tab1:
                         color_discrete_sequence=px.colors.qualitative.Pastel
                     )
                     fig_macro_sales.update_layout(showlegend=False, height=350)
-                    fig_macro_sales.update_traces(hovertemplate="<b>% {x}</b><br>Fatturato: € %{y:,.0f}<extra></extra>".replace(',', '.'))
+                    fig_macro_sales.update_traces(hovertemplate="<b>%{x}</b><br>Fatturato: € %{y:,.0f}<extra></extra>".replace(',', '.'))
                     st.plotly_chart(fig_macro_sales, use_container_width=True)
                     
                 with mc2:
@@ -468,7 +466,6 @@ with tab1:
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 # 2. GRAFICI DI DETTAGLIO SPECIFICI PER IL CLUSTER HORECA
-                # Filtriamo il set di dati mantenendo solo le sottocategorie legate all'HORECA (Ristoranti, Pizzerie, Bar, Hotel, ecc.)
                 df_horeca_only = match_ctg[match_ctg['Macro_Category_Clean'] == 'HORECA'].copy()
                 
                 df_ctg_grouped = df_horeca_only.groupby('CTG_Label').agg({
@@ -483,7 +480,6 @@ with tab1:
                     g1, g2 = st.columns(2)
                     
                     with g1:
-                        # Rinominato l'istogramma specificando che fa riferimento solo all'Horeca
                         st.markdown("#### 💰 Volume di Fatturato per Categoria - Dettaglio HORECA (Sales TT)")
                         fig_sales = px.bar(
                             df_ctg_grouped,
@@ -532,6 +528,7 @@ with tab1:
                 st.caption("⚠️ Nessun dato nel file CTG corrisponde ai reparti attivi nei filtri gerarchici.")
         else:
             st.info("Carica il file CTG nella barra laterale sinistra per sbloccare l'analisi grafica merceologica.")
+
 # =============================================================================
 # SCHEDA 2: ANALISI PORTAFOGLIO FORZA VENDITE E CLIENTI
 # =============================================================================
