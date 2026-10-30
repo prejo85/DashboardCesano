@@ -565,12 +565,17 @@ with tab2:
     if not df_sel.empty:
         df_sel_clean = df_sel.copy()
         
-        # Pulizia dei nomi delle colonne per evitare disallineamenti da spazi bianchi
+        # Pulizia spazi bianchi nei nomi delle colonne
         df_sel_clean.columns = df_sel_clean.columns.str.strip()
         
-        # Filtro gerarchico automatico basato sui reparti dello store selezionato
-        # Estrae i codici reparto dalla colonna 'Sales Department' (es. "110 - CONSERVE")
-        df_sel_clean['Codice_Reparto_SEL'] = df_sel_clean['Sales Department'].astype(str).apply(
+        # MAPPATURA STRUTTURALE ESATTA DAL TUO SCREENSHOT EXCEL
+        c_rep_name = 'Sales Dep.'
+        c_cust_name = 'Customer'
+        c_cat_name = 'MPRO Cluster'
+        c_chan_name = 'Channel Detail'
+
+        # Estrazione sicura del codice reparto numerico per il filtro gerarchico dello store
+        df_sel_clean['Codice_Reparto_SEL'] = df_sel_clean[c_rep_name].astype(str).apply(
             lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
         )
         
@@ -580,36 +585,33 @@ with tab2:
             match_sel = df_sel_clean.copy()
             
         if not match_sel.empty:
-            # FUNZIONE DI CONVERSIONE ROBUSTA PER FORMATI NUMERICI ITALIANI DEL FILE SELLOUT (es. 1.037 o 3,28)
+            # FUNZIONE DI CONVERSIONE CONTABILE PER FORMATI ITALIANI
             def parse_sellout_numeric(dataframe, col_name):
                 if col_name in dataframe.columns:
                     s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
                     s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
-                    # Gestione stringhe miste tipo (100) per i numeri negativi
-                    s = s.str.replace('(', '-', regex=False).str.replace(')', '', regex=False)
                     
                     if s.str.contains(r'\.').any() and s.str.contains(',').any():
                         s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                     elif s.str.contains(r'\.').any() and not s.str.contains(',').any():
-                        # Se contiene il punto ma ha lunghezza >= 5 o pattern da migliaia, lo rimuove
                         s = s.str.replace('.', '', regex=False)
                     elif s.str.contains(',').any():
                         s = s.str.replace(',', '.', regex=False)
                     return pd.to_numeric(s, errors='coerce').fillna(0.0)
                 return pd.Series(0.0, index=dataframe.index)
 
-            # Conversione contabile delle metriche principali
+            # Collegamento diretto ai nomi esatti dei campi visti nel file
             match_sel['Sales_TY'] = parse_sellout_numeric(match_sel, 'Sales TT')
             match_sel['Sales_PY'] = parse_sellout_numeric(match_sel, 'Sales TT PY Custom Cal')
             match_sel['Colli_TY'] = parse_sellout_numeric(match_sel, '# Colli')
             match_sel['Visits_TY'] = parse_sellout_numeric(match_sel, '# Visit')
             match_sel['Margin_TY'] = parse_sellout_numeric(match_sel, 'Front Margin')
 
-            # --- SINTESI NUMERICA INIZIALE DEL TAB 2 ---
+            # --- SINTESI NUMERICA INIZIALE ---
             sel_sales_tot = match_sel['Sales_TY'].sum()
             sel_sales_py_tot = match_sel['Sales_PY'].sum()
             sel_visits_tot = match_sel['Visits_TY'].sum()
-            sel_customers_qty = match_sel['Customer'].nunique()
+            sel_customers_qty = match_sel[c_cust_name].nunique()
             
             sel_delta_sales = ((sel_sales_tot - sel_sales_py_tot) / sel_sales_py_tot * 100) if sel_sales_py_tot > 0 else 0.0
             scontrino_medio_sel = (sel_sales_tot / sel_visits_tot) if sel_visits_tot > 0 else 0.0
@@ -630,13 +632,13 @@ with tab2:
             
             with sg1:
                 st.markdown("#### 🎯 Quota Fatturato Corrente per Customer Category")
-                df_cat_grouped = match_sel.groupby('Customer Category')['Sales_TY'].sum().reset_index().sort_values(by='Sales_TY', ascending=False)
+                df_cat_grouped = match_sel.groupby(c_cat_name)['Sales_TY'].sum().reset_index().sort_values(by='Sales_TY', ascending=False)
                 df_cat_grouped = df_cat_grouped[df_cat_grouped['Sales_TY'] > 0]
                 
                 fig_cat_pie = px.pie(
                     df_cat_grouped,
                     values='Sales_TY',
-                    names='Customer Category',
+                    names=c_cat_name,
                     template='plotly_dark',
                     hole=0.3,
                     color_discrete_sequence=px.colors.qualitative.Pastel2
@@ -647,16 +649,16 @@ with tab2:
                 
             with sg2:
                 st.markdown("#### 🏪 Incidenza Canali Logistici di Vendita (Sales TT)")
-                df_chan_grouped = match_sel.groupby('Channel Detail')['Sales_TY'].sum().reset_index().sort_values(by='Sales_TY', ascending=False)
+                df_chan_grouped = match_sel.groupby(c_chan_name)['Sales_TY'].sum().reset_index().sort_values(by='Sales_TY', ascending=False)
                 df_chan_grouped = df_chan_grouped[df_chan_grouped['Sales_TY'] > 0]
                 
                 fig_chan_bar = px.bar(
                     df_chan_grouped,
-                    x='Channel Detail',
+                    x=c_chan_name,
                     y='Sales_TY',
-                    labels={'Sales_TY': 'Fatturato Corrente (€)', 'Channel Detail': 'Canale Logistico'},
+                    labels={'Sales_TY': 'Fatturato Corrente (€)', c_chan_name: 'Canale Logistico'},
                     template='plotly_dark',
-                    color='Channel_Label' if 'Channel_Label' in df_chan_grouped.columns else 'Channel Detail',
+                    color=c_chan_name,
                     color_discrete_sequence=px.colors.qualitative.Safe
                 )
                 fig_chan_bar.update_layout(showlegend=False, height=380)
@@ -666,8 +668,8 @@ with tab2:
             st.markdown("<br>---", unsafe_allow_html=True)
             st.markdown("#### 🏆 Classifica Analitica dei Top Buying Customers (Fatturato Decrescente)")
             
-            # Aggregazione per singolo codice e anagrafica cliente
-            df_cust_grouped = match_sel.groupby(['Customer', 'Customer Category', 'Channel Detail']).agg({
+            # Aggregazione analitica basata sulle colonne reali del file Excel
+            df_cust_grouped = match_sel.groupby([c_cust_name, c_cat_name, c_chan_name]).agg({
                 'Sales_TY': 'sum',
                 'Sales_PY': 'sum',
                 'Colli_TY': 'sum',
@@ -675,7 +677,7 @@ with tab2:
                 'Margin_TY': 'sum'
             }).reset_index()
             
-            # Calcolo scostamenti e scontrino medio per singolo cliente
+            # Calcolo scostamenti progressivi
             df_cust_grouped['Scostamento_vs_PY'] = df_cust_grouped['Sales_TY'] - df_cust_grouped['Sales_PY']
             df_cust_grouped['Scontrino_Medio'] = df_cust_grouped.apply(
                 lambda r: r['Sales_TY'] / r['Visits_TY'] if r['Visits_TY'] > 0 else 0.0, axis=1
@@ -684,10 +686,10 @@ with tab2:
                 lambda r: (r['Margin_TY'] / r['Sales_TY'] * 100) if r['Sales_TY'] > 0 else 0.0, axis=1
             )
 
-            # Ordinamento per vendite correnti decrescenti
+            # Ordinamento decrescente sul fatturato dell'anno corrente
             df_cust_grouped = df_cust_grouped.sort_values(by='Sales_TY', ascending=False).reset_index(drop=True)
             
-            # Formattazione estetica della tabella per l'utente finale
+            # Formattazione estetica dei dati numerici
             df_cust_view = df_cust_grouped.copy()
             df_cust_view['Sales_TY'] = df_cust_view['Sales_TY'].apply(fmt_valuta_decimali)
             df_cust_view['Sales_PY'] = df_cust_view['Sales_PY'].apply(fmt_valuta_decimali)
@@ -699,17 +701,16 @@ with tab2:
             df_cust_view['Colli_TY'] = df_cust_view['Colli_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
             df_cust_view['Visits_TY'] = df_cust_view['Visits_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
             
-            # Rinominazione colonne per l'interfaccia Streamlit
+            # Rinominazione testata della griglia dati per l'interfaccia utente
             df_cust_view.columns = [
-                'Anagrafica Cliente', 'Categoria', 'Canale Detail', 'Sales TY', 'Sales PY', 
+                'Anagrafica Cliente', 'Cluster Categoria', 'Canale Detail', 'Sales TY', 'Sales PY', 
                 'Volume Colli TY', 'Num. Visite', 'Front Margin €', 'Delta Assoluto vs PY', 
                 'Scontrino Medio', 'Front Margin %'
             ]
             
-            # Visualizzazione della griglia dati filtrabile e ordinabile
             st.dataframe(
                 df_cust_view[[
-                    'Anagrafica Cliente', 'Categoria', 'Canale Detail', 'Sales TY', 'Sales PY', 
+                    'Anagrafica Cliente', 'Cluster Categoria', 'Canale Detail', 'Sales TY', 'Sales PY', 
                     'Delta Assoluto vs PY', 'Volume Colli TY', 'Num. Visite', 'Scontrino Medio', 'Front Margin %'
                 ]], 
                 use_container_width=True, 
