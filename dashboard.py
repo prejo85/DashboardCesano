@@ -15,73 +15,88 @@ if st.sidebar.button("Stampa / Salva in PDF", use_container_width=True):
         <script>
             const mainDoc = window.parent.document;
             
-            // 1. CREA IL FOGLIO DI STILE CSS (Nasconde sidebar e controlli, centra la pagina)
-            let printStyle = mainDoc.getElementById("dynamic-print-style");
+            let printStyle = mainDoc.getElementById("final-clean-print-style");
             if (!printStyle) {
                 printStyle = mainDoc.createElement("style");
-                printStyle.id = "dynamic-print-style";
+                printStyle.id = "final-clean-print-style";
                 printStyle.innerHTML = `
                     @media print {
+                        /* 1. NASCONDE GLI ELEMENTI DI INTERFACCIA E CONTROLLO */
                         section[data-testid="stSidebar"], 
                         header, 
                         footer, 
                         div[data-testid="stToolbar"],
                         .stButton,
-                        button {
+                        button,
+                        div[data-testid="stSelectbox"],
+                        div[data-testid="stSegmentedControl"] {
                             display: none !important;
                         }
-                        section.main {
-                            width: 100% !important;
-                            max-width: 100% !important;
+                        
+                        /* 2. RESETTA E CENTRA IL CONTENITORE PRINCIPALE SU SFONDO BIANCO */
+                        html, body, .stApp, section.main, div.block-container {
+                            background-color: #ffffff !important;
+                            color: #000000 !important;
+                            background: #ffffff !important;
                             padding: 0 !important;
                             margin: 0 auto !important;
-                            background-color: #ffffff !important;
-                            color: #000000 !important;
+                            width: 100% !important;
+                            max-width: 100% !important;
                         }
-                        body, .stApp, div[data-testid="stVerticalBlock"], div[data-testid="stMarkdownContainer"] p, h1, h2, h3, h4, h5, h6 {
-                            background-color: #ffffff !important;
-                            color: #000000 !important;
-                        }
-                        /* Forza i contenitori dei grafici Plotly a sfondo bianco e testi neri */
-                        .js-plotly-plot .main-svg { background: #ffffff !important; }
-                        .js-plotly-plot .bg { fill: #ffffff !important; }
-                        .js-plotly-plot text { fill: #000000 !important; }
-                        .js-plotly-plot .xtick text, .js-plotly-plot .ytick text { fill: #000000 !important; }
-                        .js-plotly-plot .gtitle { fill: #000000 !important; }
                         
-                        @page { margin: 15mm; }
+                        /* 3. FORZA I TESTI, TITOLI E CHIP METRICHE IN NERO SU BIANCO */
+                        h1, h2, h3, h4, h5, h6, p, span, label,
+                        div[data-testid="stMetricValue"], 
+                        div[data-testid="stMetricLabel"] p,
+                        div[data-testid="stMetricDelta"] {
+                            color: #000000 !important;
+                            -webkit-text-fill-color: #000000 !important;
+                        }
+                        
+                        /* 4. SEZIONE GRAFICI PLOTLY: INVERSIONE COMPLETA DEI COLORI */
+                        .js-plotly-plot, .plot-container, .svg-container {
+                            background-color: #ffffff !important;
+                            background: #ffffff !important;
+                        }
+                        .js-plotly-plot .main-svg {
+                            background: transparent !important;
+                        }
+                        .js-plotly-plot .bg {
+                            fill: #ffffff !important;
+                        }
+                        /* Forza i testi interni al grafico (titoli, leggende, assi) in nero */
+                        .js-plotly-plot text, 
+                        .js-plotly-plot .gtitle, 
+                        .js-plotly-plot .g-xtitle, 
+                        .js-plotly-plot .g-ytitle, 
+                        .js-plotly-plot .xtick text, 
+                        .js-plotly-plot .ytick text,
+                        .js-plotly-plot .legendtext {
+                            fill: #000000 !important;
+                            color: #000000 !important;
+                        }
+                        /* Rende le linee guida dei grafici grigie chiare invece che bianche */
+                        .js-plotly-plot .gridlayer path {
+                            stroke: #e5e5e5 !important;
+                        }
+                        
+                        @page {
+                            margin: 15mm;
+                            size: auto;
+                        }
                     }
                 `;
                 mainDoc.head.appendChild(printStyle);
             }
 
-            // 2. FORZA TEMPORANEAMENTE IL TEMA CHIARO SULL'INTERFACCIA PER CATTURARE LA PREVIEW
-            const appContainer = mainDoc.querySelector('.stApp');
-            let originalTheme = "";
-            if (appContainer) {
-                // Rileva se Streamlit ha una classe di tema scuro e la scambia temporaneamente
-                if (appContainer.classList.contains('theme-dark')) {
-                    appContainer.classList.remove('theme-dark');
-                    appContainer.classList.add('theme-light');
-                    originalTheme = "dark";
-                }
-            }
-
-            // 3. LANCIA LA STAMPA DOPO UN MICRO-RITARDO (permette ai grafici di adattarsi alla luce)
+            // Lancia la stampa sulla finestra principale senza toccare l'interfaccia live
             setTimeout(() => {
                 window.parent.print();
-                
-                // 4. RIPRISTINA IMMEDIATAMENTE IL TEMA SCURO A SCHERMO DOPO CHE LA FINESTRA DI STAMPA SI È APERTA
-                if (originalTheme === "dark" && appContainer) {
-                    appContainer.classList.remove('theme-light');
-                    appContainer.classList.add('theme-dark');
-                }
-            }, 250);
+            }, 100);
         </script>
         """,
         height=0,
     )
-
 
 
 st.set_page_config(page_title="Dashboard Commerciale Avanzata", layout="wide", page_icon="📊")
