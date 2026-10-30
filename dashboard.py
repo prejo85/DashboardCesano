@@ -363,6 +363,7 @@ with tab1:
                         st.plotly_chart(px.bar(df_ch_trader, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio TRADER (€ per Visita)", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Pastel1), use_container_width=True)
     else:
         st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
+        
 # =============================================================================
 # PARTE 5.A: FILTRI GERARCHICI COMPLEMENTARI MA INDIPENDENTI PER IL TAB 2
 # =============================================================================
@@ -377,7 +378,8 @@ with tab2:
         df_men_clean_t2.iloc[:, 3] = df_men_clean_t2.iloc[:, 3].astype(str).str.strip() 
         df_men_clean_t2.iloc[:, 4] = df_men_clean_t2.iloc[:, 4].astype(str).str.strip() 
         
-        lista_store_t2 = sorted([x for x in df_men_clean_t2.iloc[:, 1].unique() if x not in ['nan', 'None', '']])
+        # Aggiunta del "Totalone" all'inizio della lista degli Store
+        lista_store_t2 = ["STORE AREA METROPOLITANA"] + sorted([x for x in df_men_clean_t2.iloc[:, 1].unique() if x not in ['nan', 'None', '']])
         
         # Disposizione dei filtri in una riga a 4 colonne
         col_f1_t2, col_f2_t2, col_f3_t2, col_btn_t2 = st.columns(4)
@@ -391,13 +393,18 @@ with tab2:
         with col_f1_t2:
             selected_store_t2 = st.selectbox("Seleziona Store Cliente:", lista_store_t2, key=f"sb_store_t2_{st.session_state.reset_tab2}")
             
-        df_filtrato_store_t2 = df_men_clean_t2[df_men_clean_t2.iloc[:, 1] == selected_store_t2]
-        lista_aree_t2 = ["--- TOTALE STORE ---"] + sorted([x for x in df_filtrato_store_t2.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
+        # Logica di gestione del Totalone o del singolo Store selezionato
+        if selected_store_t2 == "STORE AREA METROPOLITANA":
+            df_filtrato_store_t2 = df_men_clean_t2.copy()
+            lista_aree_t2 = ["--- TOTALE REGIONE ---"] + sorted([x for x in df_filtrato_store_t2.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
+        else:
+            df_filtrato_store_t2 = df_men_clean_t2[df_men_clean_t2.iloc[:, 1] == selected_store_t2]
+            lista_aree_t2 = ["--- TOTALE STORE ---"] + sorted([x for x in df_filtrato_store_t2.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
         
         with col_f2_t2:
             selected_area_t2 = st.selectbox("Seleziona Area Clienti:", lista_aree_t2, key=f"sb_area_t2_{st.session_state.reset_tab2}")
             
-        if selected_area_t2 != "--- TOTALE STORE ---":
+        if selected_area_t2 not in ["--- TOTALE STORE ---", "--- TOTALE REGIONE ---"]:
             df_filtrato_area_t2 = df_filtrato_store_t2[df_filtrato_store_t2.iloc[:, 3] == selected_area_t2]
             lista_reparti_t2 = ["--- TOTALE AREA ---"] + sorted([x for x in df_filtrato_area_t2.iloc[:, 4].unique() if x not in ['nan', 'None', '']])
         else:
@@ -409,9 +416,12 @@ with tab2:
             
         nome_store_pulito_t2 = selected_store_t2.split(" - ")[-1] if " - " in str(selected_store_t2) else selected_store_t2
         
-        # Estrazione e isolamento dei codici reparto target per il Sellout
+        # Definizione del titolo della vista e dei codici dei reparti target da filtrare
         codici_target_t2 = set()
-        if selected_area_t2 == "--- TOTALE STORE ---":
+        if selected_store_t2 == "STORE AREA METROPOLITANA" and selected_area_t2 == "--- TOTALE REGIONE ---":
+            dati_vista_t2 = df_men_clean_t2.copy()
+            titolo_vista_t2 = "Portafoglio Clienti: STORE AREA METROPOLITANA (TUTTI I PUNTI VENDITA)"
+        elif selected_area_t2 in ["--- TOTALE STORE ---", "--- TOTALE REGIONE ---"]:
             dati_vista_t2 = df_filtrato_store_t2.copy()
             titolo_vista_t2 = f"Portafoglio Clienti: TOTALE STORE {nome_store_pulito_t2}"
         elif selected_reparto_t2 == "--- TOTALE AREA ---":
@@ -427,6 +437,7 @@ with tab2:
 
         st.markdown("---")
         st.markdown(f"### 👥 {titolo_vista_t2}")
+
 # =============================================================================
 # PARTE 5.B: SCANNING AUTOMATICO COLONNE, PARSING E GRIGLIA METRICHE CLIENTI
 # =============================================================================
