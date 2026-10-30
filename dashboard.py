@@ -87,6 +87,19 @@ if "reset_tab1" not in st.session_state:
     st.session_state.reset_tab1 = 0
 if "reset_tab2" not in st.session_state:
     st.session_state.reset_tab2 = 0
+    
+# Inserisci questo codice dove preferisci il tasto (es. in cima alla pagina o nella sidebar)
+st.sidebar.markdown("### 🖨️ Azioni Pagina")
+if st.sidebar.button("Stampa / Salva in PDF", use_container_width=True):
+    st.components.v1.html(
+        """
+        <script>
+            window.print();
+        </script>
+        """,
+        height=0,
+    )
+
 
 # Generazione della struttura dei macro Tab in alto nella pagina
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
@@ -94,17 +107,6 @@ tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Pr
 # PARTE 3.A: FILTRI GERARCHICI COMPLETI DENTRO IL TAB 1
 # =============================================================================
 with tab1:
-    # Inserisci questo codice dove preferisci il tasto (es. in cima alla pagina o nella sidebar)
-    st.sidebar.markdown("### 🖨️ Azioni Pagina")
-    if st.sidebar.button("Stampa / Salva in PDF", use_container_width=True):
-        st.components.v1.html(
-            """
-            <script>
-                window.print();
-             </script>
-            """,
-            height=0,
-        )
 
     if len(df_men.columns) >= 5:
         df_men_clean = df_men.copy()
