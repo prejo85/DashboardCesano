@@ -76,6 +76,68 @@ if "reset_counter" not in st.session_state:
 with col_btn:
     st.markdown("<div style='padding-top: 24px;'></div>", unsafe_allow_html=True)
     if st.button("🔄 Reset", use_container_width=True):
+
+# =============================================================================
+# 5. FILTRI GERARCHICI IN ALTO CON LOGICA DI RESET IN SESSION STATE
+# =============================================================================
+st.markdown("---")
+# --- CORREZIONE: Inserito l'argomento 4 dentro st.columns() ---
+col_f1, col_f2, col_f3, col_btn = st.columns(4)
+
+if "reset_counter" not in st.session_state:
+    st.session_state.reset_counter = 0
+
+with col_btn:
+    st.markdown("<div style='padding-top: 24px;'></div>", unsafe_allow_html=True)
+    if st.button("🔄 Reset", use_container_width=True):
+        st.session_state.reset_counter += 1
+        st.rerun()
+
+if len(df_men.columns) >= 5:
+    df_men_clean = df_men.copy()
+    df_men_clean.iloc[:, 1] = df_men_clean.iloc[:, 1].astype(str).str.strip() 
+    df_men_clean.iloc[:, 3] = df_men_clean.iloc[:, 3].astype(str).str.strip() 
+    df_men_clean.iloc[:, 4] = df_men_clean.iloc[:, 4].astype(str).str.strip() 
+    
+    lista_store = sorted([x for x in df_men_clean.iloc[:, 1].unique() if x not in ['nan', 'None', '']])
+    
+    with col_f1:
+        selected_store = st.selectbox("Seleziona Store:", lista_store, key=f"sb_store_{st.session_state.reset_counter}")
+    
+    df_filtrato_store = df_men_clean[df_men_clean.iloc[:, 1] == selected_store]
+    lista_aree = ["--- TOTALE STORE ---"] + sorted([x for x in df_filtrato_store.iloc[:, 3].unique() if x not in ['nan', 'None', '']])
+    
+    with col_f2:
+        selected_area = st.selectbox("Seleziona Area di Vendita:", lista_aree, key=f"sb_area_{st.session_state.reset_counter}")
+    
+    if selected_area != "--- TOTALE STORE ---":
+        df_filtrato_area = df_filtrato_store[df_filtrato_store.iloc[:, 3] == selected_area]
+        lista_reparti = ["--- TOTALE AREA ---"] + sorted([x for x in df_filtrato_area.iloc[:, 4].unique() if x not in ['nan', 'None', '']])
+    else:
+        df_filtrato_area = df_filtrato_store.copy()
+        lista_reparti = ["--- DETTAGLIO RICHIESTO ---"]
+        
+    with col_f3:
+        selected_reparto = st.selectbox("Seleziona Reparto:", lista_reparti, key=f"sb_reparto_{st.session_state.reset_counter}")
+
+    nome_store_pulito = selected_store.split(" - ")[-1] if " - " in str(selected_store) else selected_store
+
+    if selected_area == "--- TOTALE STORE ---":
+        dati_vista = df_filtrato_store.copy()
+        titolo_vista = f"Visualizzazione: TOTALE STORE {nome_store_pulito}"
+    elif selected_reparto == "--- TOTALE AREA ---":
+        dati_vista = df_filtrato_area.copy()
+        titolo_vista = f"Visualizzazione: TOTALE AREA {selected_area} ({nome_store_pulito})"
+    else:
+        dati_vista = df_filtrato_area[df_filtrato_area.iloc[:, 4] == selected_reparto]
+        titolo_vista = f"Visualizzazione REPARTO: {selected_reparto} ({nome_store_pulito})"
+else:
+    dati_vista = pd.DataFrame()
+    st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
+
+# CREAZIONE DEI DUE PANNELLI PRINCIPALI COME SCHEDE AUTONOME
+tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
+
         st.session_state.reset_counter += 1
         st.rerun()
 
