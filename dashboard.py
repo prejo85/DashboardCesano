@@ -365,7 +365,7 @@ with tab1:
         st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
         
 # =============================================================================
-# PARTE 5.A: FILTRI DINAMICI INTEGRALI ANCORATI AL FILE FREE ANALYSIS (TAB 2)
+# PARTE 5.A: FILTRI DINAMICI INTEGRALI E PUNTAMENTO COLONNE H, I, J (CORRETTO)
 # =============================================================================
 with tab2:
     if not df_sel.empty:
@@ -374,17 +374,17 @@ with tab2:
         df_sel_clean.columns = df_sel_clean.columns.str.strip().str.replace(r'\s+', ' ', regex=True)
         
         # Identificazione delle colonne chiave per indice e nome (Case Insensitive)
-        c_store_name = df_sel_clean.columns # La colonna Store (Colonna A)
-        c_area_name = next((c for c in df_sel_clean.columns if 'area' in c.lower()), df_sel_clean.columns)
-        c_rep_name = next((c for c in df_sel_clean.columns if 'department' in c.lower() or 'reparto' in c.lower()), df_sel_clean.columns)
-        c_cust_name = next((c for c in df_sel_clean.columns if 'customer' in c.lower() or 'cliente' in c.lower()), df_sel_clean.columns)
-        c_cat_name = next((c for c in df_sel_clean.columns if 'cluster' in c.lower() or 'mpro' in c.lower()), df_sel_clean.columns)
-        c_chan_name = next((c for c in df_sel_clean.columns if 'channel' in c.lower() or 'canale' in c.lower()), df_sel_clean.columns)
+        c_store_name = df_sel_clean.columns[0] # La colonna Store (Colonna A)
+        c_area_name = next((c for c in df_sel_clean.columns if 'area' in c.lower()), df_sel_clean.columns[1])
+        c_rep_name = next((c for c in df_sel_clean.columns if 'department' in c.lower() or 'reparto' in c.lower()), df_sel_clean.columns[2])
+        c_cust_name = next((c for c in df_sel_clean.columns if 'customer' in c.lower() or 'cliente' in c.lower()), df_sel_clean.columns[4])
+        c_cat_name = next((c for c in df_sel_clean.columns if 'cluster' in c.lower() or 'mpro' in c.lower()), df_sel_clean.columns[5])
+        c_chan_name = next((c for c in df_sel_clean.columns if 'channel' in c.lower() or 'canale' in c.lower()), df_sel_clean.columns[3])
 
-        # Identificazione delle colonne H, I, J per indice assoluto
-        c_tipo_gestione = df_sel_clean.columns # Colonna H
-        c_venditore = df_sel_clean.columns      # Colonna I
-        c_am_om = df_sel_clean.columns          # Colonna J
+        # IDENTIFICAZIONE DIRETTA E SICURA MEDIANTE INDICE POSIZIONALE (H=7, I=8, J=9)
+        c_tipo_gestione = df_sel_clean.columns[7] # Colonna H (Tipo Gestione)
+        c_venditore = df_sel_clean.columns[8]      # Colonna I (Venditore)
+        c_am_om = df_sel_clean.columns[9]          # Colonna J (AM - OM)
 
         # FUNZIONE DI PULIZIA SPECIFICA PER CAMPI VUOTI O TRATTINI
         def clean_gestione_fields(valore):
@@ -454,6 +454,7 @@ with tab2:
             
         st.markdown("---")
         st.markdown(f"### 👥 {titolo_vista_t2}")
+
 
 # =============================================================================
 # PARTE 5.B: ENGINE DI AGGREGAZIONE E CALCOLO METRICHE SELLOUT (TAB 2)
