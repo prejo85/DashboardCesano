@@ -253,10 +253,23 @@ with tab1:
         # Iniezione asincrona negli ultimi due segnaposto orizzontali posti in cima al Tab 1
         box_m6.metric(label="🏷️ Share Promo %", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
         box_m7.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
+        
         st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
         if not df_ctg.empty and not match_ctg.empty:
             c_macro_find = [c for c in match_ctg.columns if 'category' in c.lower() or 'segmento' in c.lower()]
-            match_ctg['Macro_Category_Clean'] = match_ctg[c_macro_find].astype(str).str.upper().apply(lambda x: 'HORECA' if 'HORECA' in x else ('SCO' if 'SCO' in x else ('TRADER' if 'TRADER' in x else 'ALTRO')))
+            
+            # --- FIX DEFINITIVO ATTR_ERROR: Estrazione del nome colonna come stringa pura ---
+            if c_macro_find and len(c_macro_find) > 0:
+                c_macro_name = c_macro_find[0]  # Seleziona il primo elemento utile della lista
+                match_ctg['Macro_Category_Clean'] = match_ctg[c_macro_name].astype(str).str.upper().apply(
+                    lambda x: 'HORECA' if 'HORECA' in x else ('SCO' if 'SCO' in x else ('TRADER' if 'TRADER' in x else 'ALTRO'))
+                )
+            else:
+                # Fallback sulla terza colonna del file se non trova la parola chiave
+                match_ctg['Macro_Category_Clean'] = match_ctg.iloc[:, 2].astype(str).str.upper().apply(
+                    lambda x: 'HORECA' if 'HORECA' in x else ('SCO' if 'SCO' in x else ('TRADER' if 'TRADER' in x else 'ALTRO'))
+                )
+                
             df_m_g = match_ctg.groupby('Macro_Category_Clean').agg({'Sales_TY':'sum', 'Visits_TY':'sum'}).reset_index()
             
             mc1, mc2 = st.columns(2)
