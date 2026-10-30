@@ -512,9 +512,8 @@ with tab2:
             with c_sel3: st.metric(label="🎫 Totale Visite/Scontrini", value=f"{int(sel_v_tot):,}".replace(',', '.'))
             with c_sel4: st.metric(label="🛒 Scontrino Medio Portafoglio", value=fmt_valuta_decimali(sc_medio))
             st.markdown("<br>", unsafe_allow_html=True)
-            
-# =============================================================================
-# PARTE 5.C: GRAFICI E GRIGLIA DI FILTRAGGIO VENDITORI / AM-OM (AGGIORNATA)
+            # =============================================================================
+# PARTE 5.C: SEZIONE GRAFICA SELLOUT E CLASSIFICA CON FILTRI AVANZATI (H, I, J)
 # =============================================================================
             sg1, sg2 = st.columns(2)
             with sg1:
@@ -529,38 +528,83 @@ with tab2:
                 df_cha_g = df_cha_g[df_cha_g['Sales_TY'] > 0]
                 st.plotly_chart(px.bar(df_cha_g, x=c_chan_name, y='Sales_TY', template='plotly_dark', color=c_chan_name, color_discrete_sequence=px.colors.qualitative.Safe), use_container_width=True)
 
+            st.markdown("<br><br>---", unsafe_allow_html=True)
+            st.markdown("### 🏆 Classifica Analitica Clienti con Dettaglio Commerciale")
+
             # -----------------------------------------------------------------
-            # CLASSIFICA DETTAGLIATA E INCROCIO FILTRATO CON COLONNE H, I, J
+            # BLOCCO FILTRI COMMERCIALI SPOSTATO PRIMA DELLA TABELLA
             # -----------------------------------------------------------------
-            st.markdown("<br>---", unsafe_allow_html=True)
-            st.markdown("#### 🏆 Classifica Analitica Clienti con Dettaglio Gestione Commerciale (H, I, J)")
+            st.markdown("##### 🛠️ Modello di Gestione Commerciale (Colonna H)")
+            opzioni_gestione = ["TUTTI"] + sorted(list(match_sel[c_tipo_gestione].unique()))
             
-            # Raggruppamento comprensivo di Nome Cliente, Venditore (I) e AM-OM (J)
-            df_c_g = match_sel.groupby([c_cust_name, c_tipo_gestione, c_venditore, c_am_om, 'Mappatura_VP']).agg({
-                'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Colli_TY': 'sum', 'Margin_TY': 'sum'
-            }).reset_index()
+            # Utilizzo di segmented_control per pulsanti grafici più compatti e moderni
+            selected_gestione = st.segmented_control(
+                "Seleziona Tipo Gestione:",
+                options=opzioni_gestione,
+                default="TUTTI",
+                key=f"seg_gestione_{st.session_state.reset_tab2}"
+            )
+
+            # Applicazione del primo filtro per calcolare le liste dei successivi sotto-filtri
+            df_commerciale_filtrato = match_sel.copy()
+            if selected_gestione != "TUTTI":
+                df_commerciale_filtrato = df_commerciale_filtrato[df_commerciale_filtrato[c_tipo_gestione] == selected_gestione]
+
+            # Generazione filtri per Venditore (I) e AM-OM (J) dinamici basati sulla gestione scelta
+            col_v1, col_v2 = st.columns(2)
             
-            df_c_g['Scostamento_vs_PY'] = df_c_g['Sales_TY'] - df_c_g['Sales_PY']
-            df_c_g['Margin_Pct'] = df_c_g.apply(lambda r: (r['Margin_TY'] / r['Sales_TY'] * 100) if r['Sales_TY'] > 0 else 0.0, axis=1)
-            df_c_g = df_c_g.sort_values(by='Sales_TY', ascending=False).reset_index(drop=True)
-            
-            # Creazione copia per visualizzazione formattata con funzioni locali italiane
-            df_c_v = df_c_g.copy()
-            df_c_v['Sales_TY'] = df_c_v['Sales_TY'].apply(fmt_valuta_decimali)
-            df_c_v['Sales_PY'] = df_c_v['Sales_PY'].apply(fmt_valuta_decimali)
-            df_c_v['Scostamento_vs_PY'] = df_c_v['Scostamento_vs_PY'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
-            df_c_v['Margin_Pct'] = df_c_v['Margin_Pct'].apply(fmt_percentuale)
-            df_c_v['Margin_TY'] = df_c_v['Margin_TY'].apply(fmt_valuta_decimali)
-            df_c_v['Colli_TY'] = df_c_v['Colli_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
-            
-            # Rinominazione colonne per rispecchiare la richiesta (Sales, Colli, Income, Nome Cliente e Gestione)
-            df_c_v.columns = ['Ragione Sociale / Cliente', 'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Target VP', 'Fatturato TY (Sales)', 'Fatturato PY', 'Volume TY (Colli)', 'Margine € (Income)', 'Delta vs PY', 'Margine %']
-            
-            # Riordino per portare subito a schermo le informazioni principali richieste
-            colonne_output = [
-                'Ragione Sociale / Cliente', 'Fatturato TY (Sales)', 'Volume TY (Colli)', 'Margine € (Income)', 
-                'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Delta vs PY', 'Margine %'
-            ]
-            st.dataframe(df_c_v[colonne_output], use_container_width=True, hide_index=False)
-        else:
-            st.caption("⚠️ Nessun dato corrisponde ai criteri di gestione commerciali impostati.")
+            with col_v1:
+                opzioni_venditori = ["--- TUTTI I VENDITORI ---"] + sorted(list(df_commerciale_filtrato[c_venditore].unique()))
+                selected_venditore = st.selectbox(
+                    "Filtraggio puntuale per Venditore (Colonna I):", 
+                    opzioni_venditori, 
+                    key=f"sb_venditore_t2_{st.session_state.reset_tab2}"
+                )
+                
+            with col_v2:
+                opzioni_amom = ["--- TUTTI GLI AM/OM ---"] + sorted(list(df_commerciale_filtrato[c_am_om].unique()))
+                selected_amom = st.selectbox(
+                    "Filtraggio puntuale per Responsabile AM - OM (Colonna J):", 
+                    opzioni_amom, 
+                    key=f"sb_amom_t2_{st.session_state.reset_tab2}"
+                )
+
+            # Applicazione definitiva a cascata dei filtri H, I, J sui dati finali della tabella
+            if selected_venditore != "--- TUTTI I VENDITORI ---":
+                df_commerciale_filtrato = df_commerciale_filtrato[df_commerciale_filtrato[c_venditore] == selected_venditore]
+                
+            if selected_amom != "--- TUTTI GLI AM/OM ---":
+                df_commerciale_filtrato = df_commerciale_filtrato[df_commerciale_filtrato[c_am_om] == selected_amom]
+
+            # -----------------------------------------------------------------
+            # AGGREGAZIONE E RENDERING DELLA TABELLA FINALE FORMATTATA
+            # -----------------------------------------------------------------
+            if not df_commerciale_filtrato.empty:
+                df_c_g = df_commerciale_filtrato.groupby([c_cust_name, c_tipo_gestione, c_venditore, c_am_om, 'Mappatura_VP']).agg({
+                    'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Colli_TY': 'sum', 'Margin_TY': 'sum'
+                }).reset_index()
+                
+                df_c_g['Scostamento_vs_PY'] = df_c_g['Sales_TY'] - df_c_g['Sales_PY']
+                df_c_g['Margin_Pct'] = df_c_g.apply(lambda r: (r['Margin_TY'] / r['Sales_TY'] * 100) if r['Sales_TY'] > 0 else 0.0, axis=1)
+                df_c_g = df_c_g.sort_values(by='Sales_TY', ascending=False).reset_index(drop=True)
+                
+                # Conversione estetica con le funzioni di formattazione valuta italiane
+                df_c_v = df_c_g.copy()
+                df_c_v['Sales_TY'] = df_c_v['Sales_TY'].apply(fmt_valuta_decimali)
+                df_c_v['Sales_PY'] = df_c_v['Sales_PY'].apply(fmt_valuta_decimali)
+                df_c_v['Scostamento_vs_PY'] = df_c_v['Scostamento_vs_PY'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
+                df_c_v['Margin_Pct'] = df_c_v['Margin_Pct'].apply(fmt_percentuale)
+                df_c_v['Margin_TY'] = df_c_v['Margin_TY'].apply(fmt_valuta_decimali)
+                df_c_v['Colli_TY'] = df_c_v['Colli_TY'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                
+                # Rinominazione testuale delle colonne
+                df_c_v.columns = ['Ragione Sociale / Cliente', 'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Target VP', 'Fatturato TY (Sales)', 'Fatturato PY', 'Volume TY (Colli)', 'Margine € (Income)', 'Delta vs PY', 'Margine %']
+                
+                # Ordinamento strutturato dell'output tabellare
+                colonne_output = [
+                    'Ragione Sociale / Cliente', 'Fatturato TY (Sales)', 'Volume TY (Colli)', 'Margine € (Income)', 
+                    'Tipo Gestione (H)', 'Venditore Riferimento (I)', 'Responsabile AM-OM (J)', 'Delta vs PY', 'Margine %'
+                ]
+                st.dataframe(df_c_v[colonne_output], use_container_width=True, hide_index=False)
+            else:
+                st.caption("⚠️ Nessun record risponde alla combinazione di filtri commerciali (Gestione, Venditore, AM/OM) selezionata.")
