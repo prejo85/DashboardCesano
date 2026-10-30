@@ -414,13 +414,20 @@ with tab1:
         box_m6.metric(label="🏷️ Share Promo %", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
         box_m7.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
 # =============================================================================
-# BLOCCO 6B: COMPONENTI GRAFICI DI PERFORMANCE MIX (HORECA CORRETTO)
+# BLOCCO 6B: COMPONENTI GRAFICI DI PERFORMANCE MIX (HORECA - FIX MACRO_CAT)
 # =============================================================================
         if not df_ctg.empty and not match_ctg.empty:
             st.markdown("#### 🎯 Performance Globale per Canale e Segmento Cliente")
             
+            # --- FIX DEFINITIVO: Estrazione sicura della colonna Macro Categoria ---
             col_macro = [c for c in match_ctg.columns if 'customer category' in c.lower() or 'segmento' in c.lower() or 'macro' in c.lower()]
-            match_ctg['Macro_Category'] = match_ctg[col_macro].astype(str).str.upper().str.strip() if col_macro else match_ctg.iloc[:, 2].astype(str).str.upper().str.strip()
+            
+            if col_macro and len(col_macro) > 0:
+                # Estraiamo il primo elemento utile della lista come stringa pura
+                col_macro_name = col_macro[0]
+                match_ctg['Macro_Category'] = match_ctg[col_macro_name].astype(str).str.upper().str.strip()
+            else:
+                match_ctg['Macro_Category'] = match_ctg.iloc[:, 2].astype(str).str.upper().str.strip()
 
             def normalizza_macro(val):
                 val_str = str(val)
@@ -457,7 +464,6 @@ with tab1:
                     fig_sales.update_layout(showlegend=False, coloraxis_showscale=False, height=450, margin=dict(l=20, r=20, t=20, b=20))
                     st.plotly_chart(fig_sales, use_container_width=True)
                 with g2:
-                    st.markdown("#### 👥 Frequenza e Mix dei Volumi delle Visite (HORECA)")
                     fig_visits = px.pie(df_ctg_grouped, values='Visits_TY', names='CTG_Label', template='plotly_dark', hole=0.4)
                     fig_visits.update_layout(height=450, margin=dict(l=20, r=20, t=20, b=20))
                     st.plotly_chart(fig_visits, use_container_width=True)
