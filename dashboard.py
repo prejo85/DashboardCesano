@@ -245,9 +245,21 @@ with tab1:
             if not df_rep.empty:
                 def parse_bmpl_direct(dataframe, col_name):
                     if col_name in dataframe.columns:
-                        s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True)
+                        # Rimuove gli spazi bianchi all'inizio e alla fine
+                        s = dataframe[col_name].astype(str).str.strip()
                         s = s.replace(['-', '--', 'nan', 'NaN', ''], '0')
-                        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                        
+                        # LOGICA CORRETTA PER IL FORMATO ITALIANO (es. 64.160 o 9.549,92)
+                        # Se contiene sia il punto (migliaia) che la virgola (decimale):
+                        if s.str.contains(r'\.').any() and s.str.contains(',').any():
+                            s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                        # Se contiene il punto ma NON la virgola, ed è un numero intero (es. 64.160 o 31.368)
+                        elif s.str.contains(r'\.').any() and not s.str.contains(',').any():
+                            s = s.str.replace('.', '', regex=False)
+                        # Se contiene solo la virgola come decimale
+                        elif s.str.contains(',').any():
+                            s = s.str.replace(',', '.', regex=False)
+                            
                         return pd.to_numeric(s, errors='coerce').fillna(0.0)
                     return pd.Series(0.0, index=dataframe.index)
 
