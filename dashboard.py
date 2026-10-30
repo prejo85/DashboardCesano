@@ -30,6 +30,9 @@ def fmt_giorni(valore):
 # -----------------------------------------------------------------------------
 # 3. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# 3. ENGINE CENTRALIZZATO DI PULIZIA E PARSING DEI REPORT (RIGA 0)
+# -----------------------------------------------------------------------------
 def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabili, file_mensile):
     def clean_df(file_path):
         try:
@@ -40,6 +43,17 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
             df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True)
         df.columns = df.columns.str.strip()
         df = df[df.iloc[:, 0].notna()]
+        
+        # --- NUOVA LOGICA: Correzione automatica del formato numerico italiano all'importazione ---
+        for col in df.columns:
+            # Identifichiamo le colonne numeriche sporche analizzando i valori non vuoti
+            sample = df[col].dropna().astype(str).str.strip()
+            if sample.str.contains(r'^\d{1,3}(\.\d{3})*(,\d+)?$|^\d{1,3}(\.\d{3})+$').any():
+                # Rimuove il punto delle migliaia italiano e converte la virgola decimale nel punto standard
+                df[col] = df[col].astype(str).str.strip()
+                df[col] = df[col].str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+                
         return df
 
     df_rep = clean_df(file_reparti)
@@ -48,6 +62,7 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
     df_ind = clean_df(file_indispensabili)
     df_men = clean_df(file_mensile)
     return df_rep, df_ctg, df_sel, df_ind, df_men
+
 
 # -----------------------------------------------------------------------------
 # 4. INTERFACCIA UNICA DI CARICAMENTO NELLA SIDEBAR LATERALE
