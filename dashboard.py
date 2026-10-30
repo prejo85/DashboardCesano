@@ -68,7 +68,7 @@ df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel
 # 5. FILTRI GERARCHICI IN ALTO CON LOGICA DI RESET IN SESSION STATE
 # =============================================================================
 st.markdown("---")
-col_f1, col_f2, col_f3, col_btn = st.columns([3, 3, 3, 1])
+col_f1, col_f2, col_f3, col_btn = st.columns()
 
 if "reset_counter" not in st.session_state:
     st.session_state.reset_counter = 0
@@ -121,13 +121,13 @@ else:
     dati_vista = pd.DataFrame()
     st.error("Il file Mensilizzazione non ha colonne sufficienti per la mappatura gerarchica.")
 
-# SEPARAZIONE IN DUE PAGINE/TAB INDIPENDENTI
+# CREAZIONE DEI DUE PANNELLI PRINCIPALI COME SCHEDE AUTONOME
 tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
 with tab1:
     if not dati_vista.empty:
         st.markdown(f"### 🎯 {titolo_vista}")
         
-        # Iniezione stili per evitare il troncamento dei numeri lunghi in "..."
+        # Iniezione stili per evitare il troncamento dei numeri lunghi (Avg Stock) in "..."
         st.markdown("""
             <style>
                 div[data-testid="stMetricValue"] { font-size: 21px !important; }
@@ -137,7 +137,7 @@ with tab1:
 
         st.markdown("#### 📊 Indicatori Chiave di Performance")
         
-        # Configurazione della griglia a 7 elementi vuoti a inizio pagina
+        # Configurazione della griglia a 7 segnaposto orizzontali vuoti a inizio pagina
         col_m1, col_m2, col_m3, col_m4, col_m5, col_m6, col_m7 = st.columns(7)
         box_m1 = col_m1.empty()
         box_m2 = col_m2.empty()
@@ -214,51 +214,6 @@ with tab1:
         box_m3.metric(label="📦 Stock Days", value=fmt_giorni(val_stock_days), delta=f"{delta_stock_pct:+.2f}% vs PY", delta_color="inverse")
         box_m4.metric(label="🏬 Avg Stock Last Day", value=fmt_valuta_interi(val_avg_stock_ultimo_giorno), delta=None)
         box_m5.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
-        # --- SEZIONE REPORT COMPLEMENTARI CROSS-REPORT ---
-        st.markdown("<br>---", unsafe_allow_html=True)
-        col_c1, col_c2 = st.columns(2)
-        
-        with col_c1:
-            st.markdown("#### 📈 Sintesi Report BMPL Reparti")
-            if not df_rep.empty:
-                def parse_bmpl_direct(dataframe, col_name):
-                    if col_name in dataframe.columns:
-                        s = dataframe[col_name].astype(str).str.replace(r'\s+', '', regex=True).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-                        return pd.to_numeric(s, errors='coerce').fillna(0.0)
-                    return pd.Series(0.0, index=dataframe.index)
-
-                df_rep_pure = df_rep.copy()
-                col_bmpl_rep = [c for c in df_rep_pure.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-                if col_bmpl_rep and len(codici_target) > 0:
-                    df_rep_pure['Codice_Reparto_BMPL'] = df_rep_pure[col_bmpl_rep].astype(str).apply(lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else '')
-                    match_bmpl = df_rep_pure[df_rep_pure['Codice_Reparto_BMPL'].isin(codici_target)] if (selected_area != "--- TOTALE STORE ---" or selected_reparto != "--- DETTAGLIO RICHIESTO ---") else df_rep_pure.copy()
-                else: match_bmpl = df_rep_pure.copy()
-
-                if not match_bmpl.empty:
-                    bmpl_s = float(parse_bmpl_direct(match_bmpl, 'Sales TT').sum())
-                    bmpl_s_py = float(parse_bmpl_direct(match_bmpl, 'Sales TT PY Custom Cal').sum())
-                    bmpl_m = float(parse_bmpl_direct(match_bmpl, 'Front Margin').sum())
-                    bmpl_m_py = float(parse_bmpl_direct(match_bmpl, 'Front Margin PY Custom Cal').sum())
-                    bmpl_c = float(parse_bmpl_direct(match_bmpl, '# Colli').sum())
-                    
-                    m_ty = (bmpl_m / bmpl_s * 100) if bmpl_s != 0 else 0.0
-                    m_py = (bmpl_m_py / bmpl_s_py * 100) if bmpl_s_py != 0 else 0.0
-                    
-                    sub1, sub2, sub3 = st.columns(3)
-                    with sub1: st.metric(label="Sales TT (BMPL)", value=fmt_valuta_interi(bmpl_s), delta=f"{((bmpl_s - bmpl_s_py)/bmpl_s_py*100):+.2f}%" if bmpl_s_py else None)
-                    with sub2: st.metric(label="Front Margin % (BMPL)", value=fmt_percentuale(m_ty), delta=f"{(m_ty - m_py):+.2f} pp")
-                    with sub3: st.metric(label="Volume Colli (BMPL)", value=f"{int(round(bmpl_c)):,}".replace(',', '.'))
-
-        with col_c2:
-            st.markdown("#### 📌 Sintesi Articoli Indispensabili")
-            if not df_ind.empty:
-                col_rep_ind = [c for c in df_ind.columns if 'department' in c.lower() or 'reparto' in c.lower()]
-                if col_rep_ind and len(codici_target) > 0:
-                    df_ind['Codice_Reparto_IND'] = df_ind[col_rep_ind].apply(lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else '')
-                    match_ind = df_ind[df_ind['Codice_Reparto_IND'].isin(codici_target)]
-                    if not match_ind.empty:
-                        st.caption(f"ℹ️ Rilevati {len(match_ind)} Articoli Indispensabili inseriti nel perimetro corrente.")
-
         # --- APERTURA ENGINE DEL CALCOLO DINAMICO REPORT CTG ---
         promo_share_ty, delta_promo_pp, hvs_sales_ty, delta_hvs_pct = 0.0, 0.0, 0.0, 0.0
         if not df_ctg.empty:
@@ -277,34 +232,94 @@ with tab1:
                 match_ctg['CTG_Label'] = match_ctg['CTG'].astype(str).str.strip()
                 match_ctg['Channel_Label'] = match_ctg['Channel Detail'].astype(str).str.strip()
 
-                c_promo = [c for c in match_ctg.columns if 'promo' in c.lower()][0]
-                c_hvs = [c for c in match_ctg.columns if 'hvs' in c.lower()][0]
+                c_promo = next((c for c in match_ctg.columns if 'promo' in c.lower()), None)
+                c_hvs = append_col = next((c for c in match_ctg.columns if 'hvs' in c.lower()), None)
                 
                 t_s_ty = match_ctg['Sales_TY'].sum()
                 t_s_py = match_ctg['Sales_PY'].sum()
                 
-                df_p = match_ctg[match_ctg[c_promo].astype(str).str.upper().str.strip() == 'PROMO']
-                promo_share_ty = (df_p['Sales_TY'].sum() / t_s_ty * 100) if t_s_ty > 0 else 0.0
-                promo_share_py = (df_p['Sales_PY'].sum() / t_s_py * 100) if t_s_py > 0 else 0.0
-                delta_promo_pp = promo_share_ty - promo_share_py
+                if c_promo:
+                    df_p = match_ctg[match_ctg[c_promo].astype(str).str.upper().str.strip() == 'PROMO']
+                    promo_share_ty = (df_p['Sales_TY'].sum() / t_s_ty * 100) if t_s_ty > 0 else 0.0
+                    promo_share_py = (df_p['Sales_PY'].sum() / t_s_py * 100) if t_s_py > 0 else 0.0
+                    delta_promo_pp = promo_share_ty - promo_share_py
                 
-                df_h = match_ctg[match_ctg[c_hvs].astype(str).str.upper().str.strip() == 'HVS']
-                hvs_sales_ty = df_h['Sales_TY'].sum()
-                delta_hvs_pct = ((hvs_sales_ty - df_h['Sales_PY'].sum()) / df_h['Sales_PY'].sum() * 100) if df_h['Sales_PY'].sum() > 0 else 0.0
+                if c_hvs:
+                    df_h = match_ctg[match_ctg[c_hvs].astype(str).str.upper().str.strip() == 'HVS']
+                    hvs_sales_ty = df_h['Sales_TY'].sum()
+                    delta_hvs_pct = ((hvs_sales_ty - df_h['Sales_PY'].sum()) / df_h['Sales_PY'].sum() * 100) if df_h['Sales_PY'].sum() > 0 else 0.0
 
         # Iniezione asincrona negli ultimi due segnaposto rimasti in sospeso in alto
         box_m6.metric(label="🏷️ Share Promo %", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
         box_m7.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
-
         st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
         if not df_ctg.empty and not match_ctg.empty:
-            c_macro_find = [c for c in match_ctg.columns if 'category' in c.lower() or 'segmento' in c.lower()][0]
+            c_macro_find = [c for c in match_ctg.columns if 'category' in c.lower() or 'segmento' in c.lower()]
             match_ctg['Macro_Category_Clean'] = match_ctg[c_macro_find].astype(str).str.upper().apply(lambda x: 'HORECA' if 'HORECA' in x else ('SCO' if 'SCO' in x else ('TRADER' if 'TRADER' in x else 'ALTRO')))
             df_m_g = match_ctg.groupby('Macro_Category_Clean').agg({'Sales_TY':'sum', 'Visits_TY':'sum'}).reset_index()
             
             mc1, mc2 = st.columns(2)
             with mc1: st.plotly_chart(px.bar(df_m_g, x='Macro_Category_Clean', y='Sales_TY', title="Fatturato per Macro Categoria", template='plotly_dark', color='Macro_Category_Clean'), use_container_width=True)
             with mc2: st.plotly_chart(px.pie(df_m_g, values='Visits_TY', names='Macro_Category_Clean', title="Mix Visite Segmenti", template='plotly_dark', hole=0.4), use_container_width=True)
+
+            # -----------------------------------------------------------------------------
+            # DETTAGLIO VERTICALE EX-NOVO: CLUSTER HORECA
+            # -----------------------------------------------------------------------------
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            st.subheader("🍽️ Performance Sotto-Categorie Segmento HORECA")
+            df_horeca_only = match_ctg[match_ctg['Macro_Category_Clean'] == 'HORECA'].copy()
+            df_ctg_g_horeca = df_horeca_only.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index().sort_values(by='Sales_TY', ascending=True)
+            df_ctg_g_horeca = df_ctg_g_horeca[df_ctg_g_horeca['Sales_TY'] > 0]
+
+            if not df_ctg_g_horeca.empty:
+                g1, g2 = st.columns(2)
+                with g1: st.plotly_chart(px.bar(df_ctg_g_horeca, x='Sales_TY', y='CTG_Label', orientation='h', title="Fatturato per Sotto-Categoria HORECA", template='plotly_dark', color='Sales_TY', color_continuous_scale='Blues'), use_container_width=True)
+                with g2: st.plotly_chart(px.pie(df_ctg_g_horeca, values='Visits_TY', names='CTG_Label', title="Mix Visite HORECA", template='plotly_dark', hole=0.4), use_container_width=True)
+                
+                df_ch_horeca = df_horeca_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
+                df_ch_horeca['Scontrino_Medio'] = df_ch_horeca.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
+                ch1, ch2 = st.columns(2)
+                with ch1: st.plotly_chart(px.bar(df_ch_horeca, x='Channel_Label', y='Sales_TY', title="Fatturato HORECA per Canale", template="plotly_dark", color='Channel_Label'), use_container_width=True)
+                with ch2: st.plotly_chart(px.bar(df_ch_horeca, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio HORECA (€ per Visita)", template="plotly_dark", color='Channel_Label'), use_container_width=True)
+            # -----------------------------------------------------------------------------
+            # DETTAGLIO VERTICALE EX-NOVO: CLUSTER SCO
+            # -----------------------------------------------------------------------------
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            st.subheader("🏪 Performance Sotto-Categorie Segmento SCO")
+            df_sco_only = match_ctg[match_ctg['Macro_Category_Clean'] == 'SCO'].copy()
+            df_ctg_g_sco = df_sco_only.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index().sort_values(by='Sales_TY', ascending=True)
+            df_ctg_g_sco = df_ctg_g_sco[df_ctg_g_sco['Sales_TY'] > 0]
+
+            if not df_ctg_g_sco.empty:
+                g1_sco, g2_sco = st.columns(2)
+                with g1_sco: st.plotly_chart(px.bar(df_ctg_g_sco, x='Sales_TY', y='CTG_Label', orientation='h', title="Fatturato per Sotto-Categoria SCO", template='plotly_dark', color='Sales_TY', color_continuous_scale='Greens'), use_container_width=True)
+                with g2_sco: st.plotly_chart(px.pie(df_ctg_g_sco, values='Visits_TY', names='CTG_Label', title="Mix Visite SCO", template='plotly_dark', hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r), use_container_width=True)
+                
+                df_ch_sco = df_sco_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
+                df_ch_sco['Scontrino_Medio'] = df_ch_sco.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
+                ch1_sco, ch2_sco = st.columns(2)
+                with ch1_sco: st.plotly_chart(px.bar(df_ch_sco, x='Channel_Label', y='Sales_TY', title="Fatturato SCO per Canale", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Set2), use_container_width=True)
+                with ch2_sco: st.plotly_chart(px.bar(df_ch_sco, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio SCO (€ per Visita)", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Set2), use_container_width=True)
+
+            # -----------------------------------------------------------------------------
+            # DETTAGLIO VERTICALE EX-NOVO: CLUSTER TRADER
+            # -----------------------------------------------------------------------------
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            st.subheader("📦 Performance Sotto-Categorie Segmento TRADER")
+            df_trader_only = match_ctg[match_ctg['Macro_Category_Clean'] == 'TRADER'].copy()
+            df_ctg_g_trader = df_trader_only.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index().sort_values(by='Sales_TY', ascending=True)
+            df_ctg_g_trader = df_ctg_g_trader[df_ctg_g_trader['Sales_TY'] > 0]
+
+            if not df_ctg_g_trader.empty:
+                g1_tr, g2_tr = st.columns(2)
+                with g1_tr: st.plotly_chart(px.bar(df_ctg_g_trader, x='Sales_TY', y='CTG_Label', orientation='h', title="Fatturato per Sotto-Categoria TRADER", template='plotly_dark', color='Sales_TY', color_continuous_scale='Oranges'), use_container_width=True)
+                with g2_tr: st.plotly_chart(px.pie(df_ctg_g_trader, values='Visits_TY', names='CTG_Label', title="Mix Visite TRADER", template='plotly_dark', hole=0.4, color_discrete_sequence=px.colors.sequential.Oranges_r), use_container_width=True)
+                
+                df_ch_trader = df_trader_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
+                df_ch_trader['Scontrino_Medio'] = df_ch_trader.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
+                ch1_tr, ch2_tr = st.columns(2)
+                with ch1_tr: st.plotly_chart(px.bar(df_ch_trader, x='Channel_Label', y='Sales_TY', title="Fatturato TRADER per Canale", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Pastel1), use_container_width=True)
+                with ch2_tr: st.plotly_chart(px.bar(df_ch_trader, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio TRADER (€ per Visita)", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Pastel1), use_container_width=True)
 # =============================================================================
 # TAB 2: ANALISI PROFILAZIONE E PERFORMANCE DETTAGLIO CLIENTI (SELLOUT)
 # =============================================================================
