@@ -64,18 +64,6 @@ if not (u_rep and u_ctg and u_sel and u_ind and u_men):
     st.stop()
 
 df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel, u_ind, u_men)
-# =============================================================================
-# 5. FILTRI GERARCHICI IN ALTO CON LOGICA DI RESET IN SESSION STATE
-# =============================================================================
-st.markdown("---")
-col_f1, col_f2, col_f3, col_btn = st.columns()
-
-if "reset_counter" not in st.session_state:
-    st.session_state.reset_counter = 0
-
-with col_btn:
-    st.markdown("<div style='padding-top: 24px;'></div>", unsafe_allow_html=True)
-    if st.button("🔄 Reset", use_container_width=True):
 
 # =============================================================================
 # 5. FILTRI GERARCHICI IN ALTO CON LOGICA DI RESET IN SESSION STATE
