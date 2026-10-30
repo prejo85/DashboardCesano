@@ -439,9 +439,9 @@ with tab2:
         st.markdown(f"### 👥 {titolo_vista_t2}")
 
 # =============================================================================
-# PARTE 5.B: SCANNING AUTOMATICO COLONNE, PARSING E GRIGLIA METRICHE CLIENTI
+# PARTE 5.B: SCANNING AUTOMATICO COLONNE, PARSING E FILTRAGGIO CORRISPONDENTE
 # =============================================================================
-        # Mappatura case-insensitive basata su parole chiave
+        # Mappatura case-insensitive basata su parole chiave per localizzare le colonne del Sellout
         c_rep_name = next((c for c in df_sel_clean.columns if 'department' in c.lower() or 'reparto' in c.lower() or 'sales dep' in c.lower()), None)
         c_cust_name = next((c for c in df_sel_clean.columns if 'customer' in c.lower() or 'cliente' in c.lower()), None)
         c_cat_name = next((c for c in df_sel_clean.columns if 'cluster' in c.lower() or 'mpro' in c.lower() or 'category' in c.lower()), None)
@@ -452,15 +452,33 @@ with tab2:
         if not c_cust_name: c_cust_name = df_sel_clean.columns[4]
         if not c_cat_name: c_cat_name = df_sel_clean.columns[5]
 
+        # 1. Pulizia e standardizzazione della colonna Store nel file Sellout (rimozione zeri iniziali e spazi)
+        df_sel_clean['Store_Codice_Pulito'] = df_sel_clean.iloc[:, 0].astype(str).str.strip().str.lstrip('0')
+
+        # 2. Estrazione del codice numerico dallo store selezionato nel widget (es. "0011 - CESANO BOSCONE" -> "11")
+        codice_store_selezionato = ""
+        if selected_store_t2 != "STORE AREA METROPOLITANA":
+            match_codice = re.match(r'^(\d+)', str(selected_store_t2).strip())
+            if match_codice:
+                codice_store_selezionato = match_codice.group(1).lstrip('0')
+
+        # 3. Mappatura del codice reparto per l'incrocio gerarchico
         df_sel_clean['Codice_Reparto_SEL'] = df_sel_clean[c_rep_name].astype(str).apply(
             lambda x: re.search(r'\d+', str(x)).group() if re.search(r'\d+', str(x)) else ''
         )
         
-        if selected_area_t2 != "--- TOTALE STORE ---" or (selected_reparto_t2 != "--- DETTAGLIO RICHIESTO ---" and selected_reparto_t2 != "--- TOTALE AREA ---"):
-            match_sel = df_sel_clean[df_sel_clean['Codice_Reparto_SEL'].isin(codici_target_t2)].copy()
-        else:
-            match_sel = df_sel_clean.copy()
+        # 4. Applicazione combinata del filtro Store e del filtro Reparto/Area
+        match_sel = df_sel_clean.copy()
+        
+        # Se non è il totalone, filtra rigorosamente per il codice del punto vendita
+        if codice_store_selezionato != "":
+            match_sel = match_sel[match_sel['Store_Codice_Pulito'] == codice_store_selezionato]
             
+        # Filtra per i reparti ottenuti dai selettori Area/Reparto superiore
+        if selected_area_t2 != "--- TOTALE STORE ---" or (selected_reparto_t2 != "--- DETTAGLIO RICHIESTO ---" and selected_reparto_t2 != "--- TOTALE AREA ---"):
+            match_sel = match_sel[match_sel['Codice_Reparto_SEL'].isin(codici_target_t2)]
+            
+        # 5. Elaborazione quantitativa dei record risultanti
         if not match_sel.empty:
             def parse_sellout_numeric(dataframe, primary_keyword, secondary_keyword=None):
                 actual_col = next((c for c in dataframe.columns if primary_keyword.lower() in c.lower()), None)
@@ -473,7 +491,6 @@ with tab2:
                     return pd.to_numeric(s, errors='coerce').fillna(0.0)
                 return pd.Series(0.0, index=dataframe.index)
 
-            # Caricamento delle metriche pulite
             match_sel['Sales_TY'] = parse_sellout_numeric(match_sel, 'Sales TT', 'Sales 1')
             match_sel['Sales_PY'] = parse_sellout_numeric(match_sel, 'PY Custom Cal', 'Sales per')
             match_sel['Colli_TY'] = parse_sellout_numeric(match_sel, '# Colli', 'Colli')
@@ -488,13 +505,13 @@ with tab2:
             sel_delta = ((sel_s_tot - sel_s_py_tot) / sel_s_py_tot * 100) if sel_s_py_tot > 0 else 0.0
             sc_medio = (sel_s_tot / sel_v_tot) if sel_v_tot > 0 else 0.0
 
-            # Rendering visivo dei 4 KPI superiori del Tab 2
             c_sel1, c_sel2, c_sel3, c_sel4 = st.columns(4)
             with c_sel1: st.metric(label="👥 Buying Customers Unici", value=f"{sel_cust_qty:,}".replace(',', '.'))
             with c_sel2: st.metric(label="💰 Totale Sales (Sellout)", value=fmt_valuta_interi(sel_s_tot), delta=f"{sel_delta:+.2f}% vs PY")
             with c_sel3: st.metric(label="🎫 Totale Visite/Scontrini", value=f"{int(sel_v_tot):,}".replace(',', '.'))
             with c_sel4: st.metric(label="🛒 Scontrino Medio Portafoglio", value=fmt_valuta_decimali(sc_medio))
             st.markdown("<br>", unsafe_allow_html=True)
+
 # =============================================================================
 # PARTE 5.C: SEZIONE GRAFICA SELLOUT E CLASSIFICA TOP CLIENTI COMPLETA
 # =============================================================================
