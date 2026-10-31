@@ -9,7 +9,7 @@ import re
 # -----------------------------------------------------------------------------
 st.set_page_config(page_title="Dashboard Commerciale Avanzata", layout="wide", page_icon="📊")
 
-st.title("📊 Dashboard Commerciale Integrata")
+st.title("📊 Dashboard Commerciale Territoriale")
 st.markdown("### Analisi Multilivello: Store, Aree, Reparti e Segmentazione Clienti")
 
 # -----------------------------------------------------------------------------
@@ -100,7 +100,7 @@ if "reset_tab2" not in st.session_state:
     st.session_state.reset_tab2 = 0
     
 # Generazione della struttura dei macro Tab in alto nella pagina
-tab1, tab2 = st.tabs(["🏬 Vista Store e Performance Reparti", "👥 Analisi Profilazione Clienti (Sellout)"])
+tab1, tab2 = st.tabs(["🏬 Analisi KPI Store e Performance Reparti", "👥 Analisi Commerciale Clienti (Territorio)"])
 # =============================================================================
 # PARTE 3.A: FILTRI GERARCHICI COMPLETI DENTRO IL TAB 1
 # =============================================================================
@@ -274,9 +274,10 @@ with tab1:
             box_m2.metric(label="📈 Front Margin %", value=fmt_percentuale(margin_on_sales), delta=f"{delta_margin_pp:+.2f} pp vs PY")
             box_m3.metric(label="📦 Stock Days", value=fmt_giorni(val_stock_days), delta=f"{delta_stock_pct:+.2f}% vs PY", delta_color="inverse")
             box_m4.metric(label="🏬 Avg Stock Last Day", value=fmt_valuta_interi(val_avg_stock_ultimo_giorno), delta=None)
-            box_m5.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
-            box_m6.metric(label="🏷️ Share Promo %", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
+            box_m5.metric(label="📉 Shrinkage (%)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
+            box_m6.metric(label="🏷️ Share Promo (%)", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
             box_m7.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
+
 # =============================================================================
 # PARTE 3.E: MOTORE DI FILTRAGGIO DINAMICO ED ESTRAZIONE CODICI REPARTO TARGET
 # =============================================================================
@@ -382,7 +383,7 @@ with tab1:
 # PARTE 3.H: RENDERING TABELLA DETTAGLIO ARTICOLI INDISPENSABILI
 # =============================================================================
                     st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown("##### 📋 Elenco Articoli Indispensabili")
+                    st.markdown("##### 📋 Elenco Articoli Indispensabili:")
                     
                     df_tab_view = df_ind_filtrato.copy()
                     
@@ -432,13 +433,13 @@ with tab1:
                         lambda x: 'HORECA' if 'HORECA' in x else ('SCO' if 'SCO' in x else ('TRADER' if 'TRADER' in x else 'ALTRO'))
                     )
                     
-                df_m_g = match_ctg.groupby('Macro_Category_Clean').agg({'Sales_TY':'sum', 'Visits_TY':'sum'}).reset_index()
+                df_m_g = match_ctg.groupby('CTG').agg({'Sales_TY':'sum', 'Visits_TY':'sum'}).reset_index()
                 
                 mc1, mc2 = st.columns(2)
                 with mc1: 
-                    st.plotly_chart(px.bar(df_m_g, x='Macro_Category_Clean', y='Sales_TY', title="Fatturato per Macro Categoria", template='plotly_dark', color='Macro_Category_Clean'), use_container_width=True)
+                    st.plotly_chart(px.bar(df_m_g, x='CTG', y='Sales_TY', title="Dettaglio Fatturato per Categoria:", template='plotly_dark', color='CTG'), use_container_width=True)
                 with mc2: 
-                    st.plotly_chart(px.pie(df_m_g, values='Visits_TY', names='Macro_Category_Clean', title="Mix Visite Segmenti", template='plotly_dark', hole=0.4), use_container_width=True)
+                    st.plotly_chart(px.pie(df_m_g, values='Visits_TY', names='CTG', title="Share % Visite Categoria:", template='plotly_dark', hole=0.4), use_container_width=True)
 # =============================================================================
 # PARTE 4.B: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO HORECA
 # =============================================================================
