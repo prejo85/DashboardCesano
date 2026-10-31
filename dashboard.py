@@ -439,7 +439,7 @@ with tab1:
                 with mc1: 
                     st.plotly_chart(px.bar(df_m_g, x='Macro_Category_Clean', y='Sales_TY', title="Dettaglio Fatturato per Categoria:", template='plotly_dark', color='Macro_Category_Clean'), use_container_width=True)
                 with mc2: 
-                    st.plotly_chart(px.pie(df_m_g, values='Visits_TY', names='Macro_Category_Clean', title="Share % Visite Categoria:", template='plotly_dark', hole=0.4), use_container_width=True)
+                    st.plotly_chart(px.pie(df_m_g, values='Visits_TY', names='Macro_Category_Clean', title="Share % Visite:", template='plotly_dark', hole=0.4), use_container_width=True)
 # =============================================================================
 # PARTE 4.B: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO HORECA
 # =============================================================================
@@ -454,7 +454,7 @@ with tab1:
                     with g1: 
                         st.plotly_chart(px.bar(df_ctg_g_horeca, x='Sales_TY', y='CTG_Label', orientation='h', title="Fatturato per Sotto-Categoria HORECA", template='plotly_dark', color='Sales_TY', color_continuous_scale='Blues'), use_container_width=True)
                     with g2: 
-                        st.plotly_chart(px.pie(df_ctg_g_horeca, values='Visits_TY', names='CTG_Label', title="Mix Visite HORECA", template='plotly_dark', hole=0.4), use_container_width=True)
+                        st.plotly_chart(px.pie(df_ctg_g_horeca, values='Visits_TY', names='CTG_Label', title="Share% Visite HORECA", template='plotly_dark', hole=0.4), use_container_width=True)
                     
                     df_ch_horeca = df_horeca_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
                     df_ch_horeca['Scontrino_Medio'] = df_ch_horeca.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
@@ -478,7 +478,7 @@ with tab1:
                     with g1_sco: 
                         st.plotly_chart(px.bar(df_ctg_g_sco, x='Sales_TY', y='CTG_Label', orientation='h', title="Fatturato per Sotto-Categoria SCO", template='plotly_dark', color='Sales_TY', color_continuous_scale='Greens'), use_container_width=True)
                     with g2_sco: 
-                        st.plotly_chart(px.pie(df_ctg_g_sco, values='Visits_TY', names='CTG_Label', title="Mix Visite SCO", template='plotly_dark', hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r), use_container_width=True)
+                        st.plotly_chart(px.pie(df_ctg_g_sco, values='Visits_TY', names='CTG_Label', title="Share% Visite SCO", template='plotly_dark', hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r), use_container_width=True)
                     
                     df_ch_sco = df_sco_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
                     df_ch_sco['Scontrino_Medio'] = df_ch_sco.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
@@ -503,7 +503,7 @@ with tab1:
                     with g1_tr: 
                         st.plotly_chart(px.bar(df_ctg_g_trader, x='Sales_TY', y='CTG_Label', orientation='h', title="Fatturato per Sotto-Categoria TRADER", template='plotly_dark', color='Sales_TY', color_continuous_scale='Oranges'), use_container_width=True)
                     with g2_tr: 
-                        st.plotly_chart(px.pie(df_ctg_g_trader, values='Visits_TY', names='CTG_Label', title="Mix Visite TRADER", template='plotly_dark', hole=0.4, color_discrete_sequence=px.colors.sequential.Oranges_r), use_container_width=True)
+                        st.plotly_chart(px.pie(df_ctg_g_trader, values='Visits_TY', names='CTG_Label', title="Share% Visite TRADER", template='plotly_dark', hole=0.4, color_discrete_sequence=px.colors.sequential.Oranges_r), use_container_width=True)
                     
                     df_ch_trader = df_trader_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
                     df_ch_trader['Scontrino_Medio'] = df_ch_trader.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
@@ -653,10 +653,10 @@ with tab2:
             sc_medio = (sel_s_tot / sel_v_tot) if sel_v_tot > 0 else 0.0
 
             c_sel1, c_sel2, c_sel3, c_sel4 = st.columns(4)
-            with c_sel1: st.metric(label="👥 Buying Customers Unici (Tot.)", value=f"{sel_cust_qty:,}".replace(',', '.'))
-            with c_sel2: st.metric(label="💰 Totale Sales (Sellout Tot.)", value=fmt_valuta_interi(sel_s_tot), delta=f"{sel_delta:+.2f}% vs PY")
-            with c_sel3: st.metric(label="🎫 Totale Visite/Scontrini (Tot.)", value=f"{int(sel_v_tot):,}".replace(',', '.'))
-            with c_sel4: st.metric(label="🛒 Scontrino Medio Portafoglio (Tot.)", value=fmt_valuta_decimali(sc_medio))
+            with c_sel1: st.metric(label="👥 Buying Customers ", value=f"{sel_cust_qty:,}".replace(',', '.'))
+            with c_sel2: st.metric(label="💰 Totale Sales ", value=fmt_valuta_interi(sel_s_tot), delta=f"{sel_delta:+.2f}% vs PY")
+            with c_sel3: st.metric(label="🎫 Totale Visite ", value=f"{int(sel_v_tot):,}".replace(',', '.'))
+            with c_sel4: st.metric(label="🛒 Scontrino Medio ", value=fmt_valuta_decimali(sc_medio))
             st.markdown("<br>", unsafe_allow_html=True)
 
 # =============================================================================
@@ -664,13 +664,13 @@ with tab2:
 # =============================================================================
             sg1, sg2 = st.columns(2)
             with sg1:
-                st.markdown("#### 🎯 Quota Fatturato Corrente per Target (VP = Si / Altri = No)")
+                st.markdown("#### 🎯 Share attivazione Accordi Commerciali")
                 df_cat_g = match_sel.groupby('Mappatura_VP')['Sales_TY'].sum().reset_index()
                 df_cat_g = df_cat_g[df_cat_g['Sales_TY'] > 0]
                 st.plotly_chart(px.pie(df_cat_g, values='Sales_TY', names='Mappatura_VP', template='plotly_dark', hole=0.3, color_discrete_sequence=px.colors.qualitative.Pastel2), use_container_width=True)
                 
             with sg2:
-                st.markdown("#### 🏪 Incidenza Canali Logistici di Vendita (Confronto TY vs PY)")
+                st.markdown("#### 🏪 Fatturato Canali di Vendita ")
                 
                 # 1. Raggruppamento e calcolo delle somme TY e PY per canale
                 df_cha_g = match_sel.groupby(c_chan_name).agg({
@@ -745,7 +745,7 @@ with tab2:
 # =============================================================================
 # PARTE 5.C.2: SEZIONE FILTRI COMMERCIALI SPOSTATI PRIMA DELLA TABELLA
 # =============================================================================
-            st.markdown("##### 🛠️ Modello di Gestione Commerciale (Colonna H)")
+            st.markdown("##### 🛠️ Modello di Gestione Commerciale :")
             opzioni_gestione = ["TUTTI"] + sorted(list(match_sel[c_tipo_gestione].unique()))
             
             selected_gestione = st.segmented_control(
@@ -765,7 +765,7 @@ with tab2:
             with col_v1:
                 opzioni_amom = ["--- TUTTI GLI AM/OM ---"] + sorted(list(df_commerciale_filtrato[c_am_om].unique()))
                 selected_amom = st.selectbox(
-                    "1. Filtraggio per Responsabile AM - OM (Colonna J):", 
+                    "1. Filtraggio per Responsabile AM - OM :", 
                     opzioni_amom, 
                     key=f"sb_amom_t2_{st.session_state.reset_tab2}"
                 )
