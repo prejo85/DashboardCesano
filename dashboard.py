@@ -49,26 +49,26 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
     df_men = clean_df(file_mensile)
     return df_rep, df_ctg, df_sel, df_ind, df_men
 
-# Funzione di pulizia corretta e protetta contro i crash di tipo (nativi/NaN)
-            def parse_italian_numeric(dataframe, col_index):
-                if len(dataframe.columns) > col_index:
-                    # Estrazione e conversione forzata a stringa rimuovendo gli spazi
-                    s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
-                    s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
+    # Funzione di pulizia corretta e protetta contro i crash di tipo (nativi/NaN)
+    def parse_italian_numeric(dataframe, col_index):
+        if len(dataframe.columns) > col_index:
+            # Estrazione e conversione forzata a stringa rimuovendo gli spazi
+            s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
+            s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
                     
-                    def fix_format(val):
-                        val_str = str(val) # Forzatura stringa locale di sicurezza
-                        if ',' in val_str and '.' in val_str:
-                            return val_str.replace('.', '').replace(',', '.')
-                        elif ',' in val_str:
-                            return val_str.replace(',', '.')
-                        elif '.' in val_str:
-                            return val_str.replace('.', '')
-                        return val_str
+            def fix_format(val):
+                val_str = str(val) # Forzatura stringa locale di sicurezza
+                if ',' in val_str and '.' in val_str:
+                    return val_str.replace('.', '').replace(',', '.')
+                elif ',' in val_str:
+                    return val_str.replace(',', '.')
+                elif '.' in val_str:
+                    return val_str.replace('.', '')
+                return val_str
                     
-                    s = s.apply(fix_format)
-                    return pd.to_numeric(s, errors='coerce').fillna(0.0)
-                return pd.Series(0.0, index=dataframe.index)
+            s = s.apply(fix_format)
+            return pd.to_numeric(s, errors='coerce').fillna(0.0)
+        return pd.Series(0.0, index=dataframe.index)
 
 # -----------------------------------------------------------------------------
 # INTERFACCIA UNICA DI CARICAMENTO NELLA SIDEBAR LATERALE
