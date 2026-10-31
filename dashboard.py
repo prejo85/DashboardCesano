@@ -671,7 +671,7 @@ with tab2:
             with sg2:
                 st.markdown("#### 🏪 Incidenza Canali Logistici di Vendita (Confronto TY vs PY)")
                 
-                # 1. Raggruppamento e calcolo delle somme TY e PY
+                # 1. Raggruppamento e calcolo delle somme TY e PY per canale
                 df_cha_g = match_sel.groupby(c_chan_name).agg({
                     'Sales_TY': 'sum',
                     'Sales_PY': 'sum'
@@ -680,47 +680,61 @@ with tab2:
                 df_cha_g = df_cha_g[(df_cha_g['Sales_TY'] > 0) | (df_cha_g['Sales_PY'] > 0)]
                 
                 if not df_cha_g.empty:
-                    # 2. Riorganizzazione con melt
-                    df_cha_melt = df_cha_g.melt(
-                        id_vars=[c_chan_name],
-                        value_vars=['Sales_TY', 'Sales_PY'],
-                        var_name='Periodo_Raw',
-                        value_name='Fatturato'
-                    )
+                    # 2. Generiamo il grafico usando go.Figure per avere il controllo totale sui colori di TY e PY
+                    fig_chan_history = go.Figure()
                     
-                    df_cha_melt['Periodo'] = df_cha_melt['Periodo_Raw'].map({'Sales_TY': 'TY Corrente', 'Sales_PY': 'PY Precedente'})
+                    # Definiamo la palette di colori originali ordinati per i tuoi canali principali
+                    # Plotly assegnerà questi colori nell'ordine in cui i canali compaiono
+                    palette_originale = px.colors.qualitative.Plotly
                     
-                    # 3. Generazione del grafico: coloriamo in base al canale per mantenere la palette originale
-                    fig_chan_history = px.bar(
-                        df_cha_melt,
-                        x=c_chan_name,
-                        y='Fatturato',
-                        color=c_chan_name, # Mantiene i colori differenziati per singolo canale della prima foto
-                        barmode='group',
-                        template='plotly_dark',
-                        text_auto='.2s',
-                        labels={'Fatturato': 'Sales (€)', c_chan_name: 'Canale Logistico (Channel Detail)'}
-                    )
+                    # Estraiamo la lista dei canali unici presenti nel set filtrato
+                    canali_presenti = df_cha_g[c_chan_name].unique()
                     
-                    # 4. Applichiamo pattern di riempimento alle barre PY per distinguerle a colpo d'occhio mantenendo il colore
-                    fig_chan_history.update_traces(
-                        patch={"pattern_shape": "x"}, # Applica un pattern geometrico a griglia alle barre PY
-                        selector={"name": "PY Precedente"}
-                    )
+                    # Creiamo liste separate per popolare i dati di TY (Colorati) e PY (Grigi)
+                    lista_canali = []
+                    valori_ty = []
+                    valori_py = []
+                    colori_traccia_ty = []
                     
-                    # In alternativa al pattern geometrico, puoi usare l'opacità per sbiadire il PY (scollega le righe sotto se preferisci l'opacità):
-                    # Forziamo la differenziazione visiva modificando l'opacità in base al periodo
-                    for trace in fig_chan_history.data:
-                        # Se la traccia appartiene ai dati del PY (scanditi dal DataFrame sottostante)
-                        # Usiamo la logica di Plotly per differenziare l'opacità tra le barre accoppiate
-                        pass
+                    for i, canale in enumerate(canali_presenti):
+                        row = df_cha_g[df_cha_g[c_chan_name] == canale].iloc[0]
+                        lista_canali.append(canale)
+                        valori_ty.append(row['Sales_TY'])
+                        valori_py.append(row['Sales_PY'])
+                        # Assegna il colore della palette originale a ciclo per evitare errori di indice
+                        colori_traccia_ty.append(palette_originale[i % len(palette_originale)])
                     
-                    # Ottimizzazione estetica finale
+                    # 3. Aggiungiamo la serie dell'Anno Corrente (TY) con i colori originari differenziati
+                    fig_chan_history.add_trace(go.Bar(
+                        x=lista_canali,
+                        y=valori_ty,
+                        name='TY Corrente',
+                        marker_color=colori_traccia_ty, # Applica il colore specifico a ogni singola barra del canale
+                        text=valori_ty,
+                        texttemplate='%{text:.2s}', # Formattazione compatta (es. 13M, 1.6M)
+                        textposition='outside'
+                    ))
+                    
+                    # 4. Aggiungiamo la serie dell'Anno Precedente (PY) colorata interamente di GRIGIO
+                    fig_chan_history.add_trace(go.Bar(
+                        x=lista_canali,
+                        y=valori_py,
+                        name='PY Precedente',
+                        marker_color='#555555', # Grigio scuro uniforme per far risaltare il confronto
+                        text=valori_py,
+                        texttemplate='%{text:.2s}',
+                        textposition='outside'
+                    ))
+                    
+                    # 5. Configurazione del layout (Raggruppato, tema scuro e legenda orizzontale)
                     fig_chan_history.update_layout(
+                        template='plotly_dark',
+                        barmode='group', # Mette le barre TY e PY affiancate
+                        xaxis=dict(title='Canale Logistico (Channel Detail)'),
+                        yaxis=dict(title='Sales (€)'),
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                        showlegend=True
+                        margin=dict(t=50, b=40, l=40, r=40)
                     )
-                    fig_chan_history.update_traces(textposition='outside')
                     
                     st.plotly_chart(fig_chan_history, use_container_width=True)
                 else:
