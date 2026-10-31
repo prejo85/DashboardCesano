@@ -740,91 +740,6 @@ with tab2:
 
                 else:
                     st.caption("Nessun dato storico disponibile sui canali logistici per i filtri selezionati.")
-# =============================================================================
-# COPIA E SOSTITUISCI QUESTO BLOCCO DENTRO IL TUO EXPANDER DEL TAB 2
-# =============================================================================
-            st.markdown("---")
-            with st.expander("🔄 Analisi Shift di Canale: Migrazione da Cash & Carry a Metro da Te", expanded=False):
-                st.markdown(
-                    """
-                    In questa sezione vengono isolati i clienti che mostrano un **cambiamento nel comportamento d'acquisto**, 
-                    riducendo i volumi sul canale fisico (*Cash & Carry*) e incrementandoli sul canale di consegna (*Metro da Te*).
-                    """
-                )
-                
-                # 1. Identifichiamo i nomi esatti dei canali partendo dal dataset 'match_sel' sicuramente esistente
-                canali_unici = match_sel[c_chan_name].dropna().unique()
-                nome_cc = next((c for c in canali_unici if 'cash' in c.lower()), None)
-                nome_mdt = next((c for c in canali_unici if 'metro da te' in c.lower() or 'consegna' in c.lower()), None)
-                
-                if nome_cc and nome_mdt:
-                    # 2. Pivot sui dati dei clienti incrociando Canale e Anno basandoci su 'match_sel'
-                    df_migration = match_sel[match_sel[c_chan_name].isin([nome_cc, nome_mdt])].copy()
-                    
-                    df_pivot = df_migration.groupby([c_cust_name, c_chan_name]).agg({
-                        'Sales_TY': 'sum',
-                        'Sales_PY': 'sum'
-                    }).reset_index()
-                    
-                    # Riorganizziamo le colonne per avere una riga unica per ogni cliente
-                    df_pivot_cc = df_pivot[df_pivot[c_chan_name] == nome_cc].rename(
-                        columns={'Sales_TY': 'CC_TY', 'Sales_PY': 'CC_PY'}
-                    ).drop(columns=[c_chan_name])
-                    
-                    df_pivot_mdt = df_pivot[df_pivot[c_chan_name] == nome_mdt].rename(
-                        columns={'Sales_TY': 'MDT_TY', 'Sales_PY': 'MDT_PY'}
-                    ).drop(columns=[c_chan_name])
-                    
-                    # Uniamo i due set di dati sul codice/ragione sociale del cliente
-                    df_merged_mig = pd.merge(df_pivot_cc, df_pivot_mdt, on=c_cust_name, how='outer').fillna(0.0)
-                    
-                    # 3. Applichiamo le regole algoritmiche di migrazione:
-                    df_merged_mig['Delta_CC'] = df_merged_mig['CC_TY'] - df_merged_mig['CC_PY']
-                    df_merged_mig['Delta_MDT'] = df_merged_mig['MDT_TY'] - df_merged_mig['MDT_PY']
-                    
-                    df_target_migrati = df_merged_mig[
-                        (df_merged_mig['CC_PY'] > 0) & 
-                        (df_merged_mig['MDT_TY'] > 0) & 
-                        (df_merged_mig['Delta_MDT'] > 0)
-                    ].copy()
-                    
-                    # Ordiniamo per entità dello shift su Metro da Te
-                    df_target_migrati = df_target_migrati.sort_values(by='Delta_MDT', ascending=False).reset_index(drop=True)
-                    
-                    if not df_target_migrati.empty:
-                        # 4. Formattazione estetica locale per la visualizzazione nella tabella di Streamlit
-                        df_target_view = df_target_migrati.copy()
-                        
-                        df_target_view['Fatturato CC (PY)'] = df_target_view['CC_PY'].apply(fmt_valuta_decimali)
-                        df_target_view['Fatturato CC (TY)'] = df_target_view['CC_TY'].apply(fmt_valuta_decimali)
-                        df_target_view['Delta Cash & Carry'] = df_target_view['Delta_CC'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
-                        
-                        df_target_view['Fatturato MetroDaTe (PY)'] = df_target_view['MDT_PY'].apply(fmt_valuta_decimali)
-                        df_target_view['Fatturato MetroDaTe (TY)'] = df_target_view['MDT_TY'].apply(fmt_valuta_decimali)
-                        df_target_view['Sviluppo Metro da Te'] = df_target_view['Delta_MDT'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
-                        
-                        colonne_visualizzazione_mig = [
-                            c_cust_name, 
-                            'Fatturato CC (PY)', 'Fatturato CC (TY)', 'Delta Cash & Carry',
-                            'Fatturato MetroDaTe (PY)', 'Fatturato MetroDaTe (TY)', 'Sviluppo Metro da Te'
-                        ]
-                        
-                        st.dataframe(df_target_view[colonne_visualizzazione_mig], use_container_width=True, hide_index=True)
-                        
-                        # Opzione di download rapido per la forza vendita
-                        csv_migrati = df_target_migrati.to_csv(index=False, sep=';').encode('utf-8')
-                        st.download_button(
-                            label="📥 Scarica Elenco Clienti Migrati (CSV)",
-                            data=csv_migrati,
-                            file_name="clienti_migrazione_cc_mdt.csv",
-                            mime="text/csv",
-                            use_container_width=True
-                        )
-                    else:
-                        st.info("ℹ️ Nessun cliente risponde ai criteri di migrazione netta da Cash & Carry a Metro da Te nel set di dati selezionato.")
-                else:
-                    st.warning("⚠️ Impossibile mappare i canali: verifica che i testi 'Cash&Carry' e 'Metro da Te' siano presenti nella colonna Channel Detail.")
-
 
 # =============================================================================
 # PARTE 5.C.2: SEZIONE FILTRI COMMERCIALI SPOSTATI PRIMA DELLA TABELLA
@@ -917,7 +832,96 @@ with tab2:
                 )
                 st.markdown("<br>", unsafe_allow_html=True)
 # =============================================================================
-# PARTE 5.C.4: NUOVA SEZIONE GRAFICA: ISTOGRAMMA AM/OM (TOP 10 CON VALORI) E TORTA GESTIONE
+# PARTE 5.C.4: DETTAGLIO AVANZATO: ANALISI SHIFT DI CANALE SU SELEZIONE COMMERCIALE ATTIVA
+# =============================================================================
+            if not df_final_kpi_table.empty:
+                st.markdown("---")
+                st.markdown("### 🔄 Focus Migrazione Canale: Da Cash & Carry a Metro da Te")
+                
+                # 1. Estrazione dinamica e pulita dei nomi reali dei canali dal dataset commerciale corrente
+                canali_unici = df_final_kpi_table[c_chan_name].dropna().unique()
+                nome_cc = next((c for c in canali_unici if 'cash' in c.lower() or 'carry' in c.lower()), None)
+                nome_mdt = next((c for c in canali_unici if 'metro da te' in c.lower() or 'consegna' in c.lower() or 'delivery' in c.lower()), None)
+                
+                if nome_cc and nome_mdt:
+                    st.markdown(
+                        f"Analisi focalizzata sul portafoglio commerciale attivo per i canali: **{nome_cc}** e **{nome_mdt}**."
+                    )
+                    
+                    # 2. Pivot sui dati dei clienti incrociando Canale e Anno sulla selezione commerciale filtrata
+                    df_migration = df_final_kpi_table[df_final_kpi_table[c_chan_name].isin([nome_cc, nome_mdt])].copy()
+                    
+                    df_pivot = df_migration.groupby([c_cust_name, c_chan_name]).agg({
+                        'Sales_TY': 'sum',
+                        'Sales_PY': 'sum'
+                    }).reset_index()
+                    
+                    # Suddivisione orizzontale dei canali per riga cliente
+                    df_pivot_cc = df_pivot[df_pivot[c_chan_name] == nome_cc].rename(
+                        columns={'Sales_TY': 'CC_TY', 'Sales_PY': 'CC_PY'}
+                    ).drop(columns=[c_chan_name])
+                    
+                    df_pivot_mdt = df_pivot[df_pivot[c_chan_name] == nome_mdt].rename(
+                        columns={'Sales_TY': 'MDT_TY', 'Sales_PY': 'MDT_PY'}
+                    ).drop(columns=[c_chan_name])
+                    
+                    # Outer join per non perdere i clienti che si sono mossi solo su un canale
+                    df_merged_mig = pd.merge(df_pivot_cc, df_pivot_mdt, on=c_cust_name, how='outer').fillna(0.0)
+                    
+                    # 3. Calcolo dei delta assoluti per identificare il travaso
+                    df_merged_mig['Delta_CC'] = df_merged_mig['CC_TY'] - df_merged_mig['CC_PY']
+                    df_merged_mig['Delta_MDT'] = df_merged_mig['MDT_TY'] - df_merged_mig['MDT_PY']
+                    
+                    # Criterio di migrazione: contrazione/stasi su CC e incremento netto sul canale delivery (Metro da Te)
+                    df_target_migrati = df_merged_mig[
+                        (df_merged_mig['CC_PY'] > 0) & 
+                        (df_merged_mig['MDT_TY'] > 0) & 
+                        (df_merged_mig['Delta_MDT'] > 0)
+                    ].copy()
+                    
+                    # Ordinamento per magnitudo dello sviluppo sul canale di consegna
+                    df_target_migrati = df_target_migrati.sort_values(by='Delta_MDT', ascending=False).reset_index(drop=True)
+                    
+                    if not df_target_migrati.empty:
+                        # 4. Formattazione e visualizzazione dati localizzata
+                        df_target_view = df_target_migrati.copy()
+                        
+                        df_target_view['Fatturato CC (PY)'] = df_target_view['CC_PY'].apply(fmt_valuta_decimali)
+                        df_target_view['Fatturato CC (TY)'] = df_target_view['CC_TY'].apply(fmt_valuta_decimali)
+                        df_target_view['Delta Cash & Carry'] = df_target_view['Delta_CC'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
+                        
+                        df_target_view['Fatturato MetroDaTe (PY)'] = df_target_view['MDT_PY'].apply(fmt_valuta_decimali)
+                        df_target_view['Fatturato MetroDaTe (TY)'] = df_target_view['MDT_TY'].apply(fmt_valuta_decimali)
+                        df_target_view['Sviluppo Metro da Te'] = df_target_view['Delta_MDT'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
+                        
+                        colonne_visualizzazione_mig = [
+                            c_cust_name, 
+                            'Fatturato CC (PY)', 'Fatturato CC (TY)', 'Delta Cash & Carry',
+                            'Fatturato MetroDaTe (PY)', 'Fatturato MetroDaTe (TY)', 'Sviluppo Metro da Te'
+                        ]
+                        
+                        st.markdown("👉 *L'elenco sottostante risponde ai filtri attivi di Store, Tipo Gestione, AM/OM e Venditore selezionati.*")
+                        st.dataframe(df_target_view[colonne_visualizzazione_mig], use_container_width=True, hide_index=True)
+                        
+                        # Esportazione rapida dell'elenco mirato
+                        csv_migrati = df_target_migrati.to_csv(index=False, sep=';').encode('utf-8')
+                        st.download_button(
+                            label="📥 Scarica Elenco Clienti Migrati Selezionati (CSV)",
+                            data=csv_migrati,
+                            file_name="clienti_migrati_filtrati.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+                    else:
+                        st.info("ℹ️ Nessun cliente risponde ai criteri di migrazione da Cash & Carry a Metro da Te per la combinazione di filtri commerciali selezionata.")
+                else:
+                    st.warning(
+                        f"⚠️ Canali non rilevati nella selezione corrente. Canali presenti nel filtro attivo: {', '.join(list(canali_unici)) if len(canali_unici)>0 else 'Nessuno'}. "
+                        "Verifica di non aver applicato filtri troppo restrittivi (es. un reparto o un venditore che non lavora su entrambi i canali)."
+                    )
+
+# =============================================================================
+# PARTE 5.C.5: NUOVA SEZIONE GRAFICA: ISTOGRAMMA AM/OM (TOP 10 CON VALORI) E TORTA GESTIONE
 # =============================================================================
                 g_comm1, g_comm2 = st.columns(2)
                 
@@ -1099,3 +1103,4 @@ with tab2:
                     st.info("ℹ️ Nessun cliente corrisponde ai criteri di ricerca digitati.")
             else:
                 st.caption("⚠️ Nessun record risponde alla combinazione di filtri commerciali selezionata.")
+                
