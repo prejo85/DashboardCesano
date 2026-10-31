@@ -65,6 +65,17 @@ def parse_to_numeric_series(dataframe, col_index, is_stock=False):
                 s = s.str.replace(',', '.', regex=False)
         return pd.to_numeric(s, errors='coerce').fillna(0.0)
     return pd.Series(dtype=float, index=dataframe.index)
+
+def parse_generic_numeric(dataframe, col_index):
+    """Pulisce e converte una colonna generica in formato numerico Float."""
+    if len(dataframe.columns) > col_index:
+        s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
+        s = s.str.replace('%', '', regex=False).str.replace('pp', '', regex=False)
+        s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
+        s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+        return pd.to_numeric(s, errors='coerce').fillna(0.0)
+    return pd.Series(0.0, index=dataframe.index)
+
 # -----------------------------------------------------------------------------
 # INTERFACCIA UNICA DI CARICAMENTO NELLA SIDEBAR LATERALE
 # -----------------------------------------------------------------------------
@@ -266,6 +277,145 @@ with tab1:
             box_m5.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
             box_m6.metric(label="🏷️ Share Promo %", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
             box_m7.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
+# =============================================================================
+# PARTE 3.E: MOTORE DI FILTRAGGIO DINAMICO ED ESTRAZIONE CODICI REPARTO TARGET
+# =============================================================================
+            codici_reparti_vista = set()
+            for r in dati_vista.iloc[:, 4].dropna().astype(str).str.strip():
+                match = re.search(r'\d+', r)
+                if match: 
+                    codici_reparti_vista.add(match.group())
+
+# =============================================================================
+# PARTE 3.F: KPI REPORT BMPL ANAGRAFICO (FILE 1 / IMMAGINE)
+# =============================================================================
+            st.markdown("---")
+            st.markdown("#### 📑 Performance Report BMPL Anagrafico")
+            
+            if not df_rep.empty:
+                df_rep_clean = df_rep.copy()
+                df_rep_clean['Cod_Reparto'] = df_rep_clean.iloc[:, 1].astype(str).apply(
+                    lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
+                )
+                
+                # Filtro basato sulla selezione gerarchica attiva
+                df_rep_filtrato = df_rep_clean[df_rep_clean['Cod_Reparto'].isin(codici_reparti_vista)]
+                
+                if not df_rep_filtrato.empty:
+                    rep_sales_ty = parse_generic_numeric(df_rep_filtrato, 3).sum()
+                    rep_sales_py = parse_generic_numeric(df_rep_filtrato, 4).sum()
+                    rep_colli_ty = parse_generic_numeric(df_rep_filtrato, 5).sum()
+                    rep_colli_py = parse_generic_numeric(df_rep_filtrato, 6).sum()
+                    rep_margin_ty = parse_generic_numeric(df_rep_filtrato, 7).sum()
+                    rep_margin_py = parse_generic_numeric(df_rep_filtrato, 8).sum()
+                    
+                    # Calcolo scostamenti e incidenze percentuali
+                    rep_delta_sales = ((rep_sales_ty - rep_sales_py) / rep_sales_py * 100) if rep_sales_py > 0 else 0.0
+                    rep_delta_colli = ((rep_colli_ty - rep_colli_py) / rep_colli_py * 100) if rep_colli_py > 0 else 0.0
+                    
+                    rep_margin_pct_ty = (rep_margin_ty / rep_sales_ty * 100) if rep_sales_ty > 0 else 0.0
+                    rep_margin_pct_py = (rep_margin_py / rep_sales_py * 100) if rep_sales_py > 0 else 0.0
+                    rep_delta_margin_pp = rep_margin_pct_ty - rep_margin_pct_py
+                    
+                    # Layout orizzontale per l'anagrafica BMPL
+                    col_b1, col_b2, col_b3 = st.columns(3)
+                    col_b1.metric("💰 Sales TT (BMPL)", fmt_valuta_interi(rep_sales_ty), f"{rep_delta_sales:+.2f}% vs PY")
+                    col_b2.metric("📦 Volume (Colli BMPL)", f"{int(round(rep_colli_ty)):,}".replace(',', '.'), f"{rep_delta_colli:+.2f}% vs PY")
+                    col_b3.metric("📈 Front Margin % (BMPL)", fmt_percentuale(rep_margin_pct_ty), f"{rep_delta_margin_pp:+.2f} pp vs PY")
+                else:
+                    st.caption("ℹ️ Nessun dato presente nel report BMPL per la selezione corrente.")
+# =============================================================================
+# PARTE 3.G: KPI DETTAGLIO ARTICOLI INDISPENSABILI (FILE 3)
+# =============================================================================
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("#### 🌟 Performance Totale Articoli Indispensabili")
+            
+            if not df_ind.empty:
+                df_ind_clean = df_ind.copy()
+                df_ind_clean['Cod_Reparto'] = df_ind_clean.iloc[:, 2].astype(str).apply(
+                    lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
+                )
+                
+                df_ind_filtrato = df_ind_clean[df_ind_clean['Cod_Reparto'].isin(codici_reparti_vista)].copy()
+                
+                if not df_ind_filtrato.empty:
+                    ind_sales_ty = parse_generic_numeric(df_ind_filtrato, 5).sum()
+                    ind_sales_py = parse_generic_numeric(df_ind_filtrato, 6).sum()
+                    ind_colli_ty = parse_generic_numeric(df_ind_filtrato, 7).sum()
+                    ind_colli_py = parse_generic_numeric(df_ind_filtrato, 8).sum()
+                    
+                    # Aggregazione ponderata corretta del margine assoluto corrente (TY)
+                    df_ind_filtrato['Margin_Pct_TY_Raw'] = parse_generic_numeric(df_ind_filtrato, 9)
+                    df_ind_filtrato['Margin_Val_TY'] = parse_generic_numeric(df_ind_filtrato, 5) * (df_ind_filtrato['Margin_Pct_TY_Raw'] / 100)
+                    
+                    # Ricostruzione del margine storico assoluto (PY) tramite la colonna dello scostamento in pp
+                    df_ind_filtrato['Margin_Delta_pp_Raw'] = parse_generic_numeric(df_ind_filtrato, 10)
+                    df_ind_filtrato['Margin_Pct_PY_Raw'] = df_ind_filtrato['Margin_Pct_TY_Raw'] - df_ind_filtrato['Margin_Delta_pp_Raw']
+                    df_ind_filtrato['Margin_Val_PY'] = parse_generic_numeric(df_ind_filtrato, 6) * (df_ind_filtrato['Margin_Pct_PY_Raw'] / 100)
+                    
+                    ind_margin_ty = df_ind_filtrato['Margin_Val_TY'].sum()
+                    ind_margin_py = df_ind_filtrato['Margin_Val_PY'].sum()
+                    
+                    # Calcolo dei volumi complessivi di Shrinkage (Sfrido monetario netto)
+                    ind_shrink_ty = parse_generic_numeric(df_ind_filtrato, 11).sum()
+                    ind_shrink_py = parse_generic_numeric(df_ind_filtrato, 12).sum()
+                    
+                    # Calcolo finale delle metriche aggregate e dei relativi Delta
+                    ind_delta_sales = ((ind_sales_ty - ind_sales_py) / ind_sales_py * 100) if ind_sales_py > 0 else 0.0
+                    ind_delta_colli = ((ind_colli_ty - ind_colli_py) / ind_colli_py * 100) if ind_colli_py > 0 else 0.0
+                    
+                    ind_margin_pct_ty = (ind_margin_ty / ind_sales_ty * 100) if ind_sales_ty > 0 else 0.0
+                    ind_margin_pct_py = (ind_margin_py / ind_sales_py * 100) if ind_sales_py > 0 else 0.0
+                    ind_delta_margin_pp = ind_margin_pct_ty - ind_margin_pct_py
+                    
+                    ind_shrink_pct_ty = (ind_shrink_ty / ind_sales_ty * 100) if ind_sales_ty > 0 else 0.0
+                    ind_shrink_pct_py = (ind_shrink_py / ind_sales_py * 100) if ind_sales_py > 0 else 0.0
+                    ind_delta_shrink_pp = ind_shrink_pct_ty - ind_shrink_pct_py
+                    
+                    # Disposizione dei 4 riquadri per gli Indispensabili
+                    col_i1, col_i2, col_i3, col_i4 = st.columns(4)
+                    col_i1.metric("💰 Sales TT (Indisp.)", fmt_valuta_interi(ind_sales_ty), f"{ind_delta_sales:+.2f}% vs PY")
+                    col_i2.metric("📦 Volume (Colli Indisp.)", f"{int(round(ind_colli_ty)):,}".replace(',', '.'), f"{ind_delta_colli:+.2f}% vs PY")
+                    col_i3.metric("📈 Front Margin % (Indisp.)", fmt_percentuale(ind_margin_pct_ty), f"{ind_delta_margin_pp:+.2f} pp vs PY")
+                    col_i4.metric("📉 Shrinkage % (Indisp.)", fmt_percentuale(ind_shrink_pct_ty), f"{ind_delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
+# =============================================================================
+# PARTE 3.H: RENDERING TABELLA DETTAGLIO ARTICOLI INDISPENSABILI
+# =============================================================================
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("##### 📋 Elenco Articoli Indispensabili")
+                    
+                    df_tab_view = df_ind_filtrato.copy()
+                    
+                    # Formattazione valute e quantità locali
+                    df_tab_view['Fatturato TY'] = parse_generic_numeric(df_tab_view, 5).apply(fmt_valuta_decimali)
+                    df_tab_view['Fatturato PY'] = parse_generic_numeric(df_tab_view, 6).apply(fmt_valuta_decimali)
+                    df_tab_view['Volume TY (Colli)'] = parse_generic_numeric(df_tab_view, 7).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                    df_tab_view['Volume PY (Colli)'] = parse_generic_numeric(df_tab_view, 8).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                    df_tab_view['Sfrido TY (€)'] = parse_generic_numeric(df_tab_view, 11).apply(fmt_valuta_decimali)
+                    
+                    # Estrazione pulita dei nomi delle colonne native
+                    col_articolo = df_tab_view.columns[4]
+                    col_margine_pct = df_tab_view.columns[9]
+                    col_delta_margine = df_tab_view.columns[10]
+                    
+                    colonne_finali_struttura = [
+                        col_articolo, 'Fatturato TY', 'Fatturato PY', 
+                        'Volume TY (Colli)', 'Volume PY (Colli)', 
+                        col_margine_pct, col_delta_margine, 'Sfrido TY (€)'
+                    ]
+                    
+                    # Filtra e applica intestazioni chiare per l'utente finale
+                    df_tab_view = df_tab_view[colonne_finali_struttura]
+                    df_tab_view.columns = [
+                        'Articolo / Prodotto', 'Fatturato TY', 'Fatturato PY', 
+                        'Volume TY (Colli)', 'Volume PY (Colli)', 'Margine % TY', 
+                        'Delta Margine pp', 'Sfrido Corrente (€)'
+                    ]
+                    
+                    st.dataframe(df_tab_view, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("ℹ️ Nessun articolo indispensabile trovato per questa combinazione di filtri.")
+
 # =============================================================================
 # PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE (HORECA / SCO / TRADER)
 # =============================================================================
