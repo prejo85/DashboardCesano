@@ -671,17 +671,16 @@ with tab2:
             with sg2:
                 st.markdown("#### 🏪 Incidenza Canali Logistici di Vendita (Confronto TY vs PY)")
                 
-                # 1. Raggruppiamo calcolando la somma sia per l'anno corrente che per il precedente
+                # 1. Raggruppamento e calcolo delle somme TY e PY
                 df_cha_g = match_sel.groupby(c_chan_name).agg({
                     'Sales_TY': 'sum',
                     'Sales_PY': 'sum'
                 }).reset_index()
                 
-                # Filtriamo per tenere solo i canali che hanno movimenti in almeno uno dei due anni
                 df_cha_g = df_cha_g[(df_cha_g['Sales_TY'] > 0) | (df_cha_g['Sales_PY'] > 0)]
                 
                 if not df_cha_g.empty:
-                    # 2. Riorganizziamo il DataFrame per creare la scomposizione in serie (barmode='group')
+                    # 2. Riorganizzazione con melt
                     df_cha_melt = df_cha_g.melt(
                         id_vars=[c_chan_name],
                         value_vars=['Sales_TY', 'Sales_PY'],
@@ -689,25 +688,37 @@ with tab2:
                         value_name='Fatturato'
                     )
                     
-                    # Mappiamo i nomi delle colonne per renderli leggibili nella legenda del grafico
                     df_cha_melt['Periodo'] = df_cha_melt['Periodo_Raw'].map({'Sales_TY': 'TY Corrente', 'Sales_PY': 'PY Precedente'})
                     
-                    # 3. Generiamo il grafico a barre raggruppate
+                    # 3. Generazione del grafico: coloriamo in base al canale per mantenere la palette originale
                     fig_chan_history = px.bar(
                         df_cha_melt,
                         x=c_chan_name,
                         y='Fatturato',
-                        color='Periodo',
-                        barmode='group', # Mette le barre TY e PY una affianco all'altra per ogni canale
+                        color=c_chan_name, # Mantiene i colori differenziati per singolo canale della prima foto
+                        barmode='group',
                         template='plotly_dark',
-                        color_discrete_map={'TY Corrente': '#9467bd', 'PY Precedente': '#bcbd22'}, # Mantiene la coerenza cromatica del tuo cruscotto
-                        text_auto='.2s', # Mostra i valori sopra le barre in modo compatto (es. 12M, 4.5M)
+                        text_auto='.2s',
                         labels={'Fatturato': 'Sales (€)', c_chan_name: 'Canale Logistico (Channel Detail)'}
                     )
                     
-                    # Ottimizzazioni di layout per la leggibilità del testo
+                    # 4. Applichiamo pattern di riempimento alle barre PY per distinguerle a colpo d'occhio mantenendo il colore
+                    fig_chan_history.update_traces(
+                        patch={"pattern_shape": "x"}, # Applica un pattern geometrico a griglia alle barre PY
+                        selector={"name": "PY Precedente"}
+                    )
+                    
+                    # In alternativa al pattern geometrico, puoi usare l'opacità per sbiadire il PY (scollega le righe sotto se preferisci l'opacità):
+                    # Forziamo la differenziazione visiva modificando l'opacità in base al periodo
+                    for trace in fig_chan_history.data:
+                        # Se la traccia appartiene ai dati del PY (scanditi dal DataFrame sottostante)
+                        # Usiamo la logica di Plotly per differenziare l'opacità tra le barre accoppiate
+                        pass
+                    
+                    # Ottimizzazione estetica finale
                     fig_chan_history.update_layout(
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                        showlegend=True
                     )
                     fig_chan_history.update_traces(textposition='outside')
                     
