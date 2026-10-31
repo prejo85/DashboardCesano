@@ -49,29 +49,22 @@ def load_and_clean_data(file_reparti, file_ctg, file_sellout, file_indispensabil
     df_men = clean_df(file_mensile)
     return df_rep, df_ctg, df_sel, df_ind, df_men
 
-# -----------------------------------------------------------------------------
-# MOTORE DI PARSING NUMERICO UNIFICATO E PROTETTO
-# -----------------------------------------------------------------------------
-def parse_italian_numeric(dataframe, col_index):
+# Helper per il parsing numerico dei dati commerciali
+def parse_to_numeric_series(dataframe, col_index, is_stock=False):
     if len(dataframe.columns) > col_index:
-        # Estrazione e conversione forzata a stringa rimuovendo gli spazi
         s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
-        s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
-        
-        def fix_format(val):
-            val_str = str(val) # Forzatura stringa di sicurezza contro i NaN nativi
-            if ',' in val_str and '.' in val_str:
-                return val_str.replace('.', '').replace(',', '.')
-            elif ',' in val_str:
-                return val_str.replace(',', '.')
-            elif '.' in val_str:
-                return val_str.replace('.', '')
-            return val_str
-        
-        s = s.apply(fix_format)
+        s = s.replace(['-', '--', 'nan', 'NaN', ''], '0')
+        if is_stock:
+            s = s.str.replace('.', '', regex=False)
+        else:
+            if s.str.count(r'\.').max() > 1:
+                s = s.str.replace('.', '', regex=False)
+            elif s.str.contains(r'\.').any() and s.str.contains(',').any():
+                s = s.str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+            elif s.str.contains(',').any() and not s.str.contains(r'\.').any():
+                s = s.str.replace(',', '.', regex=False)
         return pd.to_numeric(s, errors='coerce').fillna(0.0)
-    return pd.Series(0.0, index=dataframe.index)
-
+    return pd.Series(dtype=float, index=dataframe.index)
 # -----------------------------------------------------------------------------
 # INTERFACCIA UNICA DI CARICAMENTO NELLA SIDEBAR LATERALE
 # -----------------------------------------------------------------------------
@@ -273,125 +266,6 @@ with tab1:
             box_m5.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
             box_m6.metric(label="🏷️ Share Promo %", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
             box_m7.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
-# =============================================================================
-# PARTE 3.D_BIS: BLOCCO DI CALCOLO E METRICHE BMPL & ARTICOLI INDISPENSABILI (CORRETTO)
-# =============================================================================
-            st.markdown("---")
-            
-            # Isolamento stringa numerica del reparto per la mappatura incrociata sui report esterni
-            codice_reparto_selezionato = ""
-            if selected_reparto not in ["--- TOTALE AREA ---", "--- DETTAGLIO RICHIESTO ---"]:
-                match_cod = re.search(r'\d+', str(selected_reparto))
-                if match_cod:
-                    codice_reparto_selezionato = match_cod.group()
-
-            # Funzione di pulizia dedicata per interpretare correttamente il formato italiano (es. 31.368 o 9.549,92)
-            def parse_italian_numeric(dataframe, col_index):
-                if len(dataframe.columns) > col_index:
-                    s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True)
-                    s = s.replace(['-', '--', 'nan', 'NaN', 'None', ''], '0')
-                    
-                    # Se contiene sia punto che virgola (es. 9.549,92) -> togliamo il punto, cambiamo la virgola in punto
-                    # Se contiene solo il punto (es. 31.368 o 4.166) -> è un separatore di migliaia, lo rimuoviamo
-                    def fix_format(val):
-                        if ',' in val and '.' in val:
-                            return val.replace('.', '').replace(',', '.')
-                        elif ',' in val:
-                            return val.replace(',', '.')
-                        elif '.' in val:
-                            # Controlliamo se sembra un decimale puro (es. meno di 3 cifre dopo il punto) 
-                            # ma nei report commerciali BMPL/Indispensabili i numeri interi hanno il punto delle migliaia
-                            return val.replace('.', '')
-                        return val
-                    
-                    s = s.apply(fix_format)
-                    return pd.to_numeric(s, errors='coerce').fillna(0.0)
-                return pd.Series(0.0, index=dataframe.index)
-
-            # Configurazione colonne principali dell'interfaccia split
-            col_bmpl, col_indisp = st.columns(2)
-
-            # -----------------------------------------------------------------
-            # SEZIONE 1: ANALISI PERFORMANCE REPARTI BMPL
-            # -----------------------------------------------------------------
-            with col_bmpl:
-                st.markdown("#### 📈 Target Anagrafico Reparti BMPL")
-                
-                # Filtraggio dinamico del dataset BMPL Reparti
-                df_rep_filtrato = df_rep.copy()
-                df_rep_filtrato['Codice_Reparto'] = df_rep_filtrato.iloc[:, 1].astype(str).apply(lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else '')
-                
-                # Applicazione dei filtri ereditati dai selettori centrali
-                if selected_area != "--- TOTALE STORE ---" and codice_reparto_selezionato:
-                    df_rep_filtrato = df_rep_filtrato[df_rep_filtrato['Codice_Reparto'] == codice_reparto_selezionato]
-                elif selected_area != "--- TOTALE STORE ---":
-                    df_rep_filtrato = df_rep_filtrato[df_rep_filtrato['Codice_Reparto'].isin(codici_target)]
-
-                if not df_rep_filtrato.empty:
-                    # Parsing contabile con la nuova logica italiana corretta
-                    sales_bmpl_ty = parse_italian_numeric(df_rep_filtrato, 3).sum()
-                    sales_bmpl_py = parse_italian_numeric(df_rep_filtrato, 4).sum()
-                    colli_bmpl_ty = parse_italian_numeric(df_rep_filtrato, 5).sum()
-                    colli_bmpl_py = parse_italian_numeric(df_rep_filtrato, 6).sum()
-                    margin_bmpl_ty = parse_italian_numeric(df_rep_filtrato, 7).sum()
-                    margin_bmpl_py = parse_italian_numeric(df_rep_filtrato, 8).sum()
-
-                    # Calcolo degli scostamenti percentuali e assoluti verso l'anno precedente (PY)
-                    delta_sales_bmpl = ((sales_bmpl_ty - sales_bmpl_py) / sales_bmpl_py * 100) if sales_bmpl_py > 0 else 0.0
-                    delta_colli_bmpl = ((colli_bmpl_ty - colli_bmpl_py) / colli_bmpl_py * 100) if colli_bmpl_py > 0 else 0.0
-                    
-                    margin_pct_bmpl_ty = (margin_bmpl_ty / sales_bmpl_ty * 100) if sales_bmpl_ty > 0 else 0.0
-                    margin_pct_bmpl_py = (margin_bmpl_py / sales_bmpl_py * 100) if sales_bmpl_py > 0 else 0.0
-                    delta_margin_bmpl_pp = margin_pct_bmpl_ty - margin_pct_bmpl_py
-
-                    # Rendering orizzontale dei tre tasselli KPI richiesti
-                    cb1, cb2, cb3 = st.columns(3)
-                    cb1.metric(label="💰 Sales BMPL", value=fmt_valuta_interi(sales_bmpl_ty), delta=f"{delta_sales_bmpl:+.2f}% vs PY")
-                    cb2.metric(label="📦 Volumi BMPL (Colli)", value=f"{int(round(colli_bmpl_ty)):,}".replace(',', '.'), delta=f"{delta_colli_bmpl:+.2f}% vs PY")
-                    cb3.metric(label="📈 Margin % BMPL", value=fmt_percentuale(margin_pct_bmpl_ty), delta=f"{delta_margin_bmpl_pp:+.2f} pp vs PY")
-                else:
-                    st.info("ℹ️ Nessun record anagrafico BMPL corrispondente ai filtri selezionati.")
-
-            # -----------------------------------------------------------------
-            # SEZIONE 2: ANALISI PERFORMANCE ARTICOLI INDISPENSABILI
-            # -----------------------------------------------------------------
-            with col_indisp:
-                st.markdown("#### 💎 Monitoraggio Articoli Indispensabili")
-                
-                # Filtraggio dinamico del dataset Indispensabili Articoli
-                df_ind_filtrato = df_ind.copy()
-                df_ind_filtrato['Codice_Reparto'] = df_ind_filtrato.iloc[:, 2].astype(str).apply(lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else '')
-                
-                if selected_area != "--- TOTALE STORE ---" and codice_reparto_selezionato:
-                    df_ind_filtrato = df_ind_filtrato[df_ind_filtrato['Codice_Reparto'] == codice_reparto_selezionato]
-                elif selected_area != "--- TOTALE STORE ---":
-                    df_ind_filtrato = df_ind_filtrato[df_ind_filtrato['Codice_Reparto'].isin(codici_target)]
-
-                if not df_ind_filtrato.empty:
-                    # Parsing e conversione delle colonne specifiche con la nuova logica italiana corretta
-                    sales_ind_ty = parse_italian_numeric(df_ind_filtrato, 5).sum()
-                    sales_ind_py = parse_italian_numeric(df_ind_filtrato, 6).sum()
-                    colli_ind_ty = parse_italian_numeric(df_ind_filtrato, 7).sum()
-                    colli_ind_py = parse_italian_numeric(df_ind_filtrato, 8).sum()
-                    shrink_ind_ty = parse_italian_numeric(df_ind_filtrato, 11).sum()
-                    shrink_ind_py = parse_italian_numeric(df_ind_filtrato, 12).sum()
-
-                    # Calcolo degli scostamenti e delle incidenze percentuali (Sfrido su Sales)
-                    delta_sales_ind = ((sales_ind_ty - sales_ind_py) / sales_ind_py * 100) if sales_ind_py > 0 else 0.0
-                    delta_colli_ind = ((colli_ind_ty - colli_ind_py) / colli_ind_py * 100) if colli_ind_py > 0 else 0.0
-                    
-                    shrink_pct_ind_ty = (shrink_ind_ty / sales_ind_ty * 100) if sales_ind_ty > 0 else 0.0
-                    shrink_pct_ind_py = (shrink_ind_py / sales_ind_py * 100) if sales_ind_py > 0 else 0.0
-                    delta_shrink_ind_pp = shrink_pct_ind_ty - shrink_pct_ind_py
-
-                    # Rendering orizzontale delle tre metriche per gli indispensabili
-                    ci1, ci2, ci3 = st.columns(3)
-                    ci1.metric(label="💰 Sales Indispensabili", value=fmt_valuta_interi(sales_ind_ty), delta=f"{delta_sales_ind:+.2f}% vs PY")
-                    ci2.metric(label="📦 Volumi Indisp. (Colli)", value=f"{int(round(colli_ind_ty)):,}".replace(',', '.'), delta=f"{delta_colli_ind:+.2f}% vs PY")
-                    ci3.metric(label="📉 Shrinkage % Indisp.", value=fmt_percentuale(shrink_pct_ind_ty), delta=f"{delta_shrink_ind_pp:+.2f} pp vs PY", delta_color="inverse")
-                else:
-                    st.info("ℹ️ Nessun articolo indispensabile intercettato per la selezione corrente.")
-
 # =============================================================================
 # PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE (HORECA / SCO / TRADER)
 # =============================================================================
