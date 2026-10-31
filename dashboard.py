@@ -669,13 +669,52 @@ with tab2:
                 st.plotly_chart(px.pie(df_cat_g, values='Sales_TY', names='Mappatura_VP', template='plotly_dark', hole=0.3, color_discrete_sequence=px.colors.qualitative.Pastel2), use_container_width=True)
                 
             with sg2:
-                st.markdown("#### 🏪 Incidenza Canali Logistici di Vendita (Channel Detail)")
-                df_cha_g = match_sel.groupby(c_chan_name)['Sales_TY'].sum().reset_index()
-                df_cha_g = df_cha_g[df_cha_g['Sales_TY'] > 0]
-                st.plotly_chart(px.bar(df_cha_g, x=c_chan_name, y='Sales_TY', template='plotly_dark', color=c_chan_name, color_discrete_sequence=px.colors.qualitative.Safe), use_container_width=True)
+                st.markdown("#### 🏪 Incidenza Canali Logistici di Vendita (Confronto TY vs PY)")
+                
+                # 1. Raggruppiamo calcolando la somma sia per l'anno corrente che per il precedente
+                df_cha_g = match_sel.groupby(c_chan_name).agg({
+                    'Sales_TY': 'sum',
+                    'Sales_PY': 'sum'
+                }).reset_index()
+                
+                # Filtriamo per tenere solo i canali che hanno movimenti in almeno uno dei due anni
+                df_cha_g = df_cha_g[(df_cha_g['Sales_TY'] > 0) | (df_cha_g['Sales_PY'] > 0)]
+                
+                if not df_cha_g.empty:
+                    # 2. Riorganizziamo il DataFrame per creare la scomposizione in serie (barmode='group')
+                    df_cha_melt = df_cha_g.melt(
+                        id_vars=[c_chan_name],
+                        value_vars=['Sales_TY', 'Sales_PY'],
+                        var_name='Periodo_Raw',
+                        value_name='Fatturato'
+                    )
+                    
+                    # Mappiamo i nomi delle colonne per renderli leggibili nella legenda del grafico
+                    df_cha_melt['Periodo'] = df_cha_melt['Periodo_Raw'].map({'Sales_TY': 'TY Corrente', 'Sales_PY': 'PY Precedente'})
+                    
+                    # 3. Generiamo il grafico a barre raggruppate
+                    fig_chan_history = px.bar(
+                        df_cha_melt,
+                        x=c_chan_name,
+                        y='Fatturato',
+                        color='Periodo',
+                        barmode='group', # Mette le barre TY e PY una affianco all'altra per ogni canale
+                        template='plotly_dark',
+                        color_discrete_map={'TY Corrente': '#9467bd', 'PY Precedente': '#bcbd22'}, # Mantiene la coerenza cromatica del tuo cruscotto
+                        text_auto='.2s', # Mostra i valori sopra le barre in modo compatto (es. 12M, 4.5M)
+                        labels={'Fatturato': 'Sales (€)', c_chan_name: 'Canale Logistico (Channel Detail)'}
+                    )
+                    
+                    # Ottimizzazioni di layout per la leggibilità del testo
+                    fig_chan_history.update_layout(
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+                    fig_chan_history.update_traces(textposition='outside')
+                    
+                    st.plotly_chart(fig_chan_history, use_container_width=True)
+                else:
+                    st.caption("Nessun dato storico disponibile sui canali logistici per i filtri selezionati.")
 
-            st.markdown("<br><br>---", unsafe_allow_html=True)
-            st.markdown("### 🏆 Classifica Analitica Clienti con Dettaglio Commerciale")
 # =============================================================================
 # PARTE 5.C.2: SEZIONE FILTRI COMMERCIALI SPOSTATI PRIMA DELLA TABELLA
 # =============================================================================
