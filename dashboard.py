@@ -838,7 +838,7 @@ with tab2:
                 st.markdown("---")
                 st.markdown("### 🔄 Focus Migrazione Canale: Da Cash & Carry a Metro da Te")
                 
-                # 1. Estrazione dinamica e pulita dei nomi reali dei canali dal dataset commerciale corrente
+                # 1. Estrazione dinamica dei nomi reali dei canali dal dataset commerciale corrente
                 canali_unici = df_final_kpi_table[c_chan_name].dropna().unique()
                 nome_cc = next((c for c in canali_unici if 'cash' in c.lower() or 'carry' in c.lower()), None)
                 nome_mdt = next((c for c in canali_unici if 'metro da te' in c.lower() or 'consegna' in c.lower() or 'delivery' in c.lower()), None)
@@ -879,29 +879,42 @@ with tab2:
                         (df_merged_mig['Delta_MDT'] > 0)
                     ].copy()
                     
-                    # Ordinamento per magnitudo dello sviluppo sul canale di consegna
+                    # Ordinamento iniziale nativo per lo sviluppo sul canale di consegna
                     df_target_migrati = df_target_migrati.sort_values(by='Delta_MDT', ascending=False).reset_index(drop=True)
                     
                     if not df_target_migrati.empty:
-                        # 4. Formattazione e visualizzazione dati localizzata
-                        df_target_view = df_target_migrati.copy()
+                        # 4. Manteniamo i numeri puri nel DataFrame per garantire l'ordinamento corretto delle colonne
+                        df_target_view = df_target_migrati[[
+                            c_cust_name, 'CC_PY', 'CC_TY', 'Delta_CC', 'MDT_PY', 'MDT_TY', 'Delta_MDT'
+                        ]].copy()
                         
-                        df_target_view['Fatturato CC (PY)'] = df_target_view['CC_PY'].apply(fmt_valuta_decimali)
-                        df_target_view['Fatturato CC (TY)'] = df_target_view['CC_TY'].apply(fmt_valuta_decimali)
-                        df_target_view['Delta Cash & Carry'] = df_target_view['Delta_CC'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
-                        
-                        df_target_view['Fatturato MetroDaTe (PY)'] = df_target_view['MDT_PY'].apply(fmt_valuta_decimali)
-                        df_target_view['Fatturato MetroDaTe (TY)'] = df_target_view['MDT_TY'].apply(fmt_valuta_decimali)
-                        df_target_view['Sviluppo Metro da Te'] = df_target_view['Delta_MDT'].apply(lambda x: f"+{fmt_valuta_decimali(x)}" if x > 0 else fmt_valuta_decimali(x))
-                        
-                        colonne_visualizzazione_mig = [
-                            c_cust_name, 
-                            'Fatturato CC (PY)', 'Fatturato CC (TY)', 'Delta Cash & Carry',
-                            'Fatturato MetroDaTe (PY)', 'Fatturato MetroDaTe (TY)', 'Sviluppo Metro da Te'
+                        # Rinominiamo le colonne con i titoli definitivi della tabella
+                        df_target_view.columns = [
+                            'Ragione Sociale / Cliente', 
+                            'Fatturato CC (PY)', 
+                            'Fatturato CC (TY)', 
+                            'Delta Cash & Carry',
+                            'Fatturato MetroDaTe (PY)', 
+                            'Fatturato MetroDaTe (TY)', 
+                            'Sviluppo Metro da Te'
                         ]
                         
-                        st.markdown("👉 *L'elenco sottostante risponde ai filtri attivi di Store, Tipo Gestione, AM/OM e Venditore selezionati.*")
-                        st.dataframe(df_target_view[colonne_visualizzazione_mig], use_container_width=True, hide_index=True)
+                        st.markdown("👉 *Clicca sulle intestazioni delle colonne per ordinare i dati numerici in modo crescente o decrescente.*")
+                        
+                        # 5. Configurazione del formato Valuta tramite Column Config di Streamlit (Risolve l'ordinamento)
+                        st.dataframe(
+                            df_target_view,
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                'Fatturato CC (PY)': st.column_config.NumberColumn(format="€ %,.2f"),
+                                'Fatturato CC (TY)': st.column_config.NumberColumn(format="€ %,.2f"),
+                                'Delta Cash & Carry': st.column_config.NumberColumn(format="€ %,.2f"),
+                                'Fatturato MetroDaTe (PY)': st.column_config.NumberColumn(format="€ %,.2f"),
+                                'Fatturato MetroDaTe (TY)': st.column_config.NumberColumn(format="€ %,.2f"),
+                                'Sviluppo Metro da Te': st.column_config.NumberColumn(format="€ %,.2f")
+                            }
+                        )
                         
                         # Esportazione rapida dell'elenco mirato
                         csv_migrati = df_target_migrati.to_csv(index=False, sep=';').encode('utf-8')
@@ -919,7 +932,6 @@ with tab2:
                         f"⚠️ Canali non rilevati nella selezione corrente. Canali presenti nel filtro attivo: {', '.join(list(canali_unici)) if len(canali_unici)>0 else 'Nessuno'}. "
                         "Verifica di non aver applicato filtri troppo restrittivi (es. un reparto o un venditore che non lavora su entrambi i canali)."
                     )
-
 # =============================================================================
 # PARTE 5.C.5: NUOVA SEZIONE GRAFICA: ISTOGRAMMA AM/OM (TOP 10 CON VALORI) E TORTA GESTIONE
 # =============================================================================
