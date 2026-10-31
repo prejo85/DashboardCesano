@@ -741,7 +741,7 @@ with tab2:
                 else:
                     st.caption("Nessun dato storico disponibile sui canali logistici per i filtri selezionati.")
 # =============================================================================
-# NUOVA SEZIONE: ANALISI MIGRATION / SPOSTAMENTO CANALE DI VENDITA
+# COPIA E SOSTITUISCI QUESTO BLOCCO DENTRO IL TUO EXPANDER DEL TAB 2
 # =============================================================================
             st.markdown("---")
             with st.expander("🔄 Analisi Shift di Canale: Migrazione da Cash & Carry a Metro da Te", expanded=False):
@@ -752,14 +752,14 @@ with tab2:
                     """
                 )
                 
-                # 1. Identifichiamo i nomi esatti dei canali partendo dai dati filtrati
-                canali_unici = df_final_kpi_table[c_chan_name].dropna().unique()
+                # 1. Identifichiamo i nomi esatti dei canali partendo dal dataset 'match_sel' sicuramente esistente
+                canali_unici = match_sel[c_chan_name].dropna().unique()
                 nome_cc = next((c for c in canali_unici if 'cash' in c.lower()), None)
                 nome_mdt = next((c for c in canali_unici if 'metro da te' in c.lower() or 'consegna' in c.lower()), None)
                 
                 if nome_cc and nome_mdt:
-                    # 2. Pivot sui dati dei clienti incrociando Canale e Anno
-                    df_migration = df_final_kpi_table[df_final_kpi_table[c_chan_name].isin([nome_cc, nome_mdt])].copy()
+                    # 2. Pivot sui dati dei clienti incrociando Canale e Anno basandoci su 'match_sel'
+                    df_migration = match_sel[match_sel[c_chan_name].isin([nome_cc, nome_mdt])].copy()
                     
                     df_pivot = df_migration.groupby([c_cust_name, c_chan_name]).agg({
                         'Sales_TY': 'sum',
@@ -779,9 +779,6 @@ with tab2:
                     df_merged_mig = pd.merge(df_pivot_cc, df_pivot_mdt, on=c_cust_name, how='outer').fillna(0.0)
                     
                     # 3. Applichiamo le regole algoritmiche di migrazione:
-                    # - Il cliente deve aver acquistato in Cash&Carry l'anno scorso (CC_PY > 0)
-                    # - Il cliente deve aver acquistato su Metro da Te quest'anno (MDT_TY > 0)
-                    # - Il fatturato su Metro da Te deve essere cresciuto (Delta MDT > 0)
                     df_merged_mig['Delta_CC'] = df_merged_mig['CC_TY'] - df_merged_mig['CC_PY']
                     df_merged_mig['Delta_MDT'] = df_merged_mig['MDT_TY'] - df_merged_mig['MDT_PY']
                     
@@ -791,7 +788,7 @@ with tab2:
                         (df_merged_mig['Delta_MDT'] > 0)
                     ].copy()
                     
-                    # Ordiniamo per entità dello shift su Metro da Te (i casi più rilevanti in alto)
+                    # Ordiniamo per entità dello shift su Metro da Te
                     df_target_migrati = df_target_migrati.sort_values(by='Delta_MDT', ascending=False).reset_index(drop=True)
                     
                     if not df_target_migrati.empty:
