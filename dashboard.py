@@ -737,6 +737,9 @@ with tab2:
                     )
                     
                     st.plotly_chart(fig_chan_history, use_container_width=True)
+
+                else:
+                    st.caption("Nessun dato storico disponibile sui canali logistici per i filtri selezionati.")
 # =============================================================================
 # NUOVA SEZIONE: ANALISI MIGRATION / SPOSTAMENTO CANALE DI VENDITA
 # =============================================================================
@@ -825,8 +828,6 @@ with tab2:
                 else:
                     st.warning("⚠️ Impossibile mappare i canali: verifica che i testi 'Cash&Carry' e 'Metro da Te' siano presenti nella colonna Channel Detail.")
 
-                else:
-                    st.caption("Nessun dato storico disponibile sui canali logistici per i filtri selezionati.")
 
 # =============================================================================
 # PARTE 5.C.2: SEZIONE FILTRI COMMERCIALI SPOSTATI PRIMA DELLA TABELLA
