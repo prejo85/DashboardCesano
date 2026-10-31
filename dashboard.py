@@ -433,13 +433,13 @@ with tab1:
                         lambda x: 'HORECA' if 'HORECA' in x else ('SCO' if 'SCO' in x else ('TRADER' if 'TRADER' in x else 'ALTRO'))
                     )
                     
-                df_m_g = match_ctg.groupby('CTG').agg({'Sales_TY':'sum', 'Visits_TY':'sum'}).reset_index()
+                df_m_g = match_ctg.groupby('Macro_Category_Clean').agg({'Sales_TY':'sum', 'Visits_TY':'sum'}).reset_index()
                 
                 mc1, mc2 = st.columns(2)
                 with mc1: 
-                    st.plotly_chart(px.bar(df_m_g, x='CTG', y='Sales_TY', title="Dettaglio Fatturato per Categoria:", template='plotly_dark', color='CTG'), use_container_width=True)
+                    st.plotly_chart(px.bar(df_m_g, x='Macro_Category_Clean', y='Sales_TY', title="Dettaglio Fatturato per Categoria:", template='plotly_dark', color='Macro_Category_Clean'), use_container_width=True)
                 with mc2: 
-                    st.plotly_chart(px.pie(df_m_g, values='Visits_TY', names='CTG', title="Share % Visite Categoria:", template='plotly_dark', hole=0.4), use_container_width=True)
+                    st.plotly_chart(px.pie(df_m_g, values='Visits_TY', names='Macro_Category_Clean', title="Share % Visite Categoria:", template='plotly_dark', hole=0.4), use_container_width=True)
 # =============================================================================
 # PARTE 4.B: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO HORECA
 # =============================================================================
