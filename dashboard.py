@@ -267,6 +267,129 @@ with tab1:
             box_m6.metric(label="🏷️ Share Promo %", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
             box_m7.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
 # =============================================================================
+# PARTE 3.D_BIS: BLOCCO DI CALCOLO E METRICHE BMPL & ARTICOLI INDISPENSABILI
+# =============================================================================
+            st.markdown("---")
+            
+            # Isolamento stringa numerica del reparto per la mappatura incrociata sui report esterni
+            codice_reparto_selezionato = ""
+            if selected_reparto not in ["--- TOTALE AREA ---", "--- DETTAGLIO RICHIESTO ---"]:
+                match_cod = re.search(r'\d+', str(selected_reparto))
+                if match_cod:
+                    codice_reparto_selezionato = match_cod.group()
+
+            # Configurazione colonne principali dell'interfaccia split
+            col_bmpl, col_indisp = st.columns(2)
+
+            # -----------------------------------------------------------------
+            # SEZIONE 1: ANALISI PERFORMANCE REPARTI BMPL
+            # -----------------------------------------------------------------
+            with col_bmpl:
+                st.markdown("#### 📈 Target Anagrafico Reparti BMPL")
+                
+                # Filtraggio dinamico del dataset BMPL Reparti
+                df_rep_filtrato = df_rep.copy()
+                df_rep_filtrato['Codice_Reparto'] = df_rep_filtrato.iloc[:, 1].astype(str).apply(lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else '')
+                
+                # Applicazione dei filtri ereditati dai selettori centrali
+                if selected_area != "--- TOTALE STORE ---" and codice_reparto_selezionato:
+                    df_rep_filtrato = df_rep_filtrato[df_rep_filtrato['Codice_Reparto'] == codice_reparto_selezionato]
+                elif selected_area != "--- TOTALE STORE ---":
+                    df_rep_filtrato = df_rep_filtrato[df_rep_filtrato['Codice_Reparto'].isin(codici_target)]
+
+                if not df_rep_filtrato.empty:
+                    # Parsing contabile con engine centralizzato
+                    sales_bmpl_ty = parse_to_numeric_series(df_rep_filtrato, 3).sum()
+                    sales_bmpl_py = parse_to_numeric_series(df_rep_filtrato, 4).sum()
+                    colli_bmpl_ty = parse_to_numeric_series(df_rep_filtrato, 5).sum()
+                    colli_bmpl_py = parse_to_numeric_series(df_rep_filtrato, 6).sum()
+                    margin_bmpl_ty = parse_to_numeric_series(df_rep_filtrato, 7).sum()
+                    margin_bmpl_py = parse_to_numeric_series(df_rep_filtrato, 8).sum()
+
+                    # Calcolo degli scostamenti percentuali e assoluti verso l'anno precedente (PY)
+                    delta_sales_bmpl = ((sales_bmpl_ty - sales_bmpl_py) / sales_bmpl_py * 100) if sales_bmpl_py > 0 else 0.0
+                    delta_colli_bmpl = ((colli_bmpl_ty - colli_bmpl_py) / colli_bmpl_py * 100) if colli_bmpl_py > 0 else 0.0
+                    
+                    margin_pct_bmpl_ty = (margin_bmpl_ty / sales_bmpl_ty * 100) if sales_bmpl_ty > 0 else 0.0
+                    margin_pct_bmpl_py = (margin_bmpl_py / sales_bmpl_py * 100) if sales_bmpl_py > 0 else 0.0
+                    delta_margin_bmpl_pp = margin_pct_bmpl_ty - margin_pct_bmpl_py
+
+                    # Rendering orizzontale dei tre tasselli KPI richiesti
+                    cb1, cb2, cb3 = st.columns(3)
+                    cb1.metric(label="💰 Sales BMPL", value=fmt_valuta_interi(sales_bmpl_ty), delta=f"{delta_sales_bmpl:+.2f}% vs PY")
+                    cb2.metric(label="📦 Volumi BMPL (Colli)", value=f"{int(round(colli_bmpl_ty)):,}".replace(',', '.'), delta=f"{delta_colli_bmpl:+.2f}% vs PY")
+                    cb3.metric(label="📈 Margin % BMPL", value=fmt_percentuale(margin_pct_bmpl_ty), delta=f"{delta_margin_bmpl_pp:+.2f} pp vs PY")
+                else:
+                    st.info("ℹ️ Nessun record anagrafico BMPL corrispondente ai filtri selezionati.")
+
+            # -----------------------------------------------------------------
+            # SEZIONE 2: ANALISI PERFORMANCE ARTICOLI INDISPENSABILI
+            # -----------------------------------------------------------------
+            with col_indisp:
+                st.markdown("#### 💎 Monitoraggio Articoli Indispensabili")
+                
+                # Filtraggio dinamico del dataset Indispensabili Articoli
+                df_ind_filtrato = df_ind.copy()
+                df_ind_filtrato['Codice_Reparto'] = df_ind_filtrato.iloc[:, 2].astype(str).apply(lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else '')
+                
+                if selected_area != "--- TOTALE STORE ---" and codice_reparto_selezionato:
+                    df_ind_filtrato = df_ind_filtrato[df_ind_filtrato['Codice_Reparto'] == codice_reparto_selezionato]
+                elif selected_area != "--- TOTALE STORE ---":
+                    df_ind_filtrato = df_ind_filtrato[df_ind_filtrato['Codice_Reparto'].isin(codici_target)]
+
+                if not df_ind_filtrato.empty:
+                    # Parsing e conversione delle colonne specifiche del report Indispensabili
+                    sales_ind_ty = parse_to_numeric_series(df_ind_filtrato, 5).sum()
+                    sales_ind_py = parse_to_numeric_series(df_ind_filtrato, 6).sum()
+                    colli_ind_ty = parse_to_numeric_series(df_ind_filtrato, 7).sum()
+                    colli_ind_py = parse_to_numeric_series(df_ind_filtrato, 8).sum()
+                    shrink_ind_ty = parse_to_numeric_series(df_ind_filtrato, 11).sum()
+                    shrink_ind_py = parse_to_numeric_series(df_ind_filtrato, 12).sum()
+
+                    # Calcolo degli scostamenti e delle incidenze percentuali (Sfrido su Sales)
+                    delta_sales_ind = ((sales_ind_ty - sales_ind_py) / sales_ind_py * 100) if sales_ind_py > 0 else 0.0
+                    delta_colli_ind = ((colli_ind_ty - colli_ind_py) / colli_ind_py * 100) if colli_ind_py > 0 else 0.0
+                    
+                    shrink_pct_ind_ty = (shrink_ind_ty / sales_ind_ty * 100) if sales_ind_ty > 0 else 0.0
+                    shrink_pct_ind_py = (shrink_ind_py / sales_ind_py * 100) if sales_ind_py > 0 else 0.0
+                    delta_shrink_ind_pp = shrink_pct_ind_ty - shrink_pct_ind_py
+
+                    # Rendering orizzontale delle tre metriche per gli indispensabili
+                    ci1, ci2, ci3 = st.columns(3)
+                    ci1.metric(label="💰 Sales Indispensabili", value=fmt_valuta_interi(sales_ind_ty), delta=f"{delta_sales_ind:+.2f}% vs PY")
+                    ci2.metric(label="📦 Volumi Indisp. (Colli)", value=f"{int(round(colli_ind_ty)):,}".replace(',', '.'), delta=f"{delta_colli_ind:+.2f}% vs PY")
+                    ci3.metric(label="📉 Shrinkage % Indisp.", value=fmt_percentuale(shrink_pct_ind_ty), delta=f"{delta_shrink_ind_pp:+.2f} pp vs PY", delta_color="inverse")
+                else:
+                    st.info("ℹ️ Nessun articolo indispensabile intercettato per la selezione corrente.")
+
+            # -----------------------------------------------------------------
+            # SEZIONE 3: TABELLA ANALITICA DI DETTAGLIO ARTICOLI INDISPENSABILI
+            # -----------------------------------------------------------------
+            if not df_ind_filtrato.empty:
+                st.markdown("##### 📋 Elenco di Assortimento degli Articoli Indispensabili Filtrati")
+                
+                # Creazione di una copia di visualizzazione pulita per l'utente finale
+                df_ind_view = df_ind_filtrato.copy()
+                
+                # Assegnazione di intestazioni di colonna parlate ed eleganti
+                df_ind_view.columns = [
+                    'F/NF', 'Area di Vendita', 'Reparto', 'Categoria G2', 'Articolo / Anagrafica',
+                    'Fatturato TY Corrente', 'Fatturato PY', 'Volume TY (Colli)', 'Volume PY (Colli)',
+                    'Margine Front TY', 'Delta Margine pp', 'Sfrido € TY', 'Sfrido € PY', 'Codice_Reparto'
+                ]
+                
+                colonne_tabella_indisp = [
+                    'Articolo / Anagrafica', 'Categoria G2', 'Fatturato TY Corrente', 
+                    'Volume TY (Colli)', 'Margine Front TY', 'Delta Margine pp', 'Sfrido € TY'
+                ]
+                
+                st.dataframe(
+                    df_ind_view[colonne_tabella_indisp], 
+                    use_container_width=True, 
+                    hide_index=True
+                )
+
+# =============================================================================
 # PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE (HORECA / SCO / TRADER)
 # =============================================================================
             st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
