@@ -664,13 +664,13 @@ with tab2:
 # =============================================================================
             sg1, sg2 = st.columns(2)
             with sg1:
-                st.markdown("#### 🎯 Share attivazione Accordi Commerciali")
+                st.markdown("#### 🎯 Share% attivazione Accordi Commerciali :")
                 df_cat_g = match_sel.groupby('Mappatura_VP')['Sales_TY'].sum().reset_index()
                 df_cat_g = df_cat_g[df_cat_g['Sales_TY'] > 0]
                 st.plotly_chart(px.pie(df_cat_g, values='Sales_TY', names='Mappatura_VP', template='plotly_dark', hole=0.3, color_discrete_sequence=px.colors.qualitative.Pastel2), use_container_width=True)
                 
             with sg2:
-                st.markdown("#### 🏪 Fatturato Canali di Vendita ")
+                st.markdown("#### 🏪 Fatturato Canali di Vendita :")
                 
                 # 1. Raggruppamento e calcolo delle somme TY e PY per canale
                 df_cha_g = match_sel.groupby(c_chan_name).agg({
@@ -778,7 +778,7 @@ with tab2:
             with col_v2:
                 opzioni_venditori = ["--- TUTTI I VENDITORI ASSOCIATI ---"] + sorted(list(df_venditori_disponibili[c_venditore].unique()))
                 selected_venditore = st.selectbox(
-                    "2. Filtraggio per Venditore Associato (Colonna I):", 
+                    "2. Filtraggio per Venditore Associato :", 
                     opzioni_venditori, 
                     key=f"sb_venditore_t2_{st.session_state.reset_tab2}"
                 )
@@ -813,11 +813,11 @@ with tab2:
                     </style>
                 """, unsafe_allow_html=True)
 
-                st.markdown("##### 📊 Sintesi Performance Selezione Commerciale Corrente")
+                st.markdown("##### 📊 Sintesi Performance Selezione Commerciale AM/OM - Venditore :")
                 c_kpi1, c_kpi2, c_kpi3 = st.columns(3)
                 
                 c_kpi1.metric(
-                    label="💰 Sales (Fatturato TY)", 
+                    label="💰 Sales (Fatturato)", 
                     value=fmt_valuta_interi(kpi_sales_ty), 
                     delta=f"{delta_sales_kpi:+.2f}% vs PY"
                 )
@@ -837,7 +837,7 @@ with tab2:
 # =============================================================================
             if not df_final_kpi_table.empty:
                 st.markdown("---")
-                st.markdown("### 🔄 Focus Migrazione Canale: Da Cash & Carry a Metro da Te")
+                st.markdown("### 🔄 Focus Migrazione Canale 🔄:Flusso da Cash & Carry a Metro da Te")
                 
                 # 1. Estrazione dinamica dei nomi reali dei canali dal dataset commerciale corrente
                 canali_unici = df_final_kpi_table[c_chan_name].dropna().unique()
@@ -939,7 +939,7 @@ with tab2:
                 g_comm1, g_comm2 = st.columns(2)
                 
                 with g_comm1:
-                    st.markdown("##### 📊 Top 10 Sales per Responsabile AM / OM")
+                    st.markdown("##### 📊 Top 10 Sales per Responsabile AM / OM :")
                     # Raggruppamento e selezione rigorosa dei primi 10 nominativi per fatturato decrescente
                     df_sales_amom = df_final_kpi_table.groupby(c_am_om)['Sales_TY'].sum().reset_index()
                     df_sales_amom = df_sales_amom[df_sales_amom['Sales_TY'] > 0]
@@ -962,7 +962,7 @@ with tab2:
                     st.plotly_chart(fig_bar_amom, use_container_width=True)
                     
                 with g_comm2:
-                    st.markdown("##### 🍕 Mix Fatturato per Modello Gestione Commerciale")
+                    st.markdown("##### 📊 Share% Fatturato per tipologia di Gestione Commerciale :")
                     df_sales_gest = df_final_kpi_table.groupby(c_tipo_gestione)['Sales_TY'].sum().reset_index()
                     df_sales_gest = df_sales_gest[df_sales_gest['Sales_TY'] > 0]
                     fig_pie_gest = px.pie(
@@ -975,8 +975,9 @@ with tab2:
                     )
                     st.plotly_chart(fig_pie_gest, use_container_width=True)
                 st.markdown("<br>", unsafe_allow_html=True)
+                
 # =============================================================================
-# PARTE 5.C.5: RENDERING TABELLA, SELEZIONE E DETTAGLIO GRAFICO CON BENCHMARK PY (RISOLTO)
+# PARTE 5.C.5: RENDERING TABELLA, SELEZIONE E DETTAGLIO GRAFICO CON BENCHMARK PY 
 # =============================================================================
             if not df_final_kpi_table.empty:
                 # 1. Calcolo del dataset aggregato base per anagrafica
@@ -989,10 +990,10 @@ with tab2:
                 df_c_g = df_c_g.sort_values(by='Sales_TY', ascending=False).reset_index(drop=True)
                 
                 # 2. INSERIMENTO DELLA RICERCA RAPIDA TESTUALE PRIMA DELLA TABELLA
-                st.markdown("##### 🔍 Ricerca Rapida Anagrafica Clienti")
+                st.markdown("##### 🔍 Ricerca Rapida Anagrafica Clienti 🔍:")
                 search_query = st.text_input(
                     "Digita il Codice Cliente o la Ragione Sociale per filtrare la tabella sottostante:",
-                    placeholder="Es. 11-711160 oppure LA PAELLA...",
+                    placeholder="Es. 11-711212 oppure SAN CARLO...",
                     key=f"search_input_t2_{st.session_state.reset_tab2}"
                 ).strip().lower()
                 
@@ -1039,7 +1040,7 @@ with tab2:
                         col_det1, col_det2 = st.columns(2)
                         
                         with col_det1:
-                            st.markdown("##### 📦 Distribuzione Fatturato per Reparto (TY vs PY)")
+                            st.markdown("##### 📦 Distribuzione Fatturato per Reparto (vs PY) :")
                             df_rep_dettaglio = df_singolo_cliente.groupby(c_rep_name).agg({
                                 'Sales_TY': 'sum',
                                 'Sales_PY': 'sum'
@@ -1076,7 +1077,7 @@ with tab2:
                                 st.caption("Nessun dato storico commerciale sui reparti per il cliente corrente.")
                                 
                         with col_det2:
-                            st.markdown("##### 🏪 Confronto Acquisti per Canale Logistico (TY vs PY)")
+                            st.markdown("##### 🏪 Confronto Acquisti per Canale Logistico (vs PY) :")
                             df_chan_dettaglio = df_singolo_cliente.groupby(c_chan_name).agg({
                                 'Sales_TY': 'sum',
                                 'Sales_PY': 'sum'
