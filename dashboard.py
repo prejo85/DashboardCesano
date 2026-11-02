@@ -1048,6 +1048,9 @@ with tab2:
                     df_merged_mig['Fatturato FSD'] = df_merged_mig['Fatturato_FSD_TY']
                     df_merged_mig['Delta FSD vsPY'] = df_merged_mig['Fatturato_FSD_TY'] - df_merged_mig['Fatturato_FSD_PY']
                     
+                    # CORREZIONE: Somma algebrica dei due delta per calcolare il travaso netto complessivo
+                    df_merged_mig['Delta tra C&C e FSD'] = df_merged_mig['Delta FSD vsPY'] + df_merged_mig['Delta C&C vsPY']
+                    
                     # Quinta colonna riallineata: Delta tra lo spostamento dei due canali
                     df_merged_mig['Delta tra C&C e FSD'] = df_merged_mig['Delta FSD vsPY'] - df_merged_mig['Delta C&C vsPY']
                     
