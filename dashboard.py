@@ -516,91 +516,73 @@ with tab1:
                     st.dataframe(df_tab_view, use_container_width=True, hide_index=True)
                 else:
                     st.caption("ℹ️ Nessun articolo indispensabile trovato per questa combinazione di filtri.")
+            else:
+                st.caption("ℹ️ Carica il report degli indispensabili per attivare la vista.")
+
 # =============================================================================
-# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - FIX COMPLETO
+# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - INDIPENDENTE
 # =============================================================================
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown("#### 📈 Performance Report Analisi Articoli")
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("#### 📈 Performance Report Analisi Articoli")
+            
+            if not df_add.empty:
+                df_add_clean = df_add.copy()
+                
+                # Associazione dinamica della colonna Reparto
+                c_rep_add_name = next((c for c in df_add_clean.columns if 'reparto' in c.lower() or 'department' in c.lower() or 'rep' in c.lower()), df_add_clean.columns[2])
+                
+                df_add_clean['Cod_Reparto_Add'] = df_add_clean[c_rep_add_name].astype(str).apply(
+                    lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
+                )
+                
+                # Filtro basato sulla selezione gerarchica dello Store attiva
+                df_add_filtrato = df_add_clean[df_add_clean['Cod_Reparto_Add'].isin(codici_reparti_vista)].copy()
+                
+                if not df_add_filtrato.empty:
+                    def get_col_index_by_text(dataframe, keyword, fallback_idx):
+                        idx = next((i for i, c in enumerate(dataframe.columns) if keyword.lower() in c.lower()), None)
+                        return idx if idx is not None else fallback_idx
+
+                    # Individuazione indici basata sui nomi del report
+                    idx_sales_ty = get_col_index_by_text(df_add_filtrato, 'sales tt', 5)
+                    idx_sales_py = get_col_index_by_text(df_add_filtrato, 'py custom', 6)
+                    idx_colli_ty = get_col_index_by_text(df_add_filtrato, 'colli', 7)
+                    idx_colli_py = get_col_index_by_text(df_add_filtrato, 'colli py', 8)
+
+                    add_sales_ty = parse_generic_numeric(df_add_filtrato, idx_sales_ty).sum()
+                    add_sales_py = parse_generic_numeric(df_add_filtrato, idx_sales_py).sum()
+                    add_colli_ty = parse_generic_numeric(df_add_filtrato, idx_colli_ty).sum()
+                    add_colli_py = parse_generic_numeric(df_add_filtrato, idx_colli_py).sum()
                     
-                    if u_add is not None:
-                        df_add_clean = df_add.copy()
-                        
-                        # -------------------------------------------------
-                        # ASSOCIAZIONE DINAMICA COLONNA REPARTO (FILE 6)
-                        # -------------------------------------------------
-                        # Cerchiamo una colonna che contenga 'reparto' o 'department', altrimenti usiamo la terza colonna (indice 2)
-                        c_rep_add_name = next((c for c in df_add_clean.columns if 'reparto' in c.lower() or 'department' in c.lower() or 'rep' in c.lower()), df_add_clean.columns[2])
-                        
-                        df_add_clean['Cod_Reparto_Add'] = df_add_clean[c_rep_add_name].astype(str).apply(
-                            lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
-                        )
-                        
-                        # Filtriamo i dati in background basandoci sulla selezione gerarchica attiva dello Store
-                        df_add_filtrato = df_add_clean[df_add_clean['Cod_Reparto_Add'].isin(codici_reparti_vista)].copy()
-                        
-                        if not df_add_filtrato.empty:
-                            # -------------------------------------------------
-                            # MOTORE DINAMICO DI IDENTIFICAZIONE COLONNE METRICHE
-                            # -------------------------------------------------
-                            def get_col_index_by_text(dataframe, keyword, fallback_idx):
-                                idx = next((i for i, c in enumerate(dataframe.columns) if keyword.lower() in c.lower()), None)
-                                return idx if idx is not None else fallback_idx
-
-                            # Individuazione indici basata sui nomi delle colonne del tuo file Excel o indici di ripiego
-                            idx_sales_ty = get_col_index_by_text(df_add_filtrato, 'sales tt', 5)
-                            idx_sales_py = get_col_index_by_text(df_add_filtrato, 'py custom', 6)
-                            idx_colli_ty = get_col_index_by_text(df_add_filtrato, 'colli', 7)
-                            idx_colli_py = get_col_index_by_text(df_add_filtrato, 'colli py', 8)
-
-                            # Estrazione numerica delle metriche commerciali ponderate
-                            add_sales_ty = parse_generic_numeric(df_add_filtrato, idx_sales_ty).sum()
-                            add_sales_py = parse_generic_numeric(df_add_filtrato, idx_sales_py).sum()
-                            add_colli_ty = parse_generic_numeric(df_add_filtrato, idx_colli_ty).sum()
-                            add_colli_py = parse_generic_numeric(df_add_filtrato, idx_colli_py).sum()
-                            
-                            # Calcolo indipendente degli scostamenti percentuali rispetto all'anno precedente
-                            add_delta_sales = ((add_sales_ty - add_sales_py) / add_sales_py * 100) if add_sales_py > 0 else 0.0
-                            add_delta_colli = ((add_colli_ty - add_colli_py) / add_colli_py * 100) if add_colli_py > 0 else 0.0
-                            
-                            # Rendering dei KPI superiori della nuova sorgente dati
-                            col_add1, col_add2 = st.columns(2)
-                            with col_add1:
-                                st.metric(
-                                    label="💰 Sales Totali (Sorgente 6)", 
-                                    value=fmt_valuta_interi(add_sales_ty), 
-                                    delta=f"{add_delta_sales:+.2f}% vs PY" if add_sales_py > 0 else None
-                                )
-                            with col_add2:
-                                st.metric(
-                                    label="📦 Volumi Totali Colli (Sorgente 6)", 
-                                    value=f"{int(round(add_colli_ty)):,}".replace(',', '.'), 
-                                    delta=f"{add_delta_colli:+.2f}% vs PY" if add_colli_py > 0 else None
-                                )
-                                
-                            st.markdown("<div style='padding-top: 10px;'></div>", unsafe_allow_html=True)
-                            st.markdown("##### 📋 Dettaglio Record Elaborati (Sorgente 6):")
-                            
-                            # Preparazione del tavolo di visualizzazione tabellare per l'utente
-                            df_add_view = df_add_filtrato.copy()
-                            df_add_view['Fatturato TY (€)'] = parse_generic_numeric(df_add_view, idx_sales_ty).apply(fmt_valuta_decimali)
-                            df_add_view['Fatturato PY (€)'] = parse_generic_numeric(df_add_view, idx_sales_py).apply(fmt_valuta_decimali)
-                            df_add_view['Quantità Colli TY'] = parse_generic_numeric(df_add_view, idx_colli_ty).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
-                            df_add_view['Quantità Colli PY'] = parse_generic_numeric(df_add_view, idx_colli_py).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
-                            
-                            # Estrazione sicura delle etichette descrittive del prodotto (solitamente colonne 3 e 4 o iniziali)
-                            lbl_prod = df_add_view.columns[4] if len(df_add_view.columns) > 4 else df_add_view.columns[1]
-                            lbl_desc = df_add_view.columns[3] if len(df_add_view.columns) > 3 else df_add_view.columns[0]
-
-                            colonne_out_add = [lbl_desc, lbl_prod, 'Fatturato TY (€)', 'Fatturato PY (€)', 'Quantità Colli TY', 'Quantità Colli PY']
-                            df_add_table_final = df_add_view[colonne_out_add].copy()
-                            
-                            st.dataframe(df_add_table_final, use_container_width=True, hide_index=True)
-                        else:
-                            st.info("ℹ️ Nessun record trovato nel report aggiuntivo per la selezione di reparto attiva.")
-                    else:
-                        st.warning("⚠️ File sorgente aggiuntivo non inserito o non rilevato nella barra laterale.")
+                    add_delta_sales = ((add_sales_ty - add_sales_py) / add_sales_py * 100) if add_sales_py > 0 else 0.0
+                    add_delta_colli = ((add_colli_ty - add_colli_py) / add_colli_py * 100) if add_colli_py > 0 else 0.0
                     
-                    st.markdown("<br><hr>", unsafe_allow_html=True)
+                    col_add1, col_add2 = st.columns(2)
+                    with col_add1:
+                        st.metric(label="💰 Sales Totali (Sorgente 6)", value=fmt_valuta_interi(add_sales_ty), delta=f"{add_delta_sales:+.2f}% vs PY" if add_sales_py > 0 else None)
+                    with col_add2:
+                        st.metric(label="📦 Volumi Totali Colli (Sorgente 6)", value=f"{int(round(add_colli_ty)):,}".replace(',', '.'), delta=f"{add_delta_colli:+.2f}% vs PY" if add_colli_py > 0 else None)
+                        
+                    st.markdown("<div style='padding-top: 10px;'></div>", unsafe_allow_html=True)
+                    st.markdown("##### 📋 Dettaglio Record Elaborati (Sorgente 6):")
+                    
+                    df_add_view = df_add_filtrato.copy()
+                    df_add_view['Fatturato TY (€)'] = parse_generic_numeric(df_add_view, idx_sales_ty).apply(fmt_valuta_decimali)
+                    df_add_view['Fatturato PY (€)'] = parse_generic_numeric(df_add_view, idx_sales_py).apply(fmt_valuta_decimali)
+                    df_add_view['Quantità Colli TY'] = parse_generic_numeric(df_add_view, idx_colli_ty).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                    df_add_view['Quantità Colli PY'] = parse_generic_numeric(df_add_view, idx_colli_py).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                    
+                    lbl_prod = df_add_view.columns[4] if len(df_add_view.columns) > 4 else df_add_view.columns[1]
+                    lbl_desc = df_add_view.columns[3] if len(df_add_view.columns) > 3 else df_add_view.columns[0]
+
+                    colonne_out_add = [lbl_desc, lbl_prod, 'Fatturato TY (€)', 'Fatturato PY (€)', 'Quantità Colli TY', 'Quantità Colli PY']
+                    st.dataframe(df_add_view[colonne_out_add], use_container_width=True, hide_index=True)
+                else:
+                    st.info("ℹ️ Nessun record trovato nel report aggiuntivo per la selezione di reparto attiva.")
+            else:
+                st.warning("⚠️ File sorgente aggiuntivo vuoto o non caricato.")
+            
+            st.markdown("<br><hr>", unsafe_allow_html=True)
 
 # =============================================================================
 # PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE (BARRE AFFIANCATE)
