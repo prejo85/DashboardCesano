@@ -520,7 +520,7 @@ with tab1:
                 st.caption("ℹ️ Carica il report degli indispensabili per attivare la vista.")
                 
 # =============================================================================
-# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - SELEZIONE GRAFICA PILLOLE
+# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - LAYOUT AGGIORNATO
 # =============================================================================
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("#### 📈 Performance Report Analisi Articoli")
@@ -589,7 +589,7 @@ with tab1:
                     )
 
                     # Estrazione del testo pulito (rimuove l'emoji iniziale) per la logica Python
-                    vista_pura = vista_scelta_emoji.split(" ", 1)[1] if vista_scelta_emoji else "Top 10 Articoli (Colli)"
+                    vista_pura = vista_scelta_emoji.split(" ", 1) if vista_scelta_emoji else "Top 10 Articoli (Colli)"
 
                     # Conversione e tipizzazione matematica delle colonne per l'ordinamento
                     df_add_filtrato['Sales_Num'] = parse_generic_numeric(df_add_filtrato, idx_sales_ty)
@@ -638,14 +638,15 @@ with tab1:
                     df_add_view['Accrediti (€)'] = df_add_view['Accrediti_Num'].apply(fmt_valuta_decimali)
                     df_add_view['Margine %'] = df_add_view['Margin_Pct'].apply(fmt_percentuale)
                     
-                    # Estrazione etichette identificative dalle prime colonne (Codice e Descrizione Articolo)
-                    lbl_cod_art = df_add_view.columns[3] if len(df_add_view.columns) > 3 else df_add_view.columns[0]
-                    lbl_desc_art = df_add_view.columns[2] if len(df_add_view.columns) > 2 else df_add_view.columns[0]
+                    # Estrazione automatica della colonna articolo reale (es. "10048 - G385 CRAUTI...")
+                    lbl_cod_art = next((c for c in df_add_view.columns if 'article' in c.lower() or 'articolo' in c.lower()), df_add_view.columns[3])
 
-                    colonne_out_add = [lbl_cod_art, lbl_desc_art, 'Fatturato TY', 'Volume TY (Colli)', 'Sfrido Corrente (€)', 'Accrediti (€)', 'Margine %']
+                    # Selezione finale delle sole colonne richieste (esclusa la colonna Reparto/Descrizione Referenza)
+                    colonne_out_add = [lbl_cod_art, 'Fatturato TY', 'Volume TY (Colli)', 'Sfrido Corrente (€)', 'Accrediti (€)', 'Margine %']
                     df_add_table_final = df_add_view[colonne_out_add].copy()
                     
-                    df_add_table_final.columns = ['Codice / Identificativo', 'Descrizione Referenza', 'Fatturato TY', 'Volume TY (Colli)', 'Sfrido Corrente (€)', 'Accrediti (€)', 'Margine %']
+                    # Ridenominazione corretta con la dicitura cerchiata
+                    df_add_table_final.columns = ['Articolo-Descrizione', 'Fatturato TY', 'Volume TY (Colli)', 'Sfrido Corrente (€)', 'Accrediti (€)', 'Margine %']
                     
                     st.dataframe(df_add_table_final, use_container_width=True, hide_index=True)
                 else:
@@ -654,7 +655,6 @@ with tab1:
                 st.warning("⚠️ File sorgente aggiuntivo non inserito o non rilevato nella barra laterale.")
             
             st.markdown("<br><br>", unsafe_allow_html=True)
-
 
 # =============================================================================
 # PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE (BARRE AFFIANCATE)
