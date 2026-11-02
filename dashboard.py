@@ -1041,16 +1041,16 @@ with tab2:
                     # Unione dei due cluster commerciali sulla chiave Cliente + Venditore
                     df_merged_mig = pd.merge(df_cc, df_fsd, on=[c_cust_name, c_venditore], how='outer').fillna(0.0)
                     
-                    # 3. Calcolo e assegnazione dei Delta matematici richiesti con chiavi allineate
+                    # 3. Calcolo e assegnazione dei Delta matematici richiesti
                     df_merged_mig['Fatturato C&C'] = df_merged_mig['Fatturato_CC_TY']
                     df_merged_mig['Delta C&C vsPY'] = df_merged_mig['Fatturato_CC_TY'] - df_merged_mig['Fatturato_CC_PY']
                     
                     df_merged_mig['Fatturato FSD'] = df_merged_mig['Fatturato_FSD_TY']
                     df_merged_mig['Delta FSD vsPY'] = df_merged_mig['Fatturato_FSD_TY'] - df_merged_mig['Fatturato_FSD_PY']
                     
-                    # CORREZIONE: Somma algebrica dei due delta per calcolare il travaso netto complessivo
+                    # QUINTA COLONNA CORRETTA: Somma algebrica dei due delta per calcolare il bilancio netto reale dello shift
                     df_merged_mig['Delta tra C&C e FSD'] = df_merged_mig['Delta FSD vsPY'] + df_merged_mig['Delta C&C vsPY']
-                                       
+                    
                     # Filtriamo per mostrare solo i clienti attivi nel periodo sui canali analizzati
                     df_final_view = df_merged_mig[
                         (df_merged_mig['Fatturato C&C'] > 0) | 
