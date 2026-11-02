@@ -580,9 +580,9 @@ with tab1:
                         label="Seleziona Vista Analitica di Dettaglio:",
                         options=[
                             "📦 Top 10 Articoli (Colli)", 
-                            "📉 Top 10 Sfrido/Shrinkage", 
-                            "🟨 Top 10 Quota Accrediti", 
-                            "👥 Top 10 Clienti (Low Margin)"
+                            "📉 Top 10 Articoli (Shrinkage)", 
+                            "🟨 Top 10 Articoli (Accrediti)", 
+                            "👥 Top 10 Articoli (Low Margin)"
                         ],
                         default="📦 Top 10 Articoli (Colli)",
                         label_visibility="collapsed"
