@@ -13,43 +13,65 @@ st.title("📊 Dashboard Commerciale Territoriale")
 st.markdown("### Analisi Multilivello: Store, Aree, Reparti e Segmentazione Clienti")
 
 # -----------------------------------------------------------------------------
-# PULSANTE DI STAMPA GENERALE DELLA DASHBOARD ( window.print() )
+# PULSANTE DI STAMPA CON CENTRATURA E OTTIMIZZAZIONE LAYOUT (AGGIORNATO)
 # -----------------------------------------------------------------------------
-# CSS di stampa per nascondere la barra laterale (sidebar) e i menu di Streamlit quando si stampa
 st.markdown("""
     <style>
         @media print {
-            /* Nasconde la sidebar laterale */
-            section[data-testid="stSidebar"] {
+            /* 1. Nasconde gli elementi di navigazione ed i menu nativi di Streamlit */
+            section[data-testid="stSidebar"], 
+            header, 
+            footer, 
+            div[data-testid="stToolbar"],
+            button[data-testid="stBaseButton-secondary"] {
                 display: none !important;
             }
-            /* Nasconde i menu in alto a destra e il footer di Streamlit */
-            header, footer, div[data-testid="stToolbar"] {
-                display: none !important;
+            
+            /* 2. Resetta i vincoli del body e centra l'intera area di lavoro */
+            body {
+                margin: 0 !important;
+                padding: 0 !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
+                background-color: #0e1117 !important; /* Mantiene lo sfondo scuro nativo */
             }
-            /* Rende il corpo principale a larghezza intera per evitare tagli */
+            
+            /* 3. Forza il blocco principale a centrarsi simmetricamente sulla pagina */
             .main .block-container {
-                padding-top: 1rem !important;
-                max-width: 100% !important;
+                margin: 0 auto !important;   /* Centratura orizzontale perfetta */
+                padding-top: 2rem !important;
+                padding-bottom: 2rem !important;
+                padding-left: 1.5rem !important;
+                padding-right: 1.5rem !important;
+                max-width: 95% !important;   /* Evita collisioni con i bordi del foglio */
+                width: 95% !important;
+                display: block !important;
+            }
+            
+            /* 4. Ottimizza i grafici Plotly e le colonne per impedire disallineamenti */
+            div[data-testid="stHorizontalBlock"] {
+                justify-content: center !important; /* Centra le colonne affiancate */
+            }
+            .js-plotly-plot, .plot-container {
+                margin: 0 auto !important;   /* Centra i grafici all'interno dei loro box */
             }
         }
     </style>
 """, unsafe_allow_html=True)
 
 # Layout per posizionare il tasto in alto a destra
-col_titolo, col_stampa = st.columns([4, 1])
+col_titolo, col_stampa = st.columns()
 
 with col_stampa:
     st.markdown("<div style='padding-top: 10px;'></div>", unsafe_allow_html=True)
-    # Pulsante invisibile Streamlit accoppiato a una iniezione HTML/JS pulita
-    if st.button("🖨️ Stampa Dashboard", use_container_width=True, key="btn_print_dashboard"):
+    if st.button("🖨️ Stampa Dashboard Centrata", use_container_width=True, key="btn_print_dashboard_centered"):
         st.components.v1.html("""
             <script>
-                // Richiama la finestra di stampa nativa del browser (funziona sia su Chrome, Edge, Safari o Firefox)
+                // Esegue il comando di stampa sulla pagina principale
                 window.parent.print();
             </script>
         """, height=0)
-
 
 # -----------------------------------------------------------------------------
 # FUNZIONI DI FORMATTAZIONE VALUTA ED ESPRESSIONI ITALIANE
