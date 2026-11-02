@@ -519,7 +519,7 @@ with tab1:
             else:
                 st.caption("ℹ️ Carica il report degli indispensabili per attivare la vista.")
 # =============================================================================
-# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - CON FILTRI ADV
+# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - FIX ANAGRAFICHE
 # =============================================================================
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("#### 📈 Performance Report Analisi Articoli")
@@ -548,12 +548,11 @@ with tab1:
                     idx_colli_ty = get_col_index_by_text(df_add_filtrato, 'colli', 7)
                     idx_colli_py = get_col_index_by_text(df_add_filtrato, 'colli py', 8)
                     
-                    # Colonne speciali per i nuovi filtri (Shrinkage/Sfrido, Accrediti, Clienti, Front Margin)
-                    idx_shrink = get_col_index_by_text(df_add_filtrato, 'shrink', 11)   # Assumendo indice 11 per Sfrido
-                    idx_accrediti = get_col_index_by_text(df_add_filtrato, 'accred', 12) # Assumendo indice 12 per Accrediti
-                    idx_margin_val = get_col_index_by_text(df_add_filtrato, 'margin', 9) # Assumendo valore assoluto margine o incidenza
+                    idx_shrink = get_col_index_by_text(df_add_filtrato, 'shrink', 11)   
+                    idx_accrediti = get_col_index_by_text(df_add_filtrato, 'accred', 12) 
+                    idx_margin_val = get_col_index_by_text(df_add_filtrato, 'margin', 9) 
 
-                    # Conversione preventiva in formato numerico float per i calcoli di ordinamento
+                    # Conversione in formato numerico float per i calcoli
                     df_add_filtrato['Sales_TY_Num'] = parse_generic_numeric(df_add_filtrato, idx_sales_ty)
                     df_add_filtrato['Sales_PY_Num'] = parse_generic_numeric(df_add_filtrato, idx_sales_py)
                     df_add_filtrato['Colli_TY_Num'] = parse_generic_numeric(df_add_filtrato, idx_colli_ty)
@@ -562,7 +561,7 @@ with tab1:
                     df_add_filtrato['Accrediti_Num'] = parse_generic_numeric(df_add_filtrato, idx_accrediti)
                     df_add_filtrato['Margin_Num'] = parse_generic_numeric(df_add_filtrato, idx_margin_val)
 
-                    # KPI Generali di Sintesi del File 6
+                    # KPI Generali di Sintesi
                     add_sales_ty = df_add_filtrato['Sales_TY_Num'].sum()
                     add_sales_py = df_add_filtrato['Sales_PY_Num'].sum()
                     add_colli_ty = df_add_filtrato['Colli_TY_Num'].sum()
@@ -579,9 +578,7 @@ with tab1:
                         
                     st.markdown("<div style='padding-top: 15px;'></div>", unsafe_allow_html=True)
                     
-                    # -------------------------------------------------
-                    # INTERFACCIA FILTRI ANALITICI RICHIESTI
-                    # -------------------------------------------------
+                    # Interfaccia viste
                     interfaccia_viste = [
                         "📦 Top 10 Articoli (Colli)", 
                         "📉 Top 10 Sfrido/Shrinkage", 
@@ -596,46 +593,45 @@ with tab1:
                         key="seg_view_report_6"
                     )
                     
-                    # Identificazione colonne descrittive (Articolo/Prodotto, Cliente se presente)
-                    lbl_prod = df_add_filtrato.columns[4] if len(df_add_filtrato.columns) > 4 else df_add_filtrato.columns[1]
-                    lbl_desc = df_add_filtrato.columns[3] if len(df_add_filtrato.columns) > 3 else df_add_filtrato.columns[0]
+                    # -------------------------------------------------
+                    # FIX: LOGICA RIGOROSA DI ESTRAZIONE ANAGRAFICHE (TESTUALE)
+                    # -------------------------------------------------
+                    # Cerchiamo le colonne testuali descrittive evitando gli indici numerici del fatturato
+                    lbl_codice = next((c for c in df_add_filtrato.columns if 'codice' in c.lower() or 'id' in c.lower() or 'art' in c.lower()), df_add_filtrato.columns[0])
+                    lbl_descrizione = next((c for c in df_add_filtrato.columns if 'desc' in c.lower() or 'prodotto' in c.lower() or 'nome' in c.lower() or 'referenza' in c.lower()), df_add_filtrato.columns[1])
                     
                     df_add_view = df_add_filtrato.copy()
 
-                    # 1. Filtro: Primi 10 articoli venduti in ordine di colli
                     if selected_view_add == "📦 Top 10 Articoli (Colli)":
                         df_res = df_add_view.sort_values(by='Colli_TY_Num', ascending=False).head(10).reset_index(drop=True)
                         st.markdown("##### 📦 Primi 10 Articoli per Volume di Colli Venduti:")
                         
-                    # 2. Filtro: Primi 10 articoli in ordine di shrinkage (dal più buttato al meno)
                     elif selected_view_add == "📉 Top 10 Sfrido/Shrinkage":
                         df_res = df_add_view.sort_values(by='Shrink_Num', ascending=False).head(10).reset_index(drop=True)
                         st.markdown("##### 📉 Primi 10 Articoli per Volume di Sfrido/Shrinkage (Decrescente):")
                         
-                    # 3. Filtro: Primi 10 articoli con la quota accredito più alta
                     elif selected_view_add == "🎫 Top 10 Quota Accrediti":
                         df_res = df_add_view.sort_values(by='Accrediti_Num', ascending=False).head(10).reset_index(drop=True)
                         st.markdown("##### 🎫 Primi 10 Articoli per Valore Assoluto di Accrediti Generati:")
                         
-                    # 4. Filtro: Primi 10 clienti con il front margin (dal più basso a 0)
                     elif selected_view_add == "👥 Top 10 Clienti (Low Margin)":
-                        # Identifichiamo se nel file è presente una colonna legata all'anagrafica cliente
-                        c_clienti_add = next((c for c in df_add_view.columns if 'client' in c.lower() or 'ragione' in c.lower() or 'cust' in c.lower()), lbl_desc)
-                        
-                        # Filtriamo i record dove il margine è compreso tra i valori negativi e lo zero, ordinando dal più basso (più negativo) verso lo zero
+                        c_clienti_add = next((c for c in df_add_view.columns if 'client' in c.lower() or 'ragione' in c.lower() or 'cust' in c.lower()), df_add_view.columns[0])
                         df_low_margin = df_add_view[df_add_view['Margin_Num'] <= 0.0]
                         df_res = df_low_margin.sort_values(by='Margin_Num', ascending=True).head(10).reset_index(drop=True)
                         st.markdown("##### 👥 Primi 10 Record/Clienti con Margine Critico (Dal più basso/negativo a 0):")
-                        lbl_desc = c_clienti_add
+                        lbl_codice = c_clienti_add
+                        # Se è un cliente, usiamo un fallback vuoto o lo store se la descrizione prodotto non ha senso
+                        lbl_descrizione = next((c for c in df_add_view.columns if 'store' in c.lower() or 'negozio' in c.lower()), df_add_view.columns[1])
 
-                    # Formattazione e pulizia finale per il rendering della tabella di visualizzazione
+                    # Formattazione e pulizia per il rendering della tabella
                     df_res['Fatturato TY (€)'] = df_res['Sales_TY_Num'].apply(fmt_valuta_decimali)
                     df_res['Quantità Colli TY'] = df_res['Colli_TY_Num'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
                     df_res['Sfrido/Shrinkage (€)'] = df_res['Shrink_Num'].apply(fmt_valuta_decimali)
                     df_res['Accrediti (€)'] = df_res['Accrediti_Num'].apply(fmt_valuta_decimali)
                     df_res['Front Margin %'] = df_res['Margin_Num'].apply(fmt_percentuale)
                     
-                    colonne_out_add = [lbl_desc, lbl_prod, 'Fatturato TY (€)', 'Quantità Colli TY', 'Sfrido/Shrinkage (€)', 'Accrediti (€)', 'Front Margin %']
+                    # Generazione del set di colonne allineato senza inversioni numeriche
+                    colonne_out_add = [lbl_codice, lbl_descrizione, 'Fatturato TY (€)', 'Quantità Colli TY', 'Sfrido/Shrinkage (€)', 'Accrediti (€)', 'Front Margin %']
                     df_add_table_final = df_res[colonne_out_add].copy()
                     
                     # Ridenominazione finale pulita delle intestazioni
@@ -652,6 +648,7 @@ with tab1:
                 st.warning("⚠️ File sorgente aggiuntivo vuoto o non caricato.")
             
             st.markdown("<br><hr>", unsafe_allow_html=True)
+
 
 # =============================================================================
 # PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE (BARRE AFFIANCATE)
