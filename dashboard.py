@@ -138,7 +138,7 @@ def parse_generic_numeric(dataframe, col_index):
     return pd.Series(0.0, index=dataframe.index)
 
 # -----------------------------------------------------------------------------
-# INTERFACCIA UNICA DI CARICAMENTO NELLA SIDEBAR LATERALE
+# INTERFACCIA UNICA DI CARICAMENTO NELLA SIDEBAR LATERALE (AGGIORNATO FILE 6)
 # -----------------------------------------------------------------------------
 st.sidebar.header("📁 Caricamento File Sorgente")
 u_rep = st.sidebar.file_uploader("1. File BMPL Reparti (.csv)", type="csv")
@@ -146,13 +146,30 @@ u_ctg = st.sidebar.file_uploader("2. File CTG (.csv)", type="csv")
 u_sel = st.sidebar.file_uploader("3. File Free Analysis Sellout (.csv)", type="csv")
 u_ind = st.sidebar.file_uploader("4. File Indispensabili (.csv)", type="csv")
 u_men = st.sidebar.file_uploader("5. File Mensilizzazione (.csv)", type="csv")
+u_add = st.sidebar.file_uploader("6. File Report Aggiuntivo (.csv)", type="csv") # Nuova sorgente dati
 
-if not (u_rep and u_ctg and u_sel and u_ind and u_men):
-    st.info("💡 Carica i 5 report commerciali puliti nel pannello laterale sinistro per attivare l'interfaccia.")
+if not (u_rep and u_ctg and u_sel and u_ind and u_men and u_add):
+    st.info("💡 Carica tutti i 6 report commerciali puliti nel pannello laterale sinistro per attivare l'interfaccia.")
     st.stop()
 
-# Caricamento effettivo dei dataframe puliti
-df_rep, df_ctg, df_sel, df_ind, df_men = load_and_clean_data(u_rep, u_ctg, u_sel, u_ind, u_men)
+# Caricamento effettivo dei dataframe puliti mediante l'engine centralizzato
+def load_and_clean_data_v2(file_reparti, file_ctg, file_sellout, file_indispensabili, file_mensile, file_aggiuntivo):
+    def clean_df(file_path):
+        try:
+            df = pd.read_csv(file_path, sep=";", skiprows=0, skip_blank_lines=True, dtype=str)
+            if len(df.columns) <= 1:
+                df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True, dtype=str)
+        except:
+            df = pd.read_csv(file_path, sep=",", skiprows=0, skip_blank_lines=True, dtype=str)
+        df.columns = df.columns.str.strip()
+        df = df[df.iloc[:, 0].notna()]
+        return df
+
+    return (clean_df(file_reparti), clean_df(file_ctg), clean_df(file_sellout), 
+            clean_df(file_indispensabili), clean_df(file_mensile), clean_df(file_aggiuntivo))
+
+df_rep, df_ctg, df_sel, df_ind, df_men, df_add = load_and_clean_data_v2(u_rep, u_ctg, u_sel, u_ind, u_men, u_add)
+
 
 # Inizializzazione contatori di reset distinti per i due tab nel Session State
 if "reset_tab1" not in st.session_state:
@@ -499,6 +516,74 @@ with tab1:
                     st.dataframe(df_tab_view, use_container_width=True, hide_index=True)
                 else:
                     st.caption("ℹ️ Nessun articolo indispensabile trovato per questa combinazione di filtri.")
+# =============================================================================
+# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6)
+# =============================================================================
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("#### 📈 Performance Report Analisi Articoli")
+                    
+                    if not df_add.empty:
+                        df_add_clean = df_add.copy()
+                        
+                        # Identificazione dinamica o posizionale del codice reparto interno al file 6
+                        # Modifica l'indice posizionale se il codice reparto non si trova nella terza colonna (indice 2)
+                        df_add_clean['Cod_Reparto_Add'] = df_add_clean.iloc[:, 2].astype(str).apply(
+                            lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
+                        )
+                        
+                        # Filtriamo i dati in background basandoci sulla selezione gerarchica attiva dello Store
+                        df_add_filtrato = df_add_clean[df_add_clean['Cod_Reparto_Add'].isin(codici_reparti_vista)].copy()
+                        
+                        if not df_add_filtrato.empty:
+                            # -------------------------------------------------
+                            # LOGICA DI PARSING MATEMATICO DEL NUOVO FILE
+                            # -------------------------------------------------
+                            # Mappiamo i volumi correnti e storici (adegua gli indici 5, 6, 7, 8 se le colonne differiscono)
+                            add_sales_ty = parse_generic_numeric(df_add_filtrato, 5).sum()
+                            add_sales_py = parse_generic_numeric(df_add_filtrato, 6).sum()
+                            add_colli_ty = parse_generic_numeric(df_add_filtrato, 7).sum()
+                            add_colli_py = parse_generic_numeric(df_add_filtrato, 8).sum()
+                            
+                            # Calcolo degli scostamenti percentuali rispetto all'anno precedente
+                            add_delta_sales = ((add_sales_ty - add_sales_py) / add_sales_py * 100) if add_sales_py > 0 else 0.0
+                            add_delta_colli = ((add_colli_ty - add_colli_py) / add_colli_py * 100) if add_colli_py > 0 else 0.0
+                            
+                            # Rendering dei KPI superiori della nuova sorgente dati
+                            col_add1, col_add2 = st.columns(2)
+                            with col_add1:
+                                st.metric(
+                                    label="💰 Sales Totali (Sorgente 6)", 
+                                    value=fmt_valuta_interi(add_sales_ty), 
+                                    delta=f"{add_delta_sales:+.2f}% vs PY"
+                                )
+                            with col_add2:
+                                st.metric(
+                                    label="📦 Volumi Totali Colli (Sorgente 6)", 
+                                    value=f"{int(round(add_colli_ty)):,}".replace(',', '.'), 
+                                    delta=f"{add_delta_colli:+.2f}% vs PY" if add_colli_py > 0 else None
+                                )
+                                
+                            st.markdown("<div style='padding-top: 10px;'></div>", unsafe_allow_html=True)
+                            st.markdown("##### 📋 Dettaglio Record Elaborati (Sorgente 6):")
+                            
+                            # Preparazione del tavolo di visualizzazione tabellare per l'utente
+                            df_add_view = df_add_filtrato.copy()
+                            df_add_view['Fatturato TY (€)'] = parse_generic_numeric(df_add_view, 5).apply(fmt_valuta_decimali)
+                            df_add_view['Fatturato PY (€)'] = parse_generic_numeric(df_add_view, 6).apply(fmt_valuta_decimali)
+                            df_add_view['Quantità Colli TY'] = parse_generic_numeric(df_add_view, 7).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                            df_add_view['Quantità Colli PY'] = parse_generic_numeric(df_add_view, 8).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                            
+                            # Isoliamo le colonne descrittive native iniziali (es. indici 2, 3, 4 per Reparto, Articolo)
+                            colonne_out_add = [df_add_view.columns[3], df_add_view.columns[4], 'Fatturato TY (€)', 'Fatturato PY (€)', 'Quantità Colli TY', 'Quantità Colli PY']
+                            df_add_table_final = df_add_view[colonne_out_add].copy()
+                            
+                            st.dataframe(df_add_table_final, use_container_width=True, hide_index=True)
+                        else:
+                            st.caption("ℹ️ Nessun record trovato nel report aggiuntivo per la selezione di reparto attiva.")
+                    else:
+                        st.warning("⚠️ File sorgente aggiuntivo vuoto o non formattato correttamente.")
+                    
+                    st.markdown("<br><hr>", unsafe_allow_html=True)
 
 # =============================================================================
 # PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE (BARRE AFFIANCATE)
