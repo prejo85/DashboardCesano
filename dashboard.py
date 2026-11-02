@@ -60,8 +60,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Layout per posizionare il tasto in alto a destra
-col_titolo, col_stampa = st.columns()
+# Layout proporzionato: 3/4 di spazio a sinistra, 1/4 al pulsante di destra
+col_titolo, col_stampa = st.columns([3, 1])
 
 with col_stampa:
     st.markdown("<div style='padding-top: 10px;'></div>", unsafe_allow_html=True)
