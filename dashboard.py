@@ -1089,7 +1089,7 @@ with tab2:
 # =============================================================================
             if not df_final_kpi_table.empty:
                 st.markdown("---")
-                st.markdown("### 🔄 Focus Migrazione Canale: Da Canale Fisico a Consegna (FSD)")
+                st.markdown("### 🔄 Focus Migrazione Canale: Da Cash and Carry a Consegna (FSD)")
                 
                 df_migration = df_final_kpi_table.copy()
                 
