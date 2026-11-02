@@ -552,12 +552,12 @@ with tab1:
                     col_add1, col_add2 = st.columns(2)
                     with col_add1:
                         st.metric(
-                            label="💰 Sales Totali (Sorgente 6)", 
+                            label="💰 Sales Totali:", 
                             value=fmt_valuta_interi(add_sales_ty)
                         )
                     with col_add2:
                         st.metric(
-                            label="📦 Volumi Totali Colli (Sorgente 6)", 
+                            label="📦 Volumi Totali Colli:", 
                             value=f"{int(round(add_colli_ty)):,}".replace(',', '.')
                         )
                         
