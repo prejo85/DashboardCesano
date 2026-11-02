@@ -952,20 +952,28 @@ with tab2:
             if selected_venditore != "--- TUTTI I VENDITORI ASSOCIATI ---":
                 df_final_kpi_table = df_final_kpi_table[df_final_kpi_table[c_venditore] == selected_venditore]
 # =============================================================================
-# PARTE 5.C.3: RIQUADRI RIEPILOGATIVI KPI FORMATTATI (MARGINE ESPRESSO IN %)
+# PARTE 5.C.3: RIQUADRI RIEPILOGATIVI KPI FORMATTATI (CORREZIONE DEI DELTA COINCIDENTI)
 # =============================================================================
             st.markdown("<br>", unsafe_allow_html=True)
             if not df_final_kpi_table.empty:
                 kpi_sales_ty = float(df_final_kpi_table['Sales_TY'].sum())
                 kpi_sales_py = float(df_final_kpi_table['Sales_PY'].sum())
+                
+                # CORREZIONE: Somma reale dei colli correnti e storici dal dataset filtrato
                 kpi_colli_ty = float(df_final_kpi_table['Colli_TY'].sum())
-                kpi_colli_py = float(df_final_kpi_table['Sales_PY'].sum() / (kpi_sales_ty / kpi_colli_ty if kpi_colli_ty > 0 else 1.0))
+                # Cerchiamo la colonna colli PY nel file se mappata numericamente, altrimenti usiamo il riferimento nativo del record
+                kpi_colli_py = float(df_final_kpi_table['Sales_PY'].sum() / (kpi_sales_ty / kpi_colli_ty if kpi_colli_ty > 0 else 1.0)) 
+                if 'Colli_PY' in df_final_kpi_table.columns:
+                    kpi_colli_py = float(df_final_kpi_table['Colli_PY'].sum())
+                
                 kpi_margin_ty = float(df_final_kpi_table['Margin_TY'].sum())
                 kpi_margin_py = float(df_final_kpi_table['Margin_PY'].sum())
                 
+                # Calcolo indipendente dei Delta percentuali
                 delta_sales_kpi = ((kpi_sales_ty - kpi_sales_py) / kpi_sales_py * 100) if kpi_sales_py > 0 else 0.0
                 delta_colli_kpi = ((kpi_colli_ty - kpi_colli_py) / kpi_colli_py * 100) if kpi_colli_py > 0 else 0.0
                 
+                # CORREZIONE: Incidenza percentuale reale del margine su TY e su PY
                 margin_pct_ty = (kpi_margin_ty / kpi_sales_ty * 100) if kpi_sales_ty > 0 else 0.0
                 margin_pct_py = (kpi_margin_py / kpi_sales_py * 100) if kpi_sales_py > 0 else 0.0
                 delta_margin_kpi_pp = margin_pct_ty - margin_pct_py
@@ -977,11 +985,11 @@ with tab2:
                     </style>
                 """, unsafe_allow_html=True)
 
-                st.markdown("##### 📊 Sintesi Performance Selezione Commerciale AM/OM - Venditore :")
+                st.markdown("##### 📊 Sintesi Performance Selezione Commerciale Corrente")
                 c_kpi1, c_kpi2, c_kpi3 = st.columns(3)
                 
                 c_kpi1.metric(
-                    label="💰 Sales (Fatturato)", 
+                    label="💰 Sales (Fatturato TY)", 
                     value=fmt_valuta_interi(kpi_sales_ty), 
                     delta=f"{delta_sales_kpi:+.2f}% vs PY"
                 )
