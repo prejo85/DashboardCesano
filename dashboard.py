@@ -13,6 +13,45 @@ st.title("📊 Dashboard Commerciale Territoriale")
 st.markdown("### Analisi Multilivello: Store, Aree, Reparti e Segmentazione Clienti")
 
 # -----------------------------------------------------------------------------
+# PULSANTE DI STAMPA GENERALE DELLA DASHBOARD ( window.print() )
+# -----------------------------------------------------------------------------
+# CSS di stampa per nascondere la barra laterale (sidebar) e i menu di Streamlit quando si stampa
+st.markdown("""
+    <style>
+        @media print {
+            /* Nasconde la sidebar laterale */
+            section[data-testid="stSidebar"] {
+                display: none !important;
+            }
+            /* Nasconde i menu in alto a destra e il footer di Streamlit */
+            header, footer, div[data-testid="stToolbar"] {
+                display: none !important;
+            }
+            /* Rende il corpo principale a larghezza intera per evitare tagli */
+            .main .block-container {
+                padding-top: 1rem !important;
+                max-width: 100% !important;
+            }
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# Layout per posizionare il tasto in alto a destra
+col_titolo, col_stampa = st.columns([4, 1])
+
+with col_stampa:
+    st.markdown("<div style='padding-top: 10px;'></div>", unsafe_allow_html=True)
+    # Pulsante invisibile Streamlit accoppiato a una iniezione HTML/JS pulita
+    if st.button("🖨️ Stampa Dashboard", use_container_width=True, key="btn_print_dashboard"):
+        st.components.v1.html("""
+            <script>
+                // Richiama la finestra di stampa nativa del browser (funziona sia su Chrome, Edge, Safari o Firefox)
+                window.parent.print();
+            </script>
+        """, height=0)
+
+
+# -----------------------------------------------------------------------------
 # FUNZIONI DI FORMATTAZIONE VALUTA ED ESPRESSIONI ITALIANE
 # -----------------------------------------------------------------------------
 def fmt_valuta_interi(valore):
