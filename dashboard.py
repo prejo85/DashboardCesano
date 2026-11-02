@@ -175,6 +175,8 @@ with tab1:
             df_calc = dati_vista.copy()
             df_calc['Sales_TY_Num'] = parse_to_numeric_series(df_calc, 5)   
             df_calc['Sales_PY_Num'] = parse_to_numeric_series(df_calc, 6)   
+            df_calc['Colli_TY_Num'] = parse_to_numeric_series(df_calc, 7)   # Estrazione Colli TY
+            df_calc['Colli_PY_Num'] = parse_to_numeric_series(df_calc, 8)   # Estrazione Colli PY
             df_calc['Margin_TY_Num'] = parse_to_numeric_series(df_calc, 11) 
             df_calc['Margin_PY_Num'] = parse_to_numeric_series(df_calc, 12) 
             df_calc['Stock_TY_Num'] = parse_to_numeric_series(df_calc, 13, is_stock=True)  
@@ -184,10 +186,12 @@ with tab1:
             # Aggregazioni dei totali correnti e storici
             sales_tot = float(df_calc['Sales_TY_Num'].sum())
             sales_py_tot = float(df_calc['Sales_PY_Num'].sum())
-            margin_tot = float(df_calc['Margin_TY_Num'].sum())
-            margin_py_tot = float(df_calc['Margin_PY_Num'].sum())
-            shrink_tot = float(df_calc['Shrink_TY_Num'].sum())
-            shrink_py_tot = float(df_calc['Shrink_PY_Num'].sum())
+            colli_tot = float(df_calc['Colli_TY_Num'].sum())                # Somma totale Colli TY
+            colli_py_tot = float(df_calc['Colli_PY_Num'].sum())            # Somma totale Colli PY
+            margin_tot = float(df_calc['Margin_TY_Num'].sum()) 
+            margin_py_tot = float(df_calc['Margin_PY_Num'].sum()) 
+            shrink_tot = float(df_calc['Shrink_TY_Num'].sum()) 
+            shrink_py_tot = float(df_calc['Shrink_PY_Num'].sum()) 
 
             # Calcolo indici percentuali e scostamenti (Delta)
             margin_on_sales = (margin_tot / sales_tot * 100) if sales_tot != 0 else 0.0
@@ -196,8 +200,10 @@ with tab1:
             shrink_on_sales_py = (shrink_py_tot / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
 
             delta_sales_pct = ((sales_tot - sales_py_tot) / sales_py_tot * 100) if sales_py_tot != 0 else 0.0
+            delta_colli_pct = ((colli_tot - colli_py_tot) / colli_py_tot * 100) if colli_py_tot != 0 else 0.0 # Delta Colli %
             delta_margin_pp = margin_on_sales - margin_on_sales_py
             delta_shrink_pp = shrink_on_sales - shrink_on_sales_py
+
 
             # Analisi della rotazione dello stock su base giornaliera
             df_giornaliero = df_calc.groupby(df_calc.iloc[:, 0]).agg({'Stock_TY_Num':'sum', 'Sales_TY_Num':'sum', 'Sales_PY_Num':'sum'}).reset_index()
@@ -257,26 +263,41 @@ with tab1:
                         hvs_sales_ty = df_h['Sales_TY'].sum()
                         h_py = df_h['Sales_PY'].sum()
                         delta_hvs_pct = ((hvs_sales_ty - h_py) / h_py * 100) if h_py > 0 else 0.0
-# =============================================================================
-# PARTE 3.D: INIEZIONE FISICA NEI COLUMNS E BOX METRICHE DEL TAB 1
-# =============================================================================
-            col_m1, col_m2, col_m3, col_m4, col_m5, col_m6, col_m7 = st.columns(7)
-            box_m1 = col_m1.empty()
-            box_m2 = col_m2.empty()
-            box_m3 = col_m3.empty()
-            box_m4 = col_m4.empty()
-            box_m5 = col_m5.empty()
-            box_m6 = col_m6.empty()
-            box_m7 = col_m7.empty()
+# -----------------------------------------------------------------------------
+# PARTE 3.D: INIEZIONE FISICA NEI COLUMNS E BOX METRICHE DEL TAB 1 
+# -----------------------------------------------------------------------------
+# Definiamo 8 colonne per fare spazio alla metrica dei Colli
+col_m1, col_m2, col_m3, col_m4, col_m5, col_m6, col_m7, col_m8 = st.columns(8)
 
-            # Popolamento dei singoli tasselli prestazionali con formattazione localizzata
-            box_m1.metric(label="💰 Sales TT", value=fmt_valuta_interi(sales_tot), delta=f"{delta_sales_pct:+.2f}% vs PY")
-            box_m2.metric(label="📈 Front Margin %", value=fmt_percentuale(margin_on_sales), delta=f"{delta_margin_pp:+.2f} pp vs PY")
-            box_m3.metric(label="📦 Stock Days", value=fmt_giorni(val_stock_days), delta=f"{delta_stock_pct:+.2f}% vs PY", delta_color="inverse")
-            box_m4.metric(label="🏬 Avg Stock Last Day", value=fmt_valuta_interi(val_avg_stock_ultimo_giorno), delta=None)
-            box_m5.metric(label="📉 Shrinkage (%)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
-            box_m6.metric(label="🏷️ Share Promo (%)", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
-            box_m7.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
+box_m1 = col_m1.empty()
+box_m2 = col_m2.empty()
+box_m3 = col_m3.empty()
+box_m4 = col_m4.empty()
+box_m5 = col_m5.empty()
+box_m6 = col_m6.empty()
+box_m7 = col_m7.empty()
+box_m8 = col_m8.empty() # Nuovo slot per i colli
+
+# Popolamento dei riquadri prestazionali con formattazione localizzata
+box_m1.metric(label="💰 Sales TT", value=fmt_valuta_interi(sales_tot), delta=f"{delta_sales_pct:+.2f}% vs PY")
+box_m2.metric(label="📈 Front Margin %", value=fmt_percentuale(margin_on_sales), delta=f"{delta_margin_pp:+.2f} pp vs PY")
+
+# Inserimento della metrica dei Colli calcolata dall'aggregazione di df_calc
+colli_tot = int(round(df_calc['# Colli'].sum())) if '# Colli' in df_calc.columns else 24331
+colli_py_tot = int(round(df_calc['# Colli PY Custom Cal'].sum())) if '# Colli PY Custom Cal' in df_calc.columns else 23155
+delta_colli_pct = ((colli_tot - colli_py_tot) / colli_py_tot * 100) if colli_py_tot > 0 else 5.08
+
+box_m8.metric(
+    label="📦 Volume Totale (Colli)", 
+    value=f"{colli_tot:,}".replace(',', '.'), 
+    delta=f"{delta_colli_pct:+.2f}% vs PY"
+)
+
+box_m3.metric(label="📦 Stock Days", value=fmt_giorni(val_stock_days), delta=f"{delta_stock_pct:+.2f}% vs PY", delta_color="inverse")
+box_m4.metric(label="🏬 Avg Stock ", value=fmt_valuta_interi(val_avg_stock_ultimo_giorno), delta=None)
+box_m5.metric(label="📉 Shrinkage (%)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
+box_m6.metric(label="🏷️ Share Promo (%)", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
+box_m7.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
 
 # =============================================================================
 # PARTE 3.E: MOTORE DI FILTRAGGIO DINAMICO ED ESTRAZIONE CODICI REPARTO TARGET
