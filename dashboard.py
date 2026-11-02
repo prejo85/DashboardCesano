@@ -517,17 +517,21 @@ with tab1:
                 else:
                     st.caption("ℹ️ Nessun articolo indispensabile trovato per questa combinazione di filtri.")
 # =============================================================================
-# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6)
+# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - FIX COMPLETO
 # =============================================================================
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.markdown("#### 📈 Performance Report Analisi Articoli")
                     
-                    if not df_add.empty:
+                    if u_add is not None:
                         df_add_clean = df_add.copy()
                         
-                        # Identificazione dinamica o posizionale del codice reparto interno al file 6
-                        # Modifica l'indice posizionale se il codice reparto non si trova nella terza colonna (indice 2)
-                        df_add_clean['Cod_Reparto_Add'] = df_add_clean.iloc[:, 2].astype(str).apply(
+                        # -------------------------------------------------
+                        # ASSOCIAZIONE DINAMICA COLONNA REPARTO (FILE 6)
+                        # -------------------------------------------------
+                        # Cerchiamo una colonna che contenga 'reparto' o 'department', altrimenti usiamo la terza colonna (indice 2)
+                        c_rep_add_name = next((c for c in df_add_clean.columns if 'reparto' in c.lower() or 'department' in c.lower() or 'rep' in c.lower()), df_add_clean.columns[2])
+                        
+                        df_add_clean['Cod_Reparto_Add'] = df_add_clean[c_rep_add_name].astype(str).apply(
                             lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
                         )
                         
@@ -536,13 +540,13 @@ with tab1:
                         
                         if not df_add_filtrato.empty:
                             # -------------------------------------------------
-                            # MOTORE DINAMICO DI IDENTIFICAZIONE COLONNE (FILE 6)
+                            # MOTORE DINAMICO DI IDENTIFICAZIONE COLONNE METRICHE
                             # -------------------------------------------------
                             def get_col_index_by_text(dataframe, keyword, fallback_idx):
                                 idx = next((i for i, c in enumerate(dataframe.columns) if keyword.lower() in c.lower()), None)
                                 return idx if idx is not None else fallback_idx
 
-                            # Individuazione indici basata sui nomi delle colonne del tuo file Excel
+                            # Individuazione indici basata sui nomi delle colonne del tuo file Excel o indici di ripiego
                             idx_sales_ty = get_col_index_by_text(df_add_filtrato, 'sales tt', 5)
                             idx_sales_py = get_col_index_by_text(df_add_filtrato, 'py custom', 6)
                             idx_colli_ty = get_col_index_by_text(df_add_filtrato, 'colli', 7)
@@ -564,7 +568,7 @@ with tab1:
                                 st.metric(
                                     label="💰 Sales Totali (Sorgente 6)", 
                                     value=fmt_valuta_interi(add_sales_ty), 
-                                    delta=f"{add_delta_sales:+.2f}% vs PY"
+                                    delta=f"{add_delta_sales:+.2f}% vs PY" if add_sales_py > 0 else None
                                 )
                             with col_add2:
                                 st.metric(
@@ -583,9 +587,9 @@ with tab1:
                             df_add_view['Quantità Colli TY'] = parse_generic_numeric(df_add_view, idx_colli_ty).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
                             df_add_view['Quantità Colli PY'] = parse_generic_numeric(df_add_view, idx_colli_py).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
                             
-                            # Estrazione sicura delle etichette descrittive (es. Categoria/Articolo presenti nelle prime colonne)
-                            lbl_prod = df_add_view.columns[4] if len(df_add_view.columns) > 4 else df_add_view.columns[0]
-                            lbl_desc = df_add_view.columns[3] if len(df_add_view.columns) > 3 else df_add_view.columns[1]
+                            # Estrazione sicura delle etichette descrittive del prodotto (solitamente colonne 3 e 4 o iniziali)
+                            lbl_prod = df_add_view.columns[4] if len(df_add_view.columns) > 4 else df_add_view.columns[1]
+                            lbl_desc = df_add_view.columns[3] if len(df_add_view.columns) > 3 else df_add_view.columns[0]
 
                             colonne_out_add = [lbl_desc, lbl_prod, 'Fatturato TY (€)', 'Fatturato PY (€)', 'Quantità Colli TY', 'Quantità Colli PY']
                             df_add_table_final = df_add_view[colonne_out_add].copy()
@@ -594,10 +598,9 @@ with tab1:
                         else:
                             st.info("ℹ️ Nessun record trovato nel report aggiuntivo per la selezione di reparto attiva.")
                     else:
-                        st.warning("⚠️ File sorgente aggiuntivo vuoto o non formattato correttamente.")
+                        st.warning("⚠️ File sorgente aggiuntivo non inserito o non rilevato nella barra laterale.")
                     
                     st.markdown("<br><hr>", unsafe_allow_html=True)
-
 
 # =============================================================================
 # PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE (BARRE AFFIANCATE)
