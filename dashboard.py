@@ -287,17 +287,17 @@ with tab1:
             colli_py_tot = int(round(df_calc['# Colli PY Custom Cal'].sum())) if '# Colli PY Custom Cal' in df_calc.columns else 23155
             delta_colli_pct = ((colli_tot - colli_py_tot) / colli_py_tot * 100) if colli_py_tot > 0 else 5.08
 
-            box_m8.metric(
+            box_m3.metric(
                 label="📦 Volume Totale (Colli)", 
                 value=f"{colli_tot:,}".replace(',', '.'), 
                 delta=f"{delta_colli_pct:+.2f}% vs PY"
             )
 
-            box_m3.metric(label="📦 Stock Days", value=fmt_giorni(val_stock_days), delta=f"{delta_stock_pct:+.2f}% vs PY", delta_color="inverse")
-            box_m4.metric(label="🏬 Avg Stock Last Day", value=fmt_valuta_interi(val_avg_stock_ultimo_giorno), delta=None)
-            box_m5.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
-            box_m6.metric(label="🏷️ Share Promo %", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
-            box_m7.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
+            box_m4.metric(label="📦 Stock Days", value=fmt_giorni(val_stock_days), delta=f"{delta_stock_pct:+.2f}% vs PY", delta_color="inverse")
+            box_m5.metric(label="🏬 Avg Stock Last Day", value=fmt_valuta_interi(val_avg_stock_ultimo_giorno), delta=None)
+            box_m6.metric(label="📉 Shrinkage (Sfrido)", value=fmt_percentuale(shrink_on_sales), delta=f"{delta_shrink_pp:+.2f} pp vs PY", delta_color="inverse")
+            box_m7.metric(label="🏷️ Share Promo %", value=fmt_percentuale(promo_share_ty), delta=f"{delta_promo_pp:+.2f} pp vs PY")
+            box_m8.metric(label="💎 Sales HVS", value=fmt_valuta_interi(hvs_sales_ty), delta=f"{delta_hvs_pct:+.2f}% vs PY")
 
 
 # =============================================================================
