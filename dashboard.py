@@ -519,136 +519,135 @@ with tab1:
             else:
                 st.caption("ℹ️ Carica il report degli indispensabili per attivare la vista.")
 # =============================================================================
-# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - FIX ANAGRAFICHE
+# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - FIX E TOP 10
 # =============================================================================
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("#### 📈 Performance Report Analisi Articoli")
             
-            if not df_add.empty:
+            if u_add is not None:
                 df_add_clean = df_add.copy()
                 
-                # Associazione dinamica della colonna Reparto
+                # -------------------------------------------------
+                # ASSOCIAZIONE DINAMICA COLONNA REPARTO (FILE 6)
+                # -------------------------------------------------
                 c_rep_add_name = next((c for c in df_add_clean.columns if 'reparto' in c.lower() or 'department' in c.lower() or 'rep' in c.lower()), df_add_clean.columns[2])
                 
                 df_add_clean['Cod_Reparto_Add'] = df_add_clean[c_rep_add_name].astype(str).apply(
                     lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
                 )
                 
-                # Filtro basato sulla selezione gerarchica dello Store attiva
+                # Filtriamo i dati in background basandoci sulla selezione gerarchica attiva dello Store
                 df_add_filtrato = df_add_clean[df_add_clean['Cod_Reparto_Add'].isin(codici_reparti_vista)].copy()
                 
                 if not df_add_filtrato.empty:
+                    # -------------------------------------------------
+                    # MOTORE DINAMICO DI IDENTIFICAZIONE COLONNE METRICHE
+                    # -------------------------------------------------
                     def get_col_index_by_text(dataframe, keyword, fallback_idx):
                         idx = next((i for i, c in enumerate(dataframe.columns) if keyword.lower() in c.lower()), None)
                         return idx if idx is not None else fallback_idx
 
-                    # Individuazione dinamica degli indici delle colonne principali nel File 6
-                    idx_sales_ty = get_col_index_by_text(df_add_filtrato, 'sales tt', 5)
-                    idx_sales_py = get_col_index_by_text(df_add_filtrato, 'py custom', 6)
-                    idx_colli_ty = get_col_index_by_text(df_add_filtrato, 'colli', 7)
-                    idx_colli_py = get_col_index_by_text(df_add_filtrato, 'colli py', 8)
-                    
-                    idx_shrink = get_col_index_by_text(df_add_filtrato, 'shrink', 11)   
-                    idx_accrediti = get_col_index_by_text(df_add_filtrato, 'accred', 12) 
-                    idx_margin_val = get_col_index_by_text(df_add_filtrato, 'margin', 9) 
+                    # Individuazione indici basata sui nomi delle colonne del file (Sorgente 2)
+                    idx_sales_ty   = get_col_index_by_text(df_add_filtrato, 'sales tt', 4)
+                    idx_colli_ty   = get_col_index_by_text(df_add_filtrato, 'colli', 5)
+                    idx_accrediti  = get_col_index_by_text(df_add_filtrato, 'accrediti', 6)
+                    idx_margin_ty  = get_col_index_by_text(df_add_filtrato, 'front margin', 7)
+                    idx_shrink_ty  = get_col_index_by_text(df_add_filtrato, 'shrinkage', 8)
 
-                    # Conversione in formato numerico float per i calcoli
-                    df_add_filtrato['Sales_TY_Num'] = parse_generic_numeric(df_add_filtrato, idx_sales_ty)
-                    df_add_filtrato['Sales_PY_Num'] = parse_generic_numeric(df_add_filtrato, idx_sales_py)
-                    df_add_filtrato['Colli_TY_Num'] = parse_generic_numeric(df_add_filtrato, idx_colli_ty)
-                    df_add_filtrato['Colli_PY_Num'] = parse_generic_numeric(df_add_filtrato, idx_colli_py)
-                    df_add_filtrato['Shrink_Num'] = parse_generic_numeric(df_add_filtrato, idx_shrink)
-                    df_add_filtrato['Accrediti_Num'] = parse_generic_numeric(df_add_filtrato, idx_accrediti)
-                    df_add_filtrato['Margin_Num'] = parse_generic_numeric(df_add_filtrato, idx_margin_val)
-
-                    # KPI Generali di Sintesi
-                    add_sales_ty = df_add_filtrato['Sales_TY_Num'].sum()
-                    add_sales_py = df_add_filtrato['Sales_PY_Num'].sum()
-                    add_colli_ty = df_add_filtrato['Colli_TY_Num'].sum()
-                    add_colli_py = df_add_filtrato['Colli_PY_Num'].sum()
+                    # Estrazione numerica delle metriche commerciali per i KPI superiori
+                    add_sales_ty = parse_generic_numeric(df_add_filtrato, idx_sales_ty).sum()
+                    add_colli_ty = parse_generic_numeric(df_add_filtrato, idx_colli_ty).sum()
                     
-                    add_delta_sales = ((add_sales_ty - add_sales_py) / add_sales_py * 100) if add_sales_py > 0 else 0.0
-                    add_delta_colli = ((add_colli_ty - add_colli_py) / add_colli_py * 100) if add_colli_py > 0 else 0.0
-                    
+                    # Rendering dei KPI superiori della nuova sorgente dati
                     col_add1, col_add2 = st.columns(2)
                     with col_add1:
-                        st.metric(label="💰 Sales Totali (Sorgente 6)", value=fmt_valuta_interi(add_sales_ty), delta=f"{add_delta_sales:+.2f}% vs PY" if add_sales_py > 0 else None)
+                        st.metric(
+                            label="💰 Sales Totali (Sorgente 6)", 
+                            value=fmt_valuta_interi(add_sales_ty)
+                        )
                     with col_add2:
-                        st.metric(label="📦 Volumi Totali Colli (Sorgente 6)", value=f"{int(round(add_colli_ty)):,}".replace(',', '.'), delta=f"{add_delta_colli:+.2f}% vs PY" if add_colli_py > 0 else None)
+                        st.metric(
+                            label="📦 Volumi Totali Colli (Sorgente 6)", 
+                            value=f"{int(round(add_colli_ty)):,}".replace(',', '.')
+                        )
                         
                     st.markdown("<div style='padding-top: 15px;'></div>", unsafe_allow_html=True)
+                    st.markdown("##### Seleziona Vista Analitica di Dettaglio:")
                     
-                    # Interfaccia viste
-                    interfaccia_viste = [
-                        "📦 Top 10 Articoli (Colli)", 
-                        "📉 Top 10 Sfrido/Shrinkage", 
-                        "🎫 Top 10 Quota Accrediti", 
-                        "👥 Top 10 Clienti (Low Margin)"
-                    ]
-                    
-                    selected_view_add = st.segmented_control(
-                        "Seleziona Vista Analitica di Dettaglio:",
-                        options=interfaccia_viste,
-                        default="📦 Top 10 Articoli (Colli)",
-                        key="seg_view_report_6"
+                    # Selettore Orizzontale per la scelta dell'ordinamento Top 10
+                    vista_selezionata = st.radio(
+                        label="Scegli la metrica di ordinamento delle referenze:",
+                        options=["Top 10 Articoli (Colli)", "Top 10 Sfrido/Shrinkage", "Top 10 Quota Accrediti", "Top 10 Clienti (Low Margin)"],
+                        horizontal=True,
+                        label_visibility="collapsed"
                     )
-                    
-                    # -------------------------------------------------
-                    # FIX: LOGICA RIGOROSA DI ESTRAZIONE ANAGRAFICHE (TESTUALE)
-                    # -------------------------------------------------
-                    # Cerchiamo le colonne testuali descrittive evitando gli indici numerici del fatturato
-                    lbl_codice = next((c for c in df_add_filtrato.columns if 'codice' in c.lower() or 'id' in c.lower() or 'art' in c.lower()), df_add_filtrato.columns[0])
-                    lbl_descrizione = next((c for c in df_add_filtrato.columns if 'desc' in c.lower() or 'prodotto' in c.lower() or 'nome' in c.lower() or 'referenza' in c.lower()), df_add_filtrato.columns[1])
-                    
-                    df_add_view = df_add_filtrato.copy()
 
-                    if selected_view_add == "📦 Top 10 Articoli (Colli)":
-                        df_res = df_add_view.sort_values(by='Colli_TY_Num', ascending=False).head(10).reset_index(drop=True)
-                        st.markdown("##### 📦 Primi 10 Articoli per Volume di Colli Venduti:")
-                        
-                    elif selected_view_add == "📉 Top 10 Sfrido/Shrinkage":
-                        df_res = df_add_view.sort_values(by='Shrink_Num', ascending=False).head(10).reset_index(drop=True)
-                        st.markdown("##### 📉 Primi 10 Articoli per Volume di Sfrido/Shrinkage (Decrescente):")
-                        
-                    elif selected_view_add == "🎫 Top 10 Quota Accrediti":
-                        df_res = df_add_view.sort_values(by='Accrediti_Num', ascending=False).head(10).reset_index(drop=True)
-                        st.markdown("##### 🎫 Primi 10 Articoli per Valore Assoluto di Accrediti Generati:")
-                        
-                    elif selected_view_add == "👥 Top 10 Clienti (Low Margin)":
-                        c_clienti_add = next((c for c in df_add_view.columns if 'client' in c.lower() or 'ragione' in c.lower() or 'cust' in c.lower()), df_add_view.columns[0])
-                        df_low_margin = df_add_view[df_add_view['Margin_Num'] <= 0.0]
-                        df_res = df_low_margin.sort_values(by='Margin_Num', ascending=True).head(10).reset_index(drop=True)
-                        st.markdown("##### 👥 Primi 10 Record/Clienti con Margine Critico (Dal più basso/negativo a 0):")
-                        lbl_codice = c_clienti_add
-                        # Se è un cliente, usiamo un fallback vuoto o lo store se la descrizione prodotto non ha senso
-                        lbl_descrizione = next((c for c in df_add_view.columns if 'store' in c.lower() or 'negozio' in c.lower()), df_add_view.columns[1])
+                    # Creazione delle colonne pulite e tipizzate nel DataFrame per l'ordinamento matematico sicuro
+                    df_add_filtrato['Sales_Num'] = parse_generic_numeric(df_add_filtrato, idx_sales_ty)
+                    df_add_filtrato['Colli_Num'] = parse_generic_numeric(df_add_filtrato, idx_colli_ty)
+                    df_add_filtrato['Sfrido_Num'] = parse_generic_numeric(df_add_filtrato, idx_shrink_ty)
+                    df_add_filtrato['Accrediti_Num'] = parse_generic_numeric(df_add_filtrato, idx_accrediti)
+                    df_add_filtrato['Margin_Num'] = parse_generic_numeric(df_add_filtrato, idx_margin_ty)
+                    
+                    # Calcolo della percentuale di margine (Front Margin / Sales)
+                    df_add_filtrato['Margin_Pct'] = df_add_filtrato.apply(
+                        lambda r: (r['Margin_Num'] / r['Sales_Num'] * 100) if r['Sales_Num'] > 0 else 0.0, axis=1
+                    )
 
-                    # Formattazione e pulizia per il rendering della tabella
-                    df_res['Fatturato TY (€)'] = df_res['Sales_TY_Num'].apply(fmt_valuta_decimali)
-                    df_res['Quantità Colli TY'] = df_res['Colli_TY_Num'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
-                    df_res['Sfrido/Shrinkage (€)'] = df_res['Shrink_Num'].apply(fmt_valuta_decimali)
-                    df_res['Accrediti (€)'] = df_res['Accrediti_Num'].apply(fmt_valuta_decimali)
-                    df_res['Front Margin %'] = df_res['Margin_Num'].apply(fmt_percentuale)
+                    # -------------------------------------------------
+                    # LOGICA DI ORDINAMENTO DINAMICO (TOP 10)
+                    # -------------------------------------------------
+                    if vista_selezionata == "Top 10 Articoli (Colli)":
+                        st.markdown("###### 📊 Primi 10 Articoli per Volume di Colli Venduti:")
+                        df_top10 = df_add_filtrato.sort_values(by='Colli_Num', ascending=False).head(10)
+                        
+                    elif vista_selezionata == "Top 10 Sfrido/Shrinkage":
+                        st.markdown("###### 📉 Primi 10 Articoli per Volume di Sfrido/Shrinkage Assoluto:")
+                        # Ordinamento basato sul valore assoluto dello sfrido se inserito con segno negativo
+                        df_add_filtrato['Sfrido_Abs'] = df_add_filtrato['Sfrido_Num'].abs()
+                        df_top10 = df_add_filtrato.sort_values(by='Sfrido_Abs', ascending=False).head(10)
+                        
+                    elif vista_selezionata == "Top 10 Quota Accrediti":
+                        st.markdown("###### 💳 Primi 10 Articoli per Valore Totale Storico di Accrediti:")
+                        df_add_filtrato['Accrediti_Abs'] = df_add_filtrato['Accrediti_Num'].abs()
+                        df_top10 = df_add_filtrato.sort_values(by='Accrediti_Abs', ascending=False).head(10)
+                        
+                    elif vista_selezionata == "Top 10 Clienti (Low Margin)":
+                        st.markdown("###### 👥 Primi 10 Record/Articoli con Margine % Più Basso (Low Margin):")
+                        # Filtra eventuali righe a fatturato zero per evitare falsi positivi nel low margin
+                        df_valid_sales = df_add_filtrato[df_add_filtrato['Sales_Num'] > 0]
+                        if not df_valid_sales.empty:
+                            df_top10 = df_valid_sales.sort_values(by='Margin_Pct', ascending=True).head(10)
+                        else:
+                            df_top10 = df_add_filtrato.sort_values(by='Margin_Pct', ascending=True).head(10)
+
+                    # -------------------------------------------------
+                    # PREPARAZIONE E FORMATTAZIONE TABELLA FINALE
+                    # -------------------------------------------------
+                    df_add_view = df_top10.copy()
+                    df_add_view['Fatturato TY'] = df_add_view['Sales_Num'].apply(fmt_valuta_decimali)
+                    df_add_view['Volume TY (Colli)'] = df_add_view['Colli_Num'].apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                    df_add_view['Sfrido Corrente (€)'] = df_add_view['Sfrido_Num'].apply(fmt_valuta_decimali)
+                    df_add_view['Accrediti (€)'] = df_add_view['Accrediti_Num'].apply(fmt_valuta_decimali)
+                    df_add_view['Margine %'] = df_add_view['Margin_Pct'].apply(fmt_percentuale)
                     
-                    # Generazione del set di colonne allineato senza inversioni numeriche
-                    colonne_out_add = [lbl_codice, lbl_descrizione, 'Fatturato TY (€)', 'Quantità Colli TY', 'Sfrido/Shrinkage (€)', 'Accrediti (€)', 'Front Margin %']
-                    df_add_table_final = df_res[colonne_out_add].copy()
+                    # Estrazione sicura delle etichette descrittive (Articolo e Reparto/Descrizione)
+                    lbl_cod_art = df_add_view.columns[3] if len(df_add_view.columns) > 3 else df_add_view.columns[0]
+                    lbl_desc_art = df_add_view.columns[2] if len(df_add_view.columns) > 2 else df_add_view.columns[1]
+
+                    colonne_out_add = [lbl_cod_art, lbl_desc_art, 'Fatturato TY', 'Volume TY (Colli)', 'Sfrido Corrente (€)', 'Accrediti (€)', 'Margine %']
+                    df_add_table_final = df_add_view[colonne_out_add].copy()
                     
-                    # Ridenominazione finale pulita delle intestazioni
-                    df_add_table_final.columns = [
-                        'Codice / Identificativo', 'Descrizione Referenza', 
-                        'Fatturato TY', 'Volume TY (Colli)', 
-                        'Sfrido Corrente (€)', 'Accrediti (€)', 'Margine %'
-                    ]
+                    # Ridenominazione per conformità con il layout visivo richiesto
+                    df_add_table_final.columns = ['Codice / Identificativo', 'Descrizione Referenza', 'Fatturato TY', 'Volume TY (Colli)', 'Sfrido Corrente (€)', 'Accrediti (€)', 'Margine %']
                     
                     st.dataframe(df_add_table_final, use_container_width=True, hide_index=True)
                 else:
                     st.info("ℹ️ Nessun record trovato nel report aggiuntivo per la selezione di reparto attiva.")
             else:
-                st.warning("⚠️ File sorgente aggiuntivo vuoto o non caricato.")
+                st.warning("⚠️ File sorgente aggiuntivo non inserito o non rilevato nella barra laterale.")
             
-            st.markdown("<br><hr>", unsafe_allow_html=True)
-
+            st.markdown("<br><br>", unsafe_allow_html=True)
 
 # =============================================================================
 # PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE (BARRE AFFIANCATE)
