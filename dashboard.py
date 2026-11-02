@@ -537,12 +537,20 @@ with tab1:
                     df_add_clean.columns
                 )
                 
-                # Pulizia stringhe per garantire il perfetto matching con i reparti selezionati a monte
-                df_add_clean['Reparto_Filtro_Add'] = df_add_clean[c_rep_add_name].astype(str).str.strip()
-                lista_reparti_attivi = [str(r).strip() for r in codici_reparti_vista]
+                # Estraiamo in modo sicuro solo il codice numerico del reparto (es: "101" da "101 - SECCHI")
+                df_add_clean['Cod_Reparto_Add'] = df_add_clean[c_rep_add_name].astype(str).apply(
+                    lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
+                )
                 
-                # Applica il filtro dinamico basato sulla selezione gerarchica attiva dello Store
-                df_add_filtrato = df_add_clean[df_add_clean['Reparto_Filtro_Add'].isin(lista_reparti_attivi)].copy()
+                # Estraiamo i codici numerici anche dalla selezione attiva a monte
+                lista_codici_target = []
+                for r in codici_reparti_vista:
+                    match = re.search(r'\d+', str(r))
+                    if match:
+                        lista_codici_target.append(match.group())
+                
+                # Applica il filtro numerico dinamico per garantire l'aggiornamento automatico
+                df_add_filtrato = df_add_clean[df_add_clean['Cod_Reparto_Add'].isin(lista_codici_target)].copy()
                 
                 if not df_add_filtrato.empty:
                     # -------------------------------------------------
@@ -592,7 +600,7 @@ with tab1:
                         label_visibility="collapsed"
                     )
 
-                    # Estrazione pulita del testo escludendo l'emoji iniziale per lo switch condizionale
+                    # Estrazione pulita del testo escludendo l'emoji iniziale (Risolto l'errore del split)
                     if vista_scelta_emoji:
                         parti = vista_scelta_emoji.split(" ", 1)
                         vista_pura = parti[1] if len(parti) > 1 else vista_scelta_emoji
@@ -656,7 +664,7 @@ with tab1:
                     df_add_table_final.columns = ['Articolo-Descrizione', 'Fatturato TY', 'Volume TY (Colli)', 'Sfrido Corrente (€)', 'Accrediti (€)', 'Margine %']
                     
                     # Generazione del layout finale con chiave reattiva per forzare il refresh delle celle
-                    st.dataframe(df_add_table_final, use_container_width=True, hide_index=True, key=f"tbl_f6_reactive_{str(codici_reparti_vista)}_{vista_pura}")
+                    st.dataframe(df_add_table_final, use_container_width=True, hide_index=True, key=f"tbl_f6_reactive_{str(lista_codici_target)}_{vista_pura}")
                 else:
                     st.info("ℹ️ Nessun record trovato nel report aggiuntivo per i reparti attualmente selezionati.")
             else:
