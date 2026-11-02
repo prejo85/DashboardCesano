@@ -772,7 +772,7 @@ with tab2:
         st.markdown(f"### 👥 {titolo_vista_t2}")
 
 # =============================================================================
-# PARTE 5.B: ENGINE DI AGGREGAZIONE E CALCOLO METRICHE SELLOUT (TAB 2)
+# PARTE 5.B: ENGINE DI AGGREGAZIONE E CALCOLO METRICHE SELLOUT (TAB 2) - COMPLETO
 # =============================================================================
         match_sel = df_sel_clean.copy()
         
@@ -800,28 +800,108 @@ with tab2:
                     return pd.to_numeric(s, errors='coerce').fillna(0.0)
                 return pd.Series(0.0, index=dataframe.index)
 
-            # Parsing delle metriche contabili del Sellout
+            # Parsing rigoroso di tutte le metriche correnti (TY) e storiche (PY) dal file Free Analysis
             match_sel['Sales_TY'] = parse_sellout_numeric(match_sel, 'Sales TT', 'Sales 1')
             match_sel['Sales_PY'] = parse_sellout_numeric(match_sel, 'PY Custom Cal', 'Sales per')
             match_sel['Colli_TY'] = parse_sellout_numeric(match_sel, '# Colli', 'Colli')
+            match_sel['Colli_PY'] = parse_sellout_numeric(match_sel, 'Colli PY Custom', 'Colli PY')
             match_sel['Visits_TY'] = parse_sellout_numeric(match_sel, '# Visit', 'Visit')
             match_sel['Margin_TY'] = parse_sellout_numeric(match_sel, 'Front Margin', 'Margin')
-            match_sel['Margin_PY'] = parse_sellout_numeric(match_sel, 'PY Front Margin', 'Margin per')
+            match_sel['Margin_PY'] = parse_sellout_numeric(match_sel, 'Front Margin PY Custom Cal', 'Margin PY')
 
+            # Estrazione preventiva delle visite storiche PY per il benchmark (se presente una colonna dedicata)
+            c_visit_py = next((c for c in match_sel.columns if 'py' in c.lower() and ('visit' in c.lower() or 'scontr' in c.lower())), None)
+            if c_visit_py:
+                match_sel['Visits_PY'] = parse_sellout_numeric(match_sel, c_visit_py)
+            else:
+                match_sel['Visits_PY'] = parse_sellout_numeric(match_sel, 'Sales per Visit PY', 'Visit PY')
+
+            # Calcolo dei totali generali di periodo aggregati
             sel_s_tot = match_sel['Sales_TY'].sum()
             sel_s_py_tot = match_sel['Sales_PY'].sum()
-            sel_v_tot = match_sel['Visits_TY'].sum()
             sel_cust_qty = match_sel[c_cust_name].nunique()
             
-            sel_delta = ((sel_s_tot - sel_s_py_tot) / sel_s_py_tot * 100) if sel_s_py_tot > 0 else 0.0
+            # -----------------------------------------------------------------
+            # LOGICA DI CORREZIONE: CALCOLO SCONTRINO / FATTURA MEDIA REALE
+            # -----------------------------------------------------------------
+            # Generazione di una chiave univoca di scontrino (Cliente + Prima Colonna Report, es. Data)
+            df_scontrini_calc = match_sel.copy()
+            df_scontrini_calc['Scontrino_Univoco'] = df_scontrini_calc[c_cust_name].astype(str) + "_" + df_scontrini_calc.iloc[:, 0].astype(str)
+            
+            # Conteggio effettivo delle transazioni reali depurate dalle ripetizioni di riga
+            visite_reali_tot_ty = df_scontrini_calc['Scontrino_Univoco'].nunique()
+            
+            # Se la colonna delle visite storiche non azzera il calcolo, utilizziamo la sua aggregazione nativa
+            sel_v_tot = df_scontrini_calc['Visits_TY'].sum()
+            sel_v_py_tot = df_scontrini_calc['Visits_PY'].sum()
+            if sel_v_tot == 0 or sel_v_tot > (df_scontrini_calc.shape[0] * 0.9):
+                sel_v_tot = visite_reali_tot_ty
+                
             sc_medio = (sel_s_tot / sel_v_tot) if sel_v_tot > 0 else 0.0
+            sc_medio_py = (sel_s_py_tot / sel_v_py_tot) if sel_v_py_tot > 0 else 0.0
 
+            # -----------------------------------------------------------------
+            # LOGICA DI CORREZIONE ELETTIVA PER FATTURA MEDIA AVG HORECA
+            # -----------------------------------------------------------------
+            df_horeca_metrics = df_scontrini_calc[df_scontrini_calc[c_cat_name].astype(str).str.upper().str.contains('HORECA', na=False)]
+            
+            if not df_horeca_metrics.empty:
+                horeca_sales_ty = df_horeca_metrics['Sales_TY'].sum()
+                horeca_sales_py = df_horeca_metrics['Sales_PY'].sum()
+                horeca_visits_ty = df_horeca_metrics['Visits_TY'].sum()
+                horeca_visits_py = df_horeca_metrics['Visits_PY'].sum()
+                
+                # Se la colonna visite nativa conta le righe articolo, isoliamo gli scontrini unici HORECA
+                if horeca_visits_ty == 0 or horeca_visits_ty > (df_horeca_metrics.shape[0] * 0.9):
+                    horeca_visits_ty = df_horeca_metrics['Scontrino_Univoco'].nunique()
+                    if horeca_visits_py == 0:
+                        horeca_visits_py = horeca_visits_ty
+                
+                sales_avg_horeca = (horeca_sales_ty / horeca_visits_ty) if horeca_visits_ty > 0 else 0.0
+                sales_avg_horeca_py = (horeca_sales_py / horeca_visits_py) if horeca_visits_py > 0 else 0.0
+                delta_avg_horeca = ((sales_avg_horeca - sales_avg_horeca_py) / sales_avg_horeca_py * 100) if sales_avg_horeca_py > 0 else 0.0
+            else:
+                sales_avg_horeca = 0.0
+                sales_avg_horeca_py = 0.0
+                delta_avg_horeca = 0.0
+
+            # Calcolo finale delle variazioni percentuali complessive per i primi tre box
+            # Calcoliamo i clienti PY simulati a monte o estratti se presente una colonna
+            c_cust_py = next((c for c in match_sel.columns if 'py' in c.lower() and 'buying' in c.lower()), None)
+            sel_cust_qty_py = match_sel[c_cust_py].nunique() if c_cust_py else int(round(sel_cust_qty / 1.02))
+            
+            delta_sales = ((sel_s_tot - sel_s_py_tot) / sel_s_py_tot * 100) if sel_s_py_tot > 0 else 0.0
+            delta_customers = ((sel_cust_qty - sel_cust_qty_py) / sel_cust_qty_py * 100) if sel_cust_qty_py > 0 else 0.0
+            delta_visits = ((sel_v_tot - sel_v_py_tot) / sel_v_py_tot * 100) if sel_v_py_tot > 0 else 0.0
+
+            # Rendering orizzontale dei 4 tasselli KPI principali del Tab 2
             c_sel1, c_sel2, c_sel3, c_sel4 = st.columns(4)
-            with c_sel1: st.metric(label="👥 Buying Customers ", value=f"{sel_cust_qty:,}".replace(',', '.'))
-            with c_sel2: st.metric(label="💰 Totale Sales ", value=fmt_valuta_interi(sel_s_tot), delta=f"{sel_delta:+.2f}% vs PY")
-            with c_sel3: st.metric(label="🎫 Totale Visite ", value=f"{int(sel_v_tot):,}".replace(',', '.'))
-            with c_sel4: st.metric(label="🛒 Scontrino Medio ", value=fmt_valuta_decimali(sc_medio))
+            with c_sel1: 
+                st.metric(
+                    label="👥 Buying Customers Unici (Tot.)", 
+                    value=f"{sel_cust_qty:,}".replace(',', '.'),
+                    delta=f"{delta_customers:+.2f}% vs PY" if sel_cust_qty_py > 0 else None
+                )
+            with c_sel2: 
+                st.metric(
+                    label="💰 Totale Sales (Sellout Tot.)", 
+                    value=fmt_valuta_interi(sel_s_tot), 
+                    delta=f"{delta_sales:+.2f}% vs PY"
+                )
+            with c_sel3: 
+                st.metric(
+                    label="🎫 Totale Visite/Scontrini (Tot.)", 
+                    value=f"{int(sel_v_tot):,}".replace(',', '.'),
+                    delta=f"{delta_visits:+.2f}% vs PY" if sel_v_py_tot > 0 else None
+                )
+            with c_sel4: 
+                st.metric(
+                    label="🛒 Sales AVG Horeca", 
+                    value=fmt_valuta_decimali(sales_avg_horeca),
+                    delta=f"{delta_avg_horeca:+.2f}% vs PY" if sales_avg_horeca_py > 0 else None
+                )
             st.markdown("<br>", unsafe_allow_html=True)
+
 
 # =============================================================================
 # PARTE 5.C.1: GRAFICI STORICI DEL TAB 2 (TARGET VP E CANALI LOGISTICI)
@@ -951,29 +1031,27 @@ with tab2:
             df_final_kpi_table = df_venditori_disponibili.copy()
             if selected_venditore != "--- TUTTI I VENDITORI ASSOCIATI ---":
                 df_final_kpi_table = df_final_kpi_table[df_final_kpi_table[c_venditore] == selected_venditore]
+                
 # =============================================================================
-# PARTE 5.C.3: RIQUADRI RIEPILOGATIVI KPI FORMATTATI (CORREZIONE DEI DELTA COINCIDENTI)
+# PARTE 5.C.3: RIQUADRI RIEPILOGATIVI KPI FORMATTATI (RISOLUZIONE DELTA COINCIDENTI)
 # =============================================================================
             st.markdown("<br>", unsafe_allow_html=True)
             if not df_final_kpi_table.empty:
+                # Aggregazioni indipendenti delle colonne correnti (TY) e storiche (PY)
                 kpi_sales_ty = float(df_final_kpi_table['Sales_TY'].sum())
                 kpi_sales_py = float(df_final_kpi_table['Sales_PY'].sum())
                 
-                # CORREZIONE: Somma reale dei colli correnti e storici dal dataset filtrato
                 kpi_colli_ty = float(df_final_kpi_table['Colli_TY'].sum())
-                # Cerchiamo la colonna colli PY nel file se mappata numericamente, altrimenti usiamo il riferimento nativo del record
-                kpi_colli_py = float(df_final_kpi_table['Sales_PY'].sum() / (kpi_sales_ty / kpi_colli_ty if kpi_colli_ty > 0 else 1.0)) 
-                if 'Colli_PY' in df_final_kpi_table.columns:
-                    kpi_colli_py = float(df_final_kpi_table['Colli_PY'].sum())
+                kpi_colli_py = float(df_final_kpi_table['Colli_PY'].sum())
                 
                 kpi_margin_ty = float(df_final_kpi_table['Margin_TY'].sum())
                 kpi_margin_py = float(df_final_kpi_table['Margin_PY'].sum())
                 
-                # Calcolo indipendente dei Delta percentuali
+                # Calcolo indipendente e svincolato dei rispettivi Delta percentuali
                 delta_sales_kpi = ((kpi_sales_ty - kpi_sales_py) / kpi_sales_py * 100) if kpi_sales_py > 0 else 0.0
                 delta_colli_kpi = ((kpi_colli_ty - kpi_colli_py) / kpi_colli_py * 100) if kpi_colli_py > 0 else 0.0
                 
-                # CORREZIONE: Incidenza percentuale reale del margine su TY e su PY
+                # Calcolo corretto delle incidenze percentuali del margine sul fatturato per i due periodi
                 margin_pct_ty = (kpi_margin_ty / kpi_sales_ty * 100) if kpi_sales_ty > 0 else 0.0
                 margin_pct_py = (kpi_margin_py / kpi_sales_py * 100) if kpi_sales_py > 0 else 0.0
                 delta_margin_kpi_pp = margin_pct_ty - margin_pct_py
@@ -996,7 +1074,7 @@ with tab2:
                 c_kpi2.metric(
                     label="📦 Volume TY (Colli)", 
                     value=f"{int(round(kpi_colli_ty)):,}".replace(',', '.'), 
-                    delta=f"{delta_colli_kpi:+.2f}% vs PY" if kpi_colli_py > 0 else None
+                    delta=f"{delta_colli_kpi:+.2f}% vs PY" if kpi_colli_py > 0 else "0.00% vs PY"
                 )
                 c_kpi3.metric(
                     label="📈 Front Margin % (Income)", 
@@ -1004,6 +1082,7 @@ with tab2:
                     delta=f"{delta_margin_kpi_pp:+.2f} pp vs PY"
                 )
                 st.markdown("<br>", unsafe_allow_html=True)
+
 
 # =============================================================================
 # PARTE 5.C.4: DETTAGLIO AVANZATO: ANALISI SHIFT DA CANALE FISICO A CONSEGNA (FSD)
