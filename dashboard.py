@@ -536,15 +536,25 @@ with tab1:
                         
                         if not df_add_filtrato.empty:
                             # -------------------------------------------------
-                            # LOGICA DI PARSING MATEMATICO DEL NUOVO FILE
+                            # MOTORE DINAMICO DI IDENTIFICAZIONE COLONNE (FILE 6)
                             # -------------------------------------------------
-                            # Mappiamo i volumi correnti e storici (adegua gli indici 5, 6, 7, 8 se le colonne differiscono)
-                            add_sales_ty = parse_generic_numeric(df_add_filtrato, 5).sum()
-                            add_sales_py = parse_generic_numeric(df_add_filtrato, 6).sum()
-                            add_colli_ty = parse_generic_numeric(df_add_filtrato, 7).sum()
-                            add_colli_py = parse_generic_numeric(df_add_filtrato, 8).sum()
+                            def get_col_index_by_text(dataframe, keyword, fallback_idx):
+                                idx = next((i for i, c in enumerate(dataframe.columns) if keyword.lower() in c.lower()), None)
+                                return idx if idx is not None else fallback_idx
+
+                            # Individuazione indici basata sui nomi delle colonne del tuo file Excel
+                            idx_sales_ty = get_col_index_by_text(df_add_filtrato, 'sales tt', 5)
+                            idx_sales_py = get_col_index_by_text(df_add_filtrato, 'py custom', 6)
+                            idx_colli_ty = get_col_index_by_text(df_add_filtrato, 'colli', 7)
+                            idx_colli_py = get_col_index_by_text(df_add_filtrato, 'colli py', 8)
+
+                            # Estrazione numerica delle metriche commerciali ponderate
+                            add_sales_ty = parse_generic_numeric(df_add_filtrato, idx_sales_ty).sum()
+                            add_sales_py = parse_generic_numeric(df_add_filtrato, idx_sales_py).sum()
+                            add_colli_ty = parse_generic_numeric(df_add_filtrato, idx_colli_ty).sum()
+                            add_colli_py = parse_generic_numeric(df_add_filtrato, idx_colli_py).sum()
                             
-                            # Calcolo degli scostamenti percentuali rispetto all'anno precedente
+                            # Calcolo indipendente degli scostamenti percentuali rispetto all'anno precedente
                             add_delta_sales = ((add_sales_ty - add_sales_py) / add_sales_py * 100) if add_sales_py > 0 else 0.0
                             add_delta_colli = ((add_colli_ty - add_colli_py) / add_colli_py * 100) if add_colli_py > 0 else 0.0
                             
@@ -568,22 +578,26 @@ with tab1:
                             
                             # Preparazione del tavolo di visualizzazione tabellare per l'utente
                             df_add_view = df_add_filtrato.copy()
-                            df_add_view['Fatturato TY (€)'] = parse_generic_numeric(df_add_view, 5).apply(fmt_valuta_decimali)
-                            df_add_view['Fatturato PY (€)'] = parse_generic_numeric(df_add_view, 6).apply(fmt_valuta_decimali)
-                            df_add_view['Quantità Colli TY'] = parse_generic_numeric(df_add_view, 7).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
-                            df_add_view['Quantità Colli PY'] = parse_generic_numeric(df_add_view, 8).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                            df_add_view['Fatturato TY (€)'] = parse_generic_numeric(df_add_view, idx_sales_ty).apply(fmt_valuta_decimali)
+                            df_add_view['Fatturato PY (€)'] = parse_generic_numeric(df_add_view, idx_sales_py).apply(fmt_valuta_decimali)
+                            df_add_view['Quantità Colli TY'] = parse_generic_numeric(df_add_view, idx_colli_ty).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
+                            df_add_view['Quantità Colli PY'] = parse_generic_numeric(df_add_view, idx_colli_py).apply(lambda x: f"{int(round(x)):,}".replace(',', '.'))
                             
-                            # Isoliamo le colonne descrittive native iniziali (es. indici 2, 3, 4 per Reparto, Articolo)
-                            colonne_out_add = [df_add_view.columns[3], df_add_view.columns[4], 'Fatturato TY (€)', 'Fatturato PY (€)', 'Quantità Colli TY', 'Quantità Colli PY']
+                            # Estrazione sicura delle etichette descrittive (es. Categoria/Articolo presenti nelle prime colonne)
+                            lbl_prod = df_add_view.columns[4] if len(df_add_view.columns) > 4 else df_add_view.columns[0]
+                            lbl_desc = df_add_view.columns[3] if len(df_add_view.columns) > 3 else df_add_view.columns[1]
+
+                            colonne_out_add = [lbl_desc, lbl_prod, 'Fatturato TY (€)', 'Fatturato PY (€)', 'Quantità Colli TY', 'Quantità Colli PY']
                             df_add_table_final = df_add_view[colonne_out_add].copy()
                             
                             st.dataframe(df_add_table_final, use_container_width=True, hide_index=True)
                         else:
-                            st.caption("ℹ️ Nessun record trovato nel report aggiuntivo per la selezione di reparto attiva.")
+                            st.info("ℹ️ Nessun record trovato nel report aggiuntivo per la selezione di reparto attiva.")
                     else:
                         st.warning("⚠️ File sorgente aggiuntivo vuoto o non formattato correttamente.")
                     
                     st.markdown("<br><hr>", unsafe_allow_html=True)
+
 
 # =============================================================================
 # PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE (BARRE AFFIANCATE)
