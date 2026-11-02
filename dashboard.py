@@ -520,7 +520,7 @@ with tab1:
                 st.caption("ℹ️ Carica il report degli indispensabili per attivare la vista.")
                 
 # =============================================================================
-# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - LAYOUT AGGIORNATO
+# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - LAYOUT AGGIORNATO (FIX NAMEERROR)
 # =============================================================================
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("#### 📈 Performance Report Analisi Articoli")
@@ -588,8 +588,12 @@ with tab1:
                         label_visibility="collapsed"
                     )
 
-                    # Estrazione del testo pulito (rimuove l'emoji iniziale) per la logica Python
-                    vista_pura = vista_scelta_emoji.split(" ", 1) if vista_scelta_emoji else "Top 10 Articoli (Colli)"
+                    # Estrazione del testo pulito corretta (estrae la stringa dopo l'emoji)
+                    if vista_scelta_emoji:
+                        parti = vista_scelta_emoji.split(" ", 1)
+                        vista_pura = parti[1] if len(parti) > 1 else vista_scelta_emoji
+                    else:
+                        vista_pura = "Top 10 Articoli (Colli)"
 
                     # Conversione e tipizzazione matematica delle colonne per l'ordinamento
                     df_add_filtrato['Sales_Num'] = parse_generic_numeric(df_add_filtrato, idx_sales_ty)
@@ -602,6 +606,9 @@ with tab1:
                     df_add_filtrato['Margin_Pct'] = df_add_filtrato.apply(
                         lambda r: (r['Margin_Num'] / r['Sales_Num'] * 100) if r['Sales_Num'] > 0 else 0.0, axis=1
                     )
+
+                    # Inizializzazione di sicurezza del dataframe di output
+                    df_top10 = df_add_filtrato.head(10)
 
                     # -------------------------------------------------
                     # MOTORE DI ORDINAMENTO TOP 10 SULLA VARIABILE PULITA
@@ -639,7 +646,7 @@ with tab1:
                     df_add_view['Margine %'] = df_add_view['Margin_Pct'].apply(fmt_percentuale)
                     
                     # Estrazione automatica della colonna articolo reale (es. "10048 - G385 CRAUTI...")
-                    lbl_cod_art = next((c for c in df_add_view.columns if 'article' in c.lower() or 'articolo' in c.lower()), df_add_view.columns[3])
+                    lbl_cod_art = next((c for c in df_add_view.columns if 'article' in c.lower() or 'articolo' in c.lower()), df_add_view.columns)
 
                     # Selezione finale delle sole colonne richieste (esclusa la colonna Reparto/Descrizione Referenza)
                     colonne_out_add = [lbl_cod_art, 'Fatturato TY', 'Volume TY (Colli)', 'Sfrido Corrente (€)', 'Accrediti (€)', 'Margine %']
@@ -655,6 +662,7 @@ with tab1:
                 st.warning("⚠️ File sorgente aggiuntivo non inserito o non rilevato nella barra laterale.")
             
             st.markdown("<br><br>", unsafe_allow_html=True)
+
 
 # =============================================================================
 # PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE (BARRE AFFIANCATE)
