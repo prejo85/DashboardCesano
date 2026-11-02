@@ -996,113 +996,124 @@ with tab2:
                     delta=f"{delta_margin_kpi_pp:+.2f} pp vs PY"
                 )
                 st.markdown("<br>", unsafe_allow_html=True)
+
 # =============================================================================
-# PARTE 5.C.4: DETTAGLIO AVANZATO: ANALISI SHIFT DA CANALI FISCI (C&C + TAC) A CONSEGNA
+# PARTE 5.C.4: DETTAGLIO AVANZATO: ANALISI SHIFT DA CANALE FISICO A CONSEGNA (FSD)
 # =============================================================================
             if not df_final_kpi_table.empty:
                 st.markdown("---")
-                st.markdown("### 🔄 Focus Migrazione Canale: Da Fisico (Cash & Carry + TAC) a Metro da Te")
+                st.markdown("### 🔄 Focus Migrazione Canale: Da Canale Fisico a Consegna (FSD)")
                 
-                # 1. Identificazione dinamica o esplicita dei canali nel dataset commerciale corrente
-                canali_unici = df_final_kpi_table[c_chan_name].dropna().unique()
+                df_migration = df_final_kpi_table.copy()
                 
-                nome_cc = next((c for c in canali_unici if 'cash' in c.lower() or 'carry' in c.lower()), None)
-                nome_tac = next((c for c in canali_unici if 'tac' in c.lower()), None)
-                nome_mdt = next((c for c in canali_unici if 'metro da te' in c.lower() or 'consegna' in c.lower() or 'delivery' in c.lower()), None)
+                # Funzione per estrarre in modo sicuro il codice numerico del canale (es. "10 - TAC" -> 10)
+                def estrai_codice_canale(valore):
+                    match = re.match(r'^(\d+)', str(valore).strip())
+                    return int(match.group(1)) if match else None
+
+                df_migration['Codice_Canale'] = df_migration[c_chan_name].apply(estrai_codice_canale)
                 
-                # Creiamo una lista dei canali fisici rilevati per il filtro
-                canali_fisici = [c for c in [nome_cc, nome_tac] if c is not None]
+                # Filtriamo i record per includere solo i canali di interesse (1, 10, 3, 5 per C&C e 7 per FSD)
+                df_migration = df_migration[df_migration['Codice_Canale'].isin([1, 10, 3, 5, 7])]
                 
-                if len(canali_fisici) > 0 and nome_mdt:
-                    st.markdown(
-                        f"Analisi focalizzata sui clienti che si stanno spostando dai canali fisici **(Cash & Carry / TAC)** verso **{nome_mdt}**."
+                if not df_migration.empty:
+                    # Categorizzazione esatta dei canali in base alla richiesta
+                    df_migration['Macro_Cluster'] = df_migration['Codice_Canale'].apply(
+                        lambda x: 'CC' if x in [1, 10, 3, 5] else ('FSD' if x == 7 else None)
                     )
                     
-                    # 2. Pivot sui dati dei clienti incrociando Canale e Anno
-                    df_migration = df_final_kpi_table[df_final_kpi_table[c_chan_name].isin(canali_fisici + [nome_mdt])].copy()
-                    
-                    df_pivot = df_migration.groupby([c_cust_name, c_venditore, c_chan_name]).agg({
+                    # Pivot basato su Cliente e Venditore per isolare l'andamento corrente (TY) e storico (PY)
+                    df_pivot = df_migration.groupby([c_cust_name, c_venditore, 'Macro_Cluster']).agg({
                         'Sales_TY': 'sum',
                         'Sales_PY': 'sum'
                     }).reset_index()
                     
-                    # Estrazione e somma dei canali fisici (CC + TAC) per ciascun cliente
-                    df_fisico = df_pivot[df_pivot[c_chan_name].isin(canali_fisici)].groupby([c_cust_name, c_venditore]).agg({
-                        'Sales_TY': 'sum',
-                        'Sales_PY': 'sum'
-                    }).rename(columns={'Sales_TY': 'Fisico_TY', 'Sales_PY': 'Fisico_PY'}).reset_index()
+                    # 1. Estrazione ed aggregazione dei canali Fisici (1, 10, 3, 5)
+                    df_cc = df_pivot[df_pivot['Macro_Cluster'] == 'CC'].rename(
+                        columns={'Sales_TY': 'Fatturato_CC_TY', 'Sales_PY': 'Fatturato_CC_PY'}
+                    ).drop(columns=['Macro_Cluster'])
                     
-                    # Estrazione del canale digitale/consegna (Metro da Te)
-                    df_mdt = df_pivot[df_pivot[c_chan_name] == nome_mdt].groupby([c_cust_name, c_venditore]).agg({
-                        'Sales_TY': 'sum',
-                        'Sales_PY': 'sum'
-                    }).rename(columns={'Sales_TY': 'MDT_TY', 'Sales_PY': 'MDT_PY'}).reset_index()
+                    # 2. Estrazione ed aggregazione del canale Consegna FSD (7)
+                    df_fsd = df_pivot[df_pivot['Macro_Cluster'] == 'FSD'].rename(
+                        columns={'Sales_TY': 'Fatturato_FSD_TY', 'Sales_PY': 'Fatturato_FSD_PY'}
+                    ).drop(columns=['Macro_Cluster'])
                     
-                    # Join completo delle due anime commerciali
-                    df_merged_mig = pd.merge(df_fisico, df_mdt, on=[c_cust_name, c_venditore], how='outer').fillna(0.0)
+                    # Unione dei due cluster commerciali sulla chiave Cliente + Venditore
+                    df_merged_mig = pd.merge(df_cc, df_fsd, on=[c_cust_name, c_venditore], how='outer').fillna(0.0)
                     
-                    # 3. Calcolo delle metriche di travaso reale
-                    df_merged_mig['Delta_Fisico'] = df_merged_mig['Fisico_TY'] - df_merged_mig['Fisico_PY']
-                    df_merged_mig['Delta_MDT'] = df_merged_mig['MDT_TY'] - df_merged_mig['MDT_PY']
+                    # 3. Calcolo dei Delta matematici richiesti
+                    df_merged_mig['Fatturato C&C'] = df_merged_mig['Fatturato_CC_TY']
+                    df_merged_mig['Delta C&C vsPY'] = df_merged_mig['Fatturato_CC_TY'] - df_merged_mig['Fatturato_CC_PY']
                     
-                    # CONDIZIONE RIGOROSA DI MIGRAZIONE:
-                    # Il cliente cala sul canale fisico (Delta < 0) E cresce su Metro da Te (Delta > 0)
-                    df_target_migrati = df_merged_mig[
-                        (df_merged_mig['Fisico_PY'] > 0) & 
-                        (df_merged_mig['Delta_Fisico'] < 0) & 
-                        (df_merged_mig['Delta_MDT'] > 0)
+                    df_merged_mig['Fatturato FSD'] = df_merged_mig['Fatturato_FSD_TY']
+                    df_merged_mig['Delta FSD vsPY'] = df_merged_mig['Fatturato_FSD_TY'] - df_merged_mig['Fatturato_FSD_PY']
+                    
+                    # Quinta colonna: Delta assoluto tra l'andamento del canale Fisico e della Consegna
+                    df_merged_mig['Delta tra C&C e FSD'] = df_merged_mig['Delta_CC'] - df_merged_mig['Delta_MDT']
+                    
+                    # Filtriamo per mostrare solo i clienti attivi nel periodo (corrente o precedente) sui canali analizzati
+                    df_final_view = df_merged_mig[
+                        (df_merged_mig['Fatturato C&C'] > 0) | 
+                        (df_merged_mig['Fatturato FSD'] > 0) | 
+                        (df_merged_mig['Fatturato_CC_PY'] > 0) | 
+                        (df_merged_mig['Fatturato_FSD_PY'] > 0)
                     ].copy()
                     
-                    # Ordiniamo per i clienti che hanno sviluppato maggiormente il fatturato in consegna
-                    df_target_migrati = df_target_migrati.sort_values(by='Delta_MDT', ascending=False).reset_index(drop=True)
+                    # Ordinamento decrescente basato sul fatturato del canale fisico (C&C)
+                    df_final_view = df_final_view.sort_values(by='Fatturato C&C', ascending=False).reset_index(drop=True)
                     
-                    if not df_target_migrati.empty:
-                        # 4. Selezione e pulizia delle colonne per la visualizzazione finale
-                        df_target_view = df_target_migrati[[
-                            c_cust_name, c_venditore, 'Fisico_PY', 'Fisico_TY', 'Delta_Fisico', 'MDT_PY', 'MDT_TY', 'Delta_MDT'
-                        ]].copy()
-                        
-                        df_target_view.columns = [
-                            'Ragione Sociale / Cliente', 
-                            'Venditore Riferimento',
-                            'Fatturato Fisico CC+TAC (PY)', 
-                            'Fatturato Fisico CC+TAC (TY)', 
-                            'Contrazione Canale Fisico',
-                            'Fatturato MetroDaTe (PY)', 
-                            'Fatturato MetroDaTe (TY)', 
-                            'Sviluppo Metro da Te'
+                    if not df_final_view.empty:
+                        # Selezione ordinata delle colonne secondo specifica
+                        colonne_visualizzazione = [
+                            c_cust_name, c_venditore, 
+                            'Fatturato C&C', 'Delta C&C vsPY', 
+                            'Fatturato FSD', 'Delta FSD vsPY', 
+                            'Delta tra C&C e FSD'
                         ]
                         
-                        st.markdown("👉 *La tabella sottostante mostra esclusivamente i clienti con un reale travaso di fatturato (calo sul fisico e incremento sulla consegna).*")
+                        df_table_out = df_final_view[colonne_visualizzazione].copy()
                         
+                        # Ridenominazione finale delle colonne anagrafiche per la tabella pulita
+                        df_table_out.columns = [
+                            'Ragione Sociale / Cliente', 
+                            'Venditore Riferimento',
+                            'Fatturato C&C', 
+                            'Delta C&C vsPY', 
+                            'Fatturato FSD', 
+                            'Delta FSD vsPY', 
+                            'Delta tra C&C e FSD'
+                        ]
+                        
+                        st.markdown("👉 *Clicca sulle intestazioni per ordinare l'elenco. I canali 1, 10, 3, 5 sono accorpati sotto la dicitura C&C, mentre il canale 7 è isolato sotto FSD.*")
+                        
+                        # Rendering della tabella con formattazione numerica in Euro regolata
                         st.dataframe(
-                            df_target_view,
+                            df_table_out,
                             use_container_width=True,
                             hide_index=True,
                             column_config={
-                                'Fatturato Fisico CC+TAC (PY)': st.column_config.NumberColumn(format="€ %,.2f"),
-                                'Fatturato Fisico CC+TAC (TY)': st.column_config.NumberColumn(format="€ %,.2f"),
-                                'Contrazione Canale Fisico': st.column_config.NumberColumn(format="€ %,.2f"),
-                                'Fatturato MetroDaTe (PY)': st.column_config.NumberColumn(format="€ %,.2f"),
-                                'Fatturato MetroDaTe (TY)': st.column_config.NumberColumn(format="€ %,.2f"),
-                                'Sviluppo Metro da Te': st.column_config.NumberColumn(format="€ %,.2f")
+                                'Fatturato C&C': st.column_config.NumberColumn(format="€ %,.2f"),
+                                'Delta C&C vsPY': st.column_config.NumberColumn(format="€ %,.2f"),
+                                'Fatturato FSD': st.column_config.NumberColumn(format="€ %,.2f"),
+                                'Delta FSD vsPY': st.column_config.NumberColumn(format="€ %,.2f"),
+                                'Delta tra C&C e FSD': st.column_config.NumberColumn(format="€ %,.2f")
                             }
                         )
                         
-                        csv_migrati = df_target_migrati.to_csv(index=False, sep=';').encode('utf-8')
+                        # Bottone di esportazione per i dati ricalcolati
+                        csv_esportazione = df_final_view.to_csv(index=False, sep=';').encode('utf-8')
                         st.download_button(
-                            label="📥 Scarica Elenco Clienti Migrati Selezionati (CSV)",
-                            data=csv_migrati,
-                            file_name="clienti_migrati_fisico_consegna.csv",
+                            label="📥 Scarica Elenco Dettagliato Shift Canali (CSV)",
+                            data=csv_esportazione,
+                            file_name="analisi_shift_cc_fsd.csv",
                             mime="text/csv",
                             use_container_width=True
                         )
                     else:
-                        st.info("ℹ️ Nessun cliente risponde ai criteri di migrazione (contrazione su C&C+TAC associata a uno sviluppo su Metro da Te) per i filtri attuali.")
+                        st.info("ℹ️ Nessun dato commerciale registrato sui canali selezionati per i filtri attivi.")
                 else:
-                    st.warning(
-                        f"⚠️ Canali necessari non rilevati. Assicurati che nel file Sellout siano presenti le voci Cash&Carry/TAC e Metro da te."
-                    )
+                    st.warning("⚠️ Non è stato possibile isolare le transazioni per i canali specificati (1, 10, 3, 5, 7) nel dataset corrente.")
+
 
 # =============================================================================
 # PARTE 5.C.5: NUOVA SEZIONE GRAFICA: ISTOGRAMMA AM/OM (TOP 10 CON VALORI) E TORTA GESTIONE
