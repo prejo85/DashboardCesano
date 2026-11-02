@@ -520,25 +520,14 @@ with tab1:
                 st.caption("ℹ️ Carica il report degli indispensabili per attivare la vista.")
                 
 # =============================================================================
-# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - LAYOUT AGGIORNATO (FIX NAMEERROR)
+# PARTE 3.I: ANALISI PRESTAZIONALE NUOVO REPORT AGGIUNTIVO (FILE 6) - VERSIONE DIRETTA
 # =============================================================================
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("#### 📈 Performance Report Analisi Articoli")
             
             if u_add is not None:
-                df_add_clean = df_add.copy()
-                
-                # -------------------------------------------------
-                # ASSOCIAZIONE DINAMICA COLONNA REPARTO (FILE 6)
-                # -------------------------------------------------
-                c_rep_add_name = next((c for c in df_add_clean.columns if 'reparto' in c.lower() or 'department' in c.lower() or 'rep' in c.lower()), df_add_clean.columns)
-                
-                df_add_clean['Cod_Reparto_Add'] = df_add_clean[c_rep_add_name].astype(str).apply(
-                    lambda x: re.search(r'\d+', x).group() if re.search(r'\d+', x) else ''
-                )
-                
-                # Filtro in background basato sulla selezione gerarchica attiva dello Store
-                df_add_filtrato = df_add_clean[df_add_clean['Cod_Reparto_Add'].isin(codici_reparti_vista)].copy()
+                # Usiamo direttamente il dataframe senza rifiltrare se l'azione è già centralizzata a monte
+                df_add_filtrato = df_add.copy()
                 
                 if not df_add_filtrato.empty:
                     # -------------------------------------------------
@@ -548,7 +537,7 @@ with tab1:
                         idx = next((i for i, c in enumerate(dataframe.columns) if keyword.lower() in c.lower()), None)
                         return idx if idx is not None else fallback_idx
 
-                    # Individuazione indici basata sui nomi reali delle colonne (es. DA - Sales TT, DA - #Colli, ecc.)
+                    # Individuazione indici basata sui nomi reali esatti del file Excel
                     idx_sales_ty   = get_col_index_by_text(df_add_filtrato, 'sales tt', 4)
                     idx_colli_ty   = get_col_index_by_text(df_add_filtrato, 'colli', 5)
                     idx_accrediti  = get_col_index_by_text(df_add_filtrato, 'accrediti', 6)
@@ -575,7 +564,7 @@ with tab1:
                     st.markdown("<div style='padding-top: 15px;'></div>", unsafe_allow_html=True)
                     st.markdown("##### Seleziona Vista Analitica di Dettaglio:")
                     
-                    # Grafica personalizzata stile "Tab/Pillole" affiancate dallo screenshot
+                    # Interfaccia grafica a segmenti affiancati nativa (stile screenshot richiesto)
                     vista_scelta_emoji = st.segmented_control(
                         label="Seleziona Vista Analitica di Dettaglio:",
                         options=[
@@ -588,30 +577,30 @@ with tab1:
                         label_visibility="collapsed"
                     )
 
-                    # Estrazione del testo pulito corretta (estrae la stringa dopo l'emoji)
+                    # Estrazione pulita del testo escludendo l'emoji iniziale per i controlli Python
                     if vista_scelta_emoji:
                         parti = vista_scelta_emoji.split(" ", 1)
                         vista_pura = parti[1] if len(parti) > 1 else vista_scelta_emoji
                     else:
                         vista_pura = "Top 10 Articoli (Colli)"
 
-                    # Conversione e tipizzazione matematica delle colonne per l'ordinamento
+                    # Conversione e normalizzazione matematica delle metriche per l'ordinamento sicuro
                     df_add_filtrato['Sales_Num'] = parse_generic_numeric(df_add_filtrato, idx_sales_ty)
                     df_add_filtrato['Colli_Num'] = parse_generic_numeric(df_add_filtrato, idx_colli_ty)
                     df_add_filtrato['Sfrido_Num'] = parse_generic_numeric(df_add_filtrato, idx_shrink_ty)
                     df_add_filtrato['Accrediti_Num'] = parse_generic_numeric(df_add_filtrato, idx_accrediti)
                     df_add_filtrato['Margin_Num'] = parse_generic_numeric(df_add_filtrato, idx_margin_ty)
                     
-                    # Calcolo del Margine %: (Front Margin / Sales TT) * 100 con protezione da divisione per zero
+                    # Calcolo del Margine %: (Front Margin / Sales TT) * 100
                     df_add_filtrato['Margin_Pct'] = df_add_filtrato.apply(
                         lambda r: (r['Margin_Num'] / r['Sales_Num'] * 100) if r['Sales_Num'] > 0 else 0.0, axis=1
                     )
 
-                    # Inizializzazione di sicurezza del dataframe di output
+                    # Inizializzazione di sicurezza della variabile
                     df_top10 = df_add_filtrato.head(10)
 
                     # -------------------------------------------------
-                    # MOTORE DI ORDINAMENTO TOP 10 SULLA VARIABILE PULITA
+                    # MOTORE DI ORDINAMENTO DINAMICO (TOP 10)
                     # -------------------------------------------------
                     if vista_pura == "Top 10 Articoli (Colli)":
                         st.markdown("###### 📊 Primi 10 Articoli per Volume di Colli Venduti:")
@@ -636,7 +625,7 @@ with tab1:
                             df_top10 = df_add_filtrato.sort_values(by='Margin_Pct', ascending=True).head(10)
 
                     # -------------------------------------------------
-                    # APPLICAZIONE FORMATTAZIONE FINALE STRINGHE SULLA TABELLA
+                    # FORMATTAZIONE E PRESENTAZIONE DELLA TABELLA FINALE
                     # -------------------------------------------------
                     df_add_view = df_top10.copy()
                     df_add_view['Fatturato TY'] = df_add_view['Sales_Num'].apply(fmt_valuta_decimali)
@@ -645,19 +634,20 @@ with tab1:
                     df_add_view['Accrediti (€)'] = df_add_view['Accrediti_Num'].apply(fmt_valuta_decimali)
                     df_add_view['Margine %'] = df_add_view['Margin_Pct'].apply(fmt_percentuale)
                     
-                    # Estrazione automatica della colonna articolo reale (es. "10048 - G385 CRAUTI...")
+                    # Individuazione della colonna D ('Article') contenente codice e descrizione articolo
                     lbl_cod_art = next((c for c in df_add_view.columns if 'article' in c.lower() or 'articolo' in c.lower()), df_add_view.columns)
 
-                    # Selezione finale delle sole colonne richieste (esclusa la colonna Reparto/Descrizione Referenza)
+                    # Selezione finale colonne: teniamo solo Articolo (D) ed escludiamo le colonne reparto B e C
                     colonne_out_add = [lbl_cod_art, 'Fatturato TY', 'Volume TY (Colli)', 'Sfrido Corrente (€)', 'Accrediti (€)', 'Margine %']
                     df_add_table_final = df_add_view[colonne_out_add].copy()
                     
-                    # Ridenominazione corretta con la dicitura cerchiata
+                    # Assegnazione dei nomi definitivi richiesti per l'intestazione
                     df_add_table_final.columns = ['Articolo-Descrizione', 'Fatturato TY', 'Volume TY (Colli)', 'Sfrido Corrente (€)', 'Accrediti (€)', 'Margine %']
                     
+                    # Generazione del layout finale
                     st.dataframe(df_add_table_final, use_container_width=True, hide_index=True)
                 else:
-                    st.info("ℹ️ Nessun record trovato nel report aggiuntivo per la selezione di reparto attiva.")
+                    st.info("ℹ️ Nessun record presente nel file caricato.")
             else:
                 st.warning("⚠️ File sorgente aggiuntivo non inserito o non rilevato nella barra laterale.")
             
