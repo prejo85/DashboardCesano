@@ -585,7 +585,7 @@ with tab1:
 
                 if vista_scelta_emoji:
                     parti = vista_scelta_emoji.split(" ", 1)
-                    vista_pura =迫rti[1] if len(parti) > 1 else vista_scelta_emoji
+                    vista_pura =parti[1] if len(parti) > 1 else vista_scelta_emoji
                 else:
                     vista_pura = "Top 10 Articoli (Colli)"
 
