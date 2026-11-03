@@ -650,245 +650,252 @@ with tab1:
 
 
 # =============================================================================
-# PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE (BARRE AFFIANCATE)
+# PARTE 4.A: GRAFICI DI PERFORMANCE MACRO CATEGORIE FILTRATI (BARRE AFFIANCATE)
 # =============================================================================
-            st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
-            if not df_ctg.empty and not match_ctg.empty:
-                c_macro_find = [c for c in match_ctg.columns if 'category' in c.lower() or 'segmento' in c.lower()]
-                if c_macro_find and len(c_macro_find) > 0:
-                    c_macro_name = c_macro_find[0]
-                    match_ctg['Macro_Category_Clean'] = match_ctg[c_macro_name].astype(str).str.upper().apply(
-                        lambda x: 'HORECA' if 'HORECA' in x else ('SCO' if 'SCO' in x else ('TRADER' if 'TRADER' in x else 'ALTRO'))
-                    )
-                else:
-                    match_ctg['Macro_Category_Clean'] = match_ctg.iloc[:, 2].astype(str).str.upper().apply(
-                        lambda x: 'HORECA' if 'HORECA' in x else ('SCO' if 'SCO' in x else ('TRADER' if 'TRADER' in x else 'ALTRO'))
-                    )
+st.subheader("📊 Analisi e Performance Mix Categorie e Canali (Report CTG)")
+
+# Determiniamo il dataset corretto da mostrare in base ai filtri
+if not df_ctg.empty:
+    # Se l'utente ha filtrato per Area/Reparto e il match ha prodotto risultati, usiamo quelli
+    if 'match_ctg' in locals() and not match_ctg.empty:
+        df_ctg_visualizzazione = match_ctg.copy()
+    else:
+        # Altrimenti siamo sul TOTALE STORE: popoliamo i campi numerici sul foglio CTG completo
+        df_ctg_visualizzazione = df_ctg.copy()
+        df_ctg_visualizzazione['CTG_Label'] = df_ctg_visualizzazione['CTG'].astype(str).str.strip()
+        df_ctg_visualizzazione['Channel_Label'] = df_ctg_visualizzazione['Channel Detail'].astype(str).str.strip()
+        
+        def parse_ctg_totale(dataframe, col_index):
+            s = dataframe.iloc[:, col_index].astype(str).str.replace(r'\s+', '', regex=True).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+            return pd.to_numeric(s, errors='coerce').fillna(0.0)
+        
+        df_ctg_visualizzazione['Sales_TY'] = parse_ctg_totale(df_ctg_visualizzazione, 7)
+        df_ctg_visualizzazione['Sales_PY'] = parse_ctg_totale(df_ctg_visualizzazione, 8)
+        df_ctg_visualizzazione['Visits_TY'] = parse_ctg_totale(df_ctg_visualizzazione, 11)
+
+    # Estrazione e pulizia della Macro Categoria (HORECA, SCO, TRADER)
+    c_macro_find = [c for c in df_ctg_visualizzazione.columns if 'category' in c.lower() or 'segmento' in c.lower()]
+    if c_macro_find and len(c_macro_find) > 0:
+        c_macro_name = c_macro_find[0]
+        df_ctg_visualizzazione['Macro_Category_Clean'] = df_ctg_visualizzazione[c_macro_name].astype(str).str.upper().apply(
+            lambda x: 'HORECA' if 'HORECA' in x else ('SCO' if 'SCO' in x else ('TRADER' if 'TRADER' in x else 'ALTRO'))
+        )
+    else:
+        df_ctg_visualizzazione['Macro_Category_Clean'] = df_ctg_visualizzazione.iloc[:, 2].astype(str).str.upper().apply(
+            lambda x: 'HORECA' if 'HORECA' in x else ('SCO' if 'SCO' in x else ('TRADER' if 'TRADER' in x else 'ALTRO'))
+        )
+        
+    df_m_g = df_ctg_visualizzazione.groupby('Macro_Category_Clean').agg({'Sales_TY':'sum', 'Sales_PY':'sum', 'Visits_TY':'sum'}).reset_index()
+    
+    mc1, mc2 = st.columns(2)
+    with mc1: 
+        fig_macro = go.Figure()
+        
+        # 1. Barre TY Corrente filtrato
+        fig_macro.add_trace(go.Bar(
+            x=df_m_g['Macro_Category_Clean'],
+            y=df_m_g['Sales_TY'],
+            name='TY Corrente',
+            marker_color=px.colors.qualitative.Plotly[:len(df_m_g)],
+            text=df_m_g['Sales_TY'],
+            texttemplate='%{text:.2s}',
+            textposition='outside'
+        ))
+        
+        # 2. Barre PY Precedente filtrato
+        fig_macro.add_trace(go.Bar(
+            x=df_m_g['Macro_Category_Clean'],
+            y=df_m_g['Sales_PY'],
+            name='PY Precedente',
+            marker_color='#555555',
+            text=df_m_g['Sales_PY'],
+            texttemplate='%{text:.2s}',
+            textposition='outside'
+        ))
+        
+        fig_macro.update_layout(
+            title="Fatturato per Macro Categoria (Selezionata vs PY)",
+            template='plotly_dark',
+            barmode='group',
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        st.plotly_chart(fig_macro, use_container_width=True)
+        
+    with mc2: 
+        st.plotly_chart(px.pie(df_m_g, values='Visits_TY', names='Macro_Category_Clean', title="Mix Visite Segmenti Selezione", template='plotly_dark', hole=0.4), use_container_width=True)
+
+# =============================================================================
+# PARTE 4.B: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO HORECA FILTRATO
+# =============================================================================
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.subheader("🍽️ Performance Sotto-Categorie Segmento HORECA")
+    df_horeca_only = df_ctg_visualizzazione[df_ctg_visualizzazione['Macro_Category_Clean'] == 'HORECA'].copy()
+    df_ctg_g_horeca = df_horeca_only.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Visits_TY': 'sum'}).reset_index().sort_values(by='Sales_TY', ascending=True)
+    df_ctg_g_horeca = df_ctg_g_horeca[(df_ctg_g_horeca['Sales_TY'] > 0) | (df_ctg_g_horeca['Sales_PY'] > 0)]
+
+    if not df_ctg_g_horeca.empty:
+        g1, g2 = st.columns(2)
+        with g1: 
+            fig_horeca_bar = go.Figure()
+            colori_blues = px.colors.sample_colorscale("Blues", [i/(len(df_ctg_g_horeca)-1 or 1) for i in range(len(df_ctg_g_horeca))])
+            
+            fig_horeca_bar.add_trace(go.Bar(
+                y=df_ctg_g_horeca['CTG_Label'],
+                x=df_ctg_g_horeca['Sales_TY'],
+                name='TY Corrente',
+                orientation='h',
+                marker_color=colori_blues,
+                text=df_ctg_g_horeca['Sales_TY'],
+                texttemplate='%{text:.2s}',
+                textposition='outside'
+            ))
+            
+            fig_horeca_bar.add_trace(go.Bar(
+                y=df_ctg_g_horeca['CTG_Label'],
+                x=df_ctg_g_horeca['Sales_PY'],
+                name='PY Precedente',
+                orientation='h',
+                marker_color='#555555',
+                text=df_ctg_g_horeca['Sales_PY'],
+                texttemplate='%{text:.2s}',
+                textposition='outside'
+            ))
+            
+            fig_horeca_bar.update_layout(
+                title="Fatturato per Sotto-Categoria HORECA (Selezionata vs PY)",
+                template='plotly_dark',
+                barmode='group',
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_horeca_bar, use_container_width=True)
+            
+        with g2: 
+            st.plotly_chart(px.pie(df_ctg_g_horeca, values='Visits_TY', names='CTG_Label', title="Mix Visite HORECA Selezione", template='plotly_dark', hole=0.4), use_container_width=True)
+        
+        df_ch_horeca = df_horeca_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
+        df_ch_horeca['Scontrino_Medio'] = df_ch_horeca.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
+        
+        ch1, ch2 = st.columns(2)
+        with ch1: 
+            st.plotly_chart(px.bar(df_ch_horeca, x='Channel_Label', y='Sales_TY', title="Fatturato HORECA per Canale Selezione", template="plotly_dark", color='Channel_Label'), use_container_width=True)
+        with ch2: 
+            st.plotly_chart(px.bar(df_ch_horeca, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio HORECA Selezione", template="plotly_dark", color='Channel_Label'), use_container_width=True)
+
+# =============================================================================
+# PARTE 4.C: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO SCO FILTRATO
+# =============================================================================
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.subheader("🏪 Performance Sotto-Categorie Segmento SCO")
+    df_sco_only = df_ctg_visualizzazione[df_ctg_visualizzazione['Macro_Category_Clean'] == 'SCO'].copy()
+    df_ctg_g_sco = df_sco_only.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Visits_TY': 'sum'}).reset_index().sort_values(by='Sales_TY', ascending=True)
+    df_ctg_g_sco = df_ctg_g_sco[(df_ctg_g_sco['Sales_TY'] > 0) | (df_ctg_g_sco['Sales_PY'] > 0)]
+
+    if not df_ctg_g_sco.empty:
+        g1_sco, g2_sco = st.columns(2)
+        with g1_sco: 
+            fig_sco_bar = go.Figure()
+            colori_greens = px.colors.sample_colorscale("Greens", [i/(len(df_ctg_g_sco)-1 or 1) for i in range(len(df_ctg_g_sco))])
+            
+            fig_sco_bar.add_trace(go.Bar(
+                y=df_ctg_g_sco['CTG_Label'],
+                x=df_sco_g_sco = df_ctg_g_sco['Sales_TY'],
+                name='TY Corrente',
+                orientation='h',
+                marker_color=colori_greens,
+                text=df_ctg_g_sco['Sales_TY'],
+                texttemplate='%{text:.2s}',
+                textposition='outside'
+            ))
+            
+            fig_sco_bar.add_trace(go.Bar(
+                y=df_ctg_g_sco['CTG_Label'],
+                x=df_ctg_g_sco['Sales_PY'],
+                name='PY Precedente',
+                orientation='h',
+                marker_color='#555555',
+                text=df_ctg_g_sco['Sales_PY'],
+                texttemplate='%{text:.2s}',
+                textposition='outside'
+            ))
+            
+            fig_sco_bar.update_layout(
+                title="Fatturato per Sotto-Categoria SCO (Selezionata vs PY)",
+                template='plotly_dark',
+                barmode='group',
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_sco_bar, use_container_width=True)
+            
+        with g2_sco: 
+            st.plotly_chart(px.pie(df_ctg_g_sco, values='Visits_TY', names='CTG_Label', title="Mix Visite SCO Selezione", template='plotly_dark', hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r), use_container_width=True)
+        
+        df_ch_sco = df_sco_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
+        df_ch_sco['Scontrino_Medio'] = df_ch_sco.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
+        
+        ch1_sco, ch2_sco = st.columns(2)
+        with ch1_sco: 
+            st.plotly_chart(px.bar(df_ch_sco, x='Channel_Label', y='Sales_TY', title="Fatturato SCO per Canale Selezione", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Set2), use_container_width=True)
+        with ch2_sco: 
+            st.plotly_chart(px.bar(df_ch_sco, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio SCO Selezione", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Set2), use_container_width=True)
+
+# =============================================================================
+# PARTE 4.D: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO TRADER FILTRATO (INDENTATO)
+# =============================================================================
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            st.subheader("📦 Performance Sotto-Categorie Segmento TRADER")
+            df_trader_only = df_ctg_visualizzazione[df_ctg_visualizzazione['Macro_Category_Clean'] == 'TRADER'].copy()
+            df_ctg_g_trader = df_trader_only.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Visits_TY': 'sum'}).reset_index().sort_values(by='Sales_TY', ascending=True)
+            df_ctg_g_trader = df_ctg_g_trader[(df_ctg_g_trader['Sales_TY'] > 0) | (df_ctg_g_trader['Sales_PY'] > 0)]
+
+            if not df_ctg_g_trader.empty:
+                g1_tr, g2_tr = st.columns(2)
+                with g1_tr: 
+                    fig_trader_bar = go.Figure()
+                    colori_oranges = px.colors.sample_colorscale("Oranges", [i/(len(df_ctg_g_trader)-1 or 1) for i in range(len(df_ctg_g_trader))])
                     
-                df_m_g = match_ctg.groupby('Macro_Category_Clean').agg({'Sales_TY':'sum', 'Sales_PY':'sum', 'Visits_TY':'sum'}).reset_index()
-                
-                mc1, mc2 = st.columns(2)
-                with mc1: 
-                    # Grafico Macro Categorie raggruppato
-                    fig_macro = go.Figure()
-                    
-                    # 1. Barre TY Corrente (Colori originali del set qualitativo Plotly)
-                    fig_macro.add_trace(go.Bar(
-                        x=df_m_g['Macro_Category_Clean'],
-                        y=df_m_g['Sales_TY'],
+                    fig_trader_bar.add_trace(go.Bar(
+                        y=df_ctg_g_trader['CTG_Label'],
+                        x=df_ctg_g_trader['Sales_TY'],
                         name='TY Corrente',
-                        marker_color=px.colors.qualitative.Plotly[:len(df_m_g)],
-                        text=df_m_g['Sales_TY'],
+                        orientation='h',
+                        marker_color=colori_oranges,
+                        text=df_ctg_g_trader['Sales_TY'],
                         texttemplate='%{text:.2s}',
                         textposition='outside'
                     ))
                     
-                    # 2. Barre PY Precedente (Grigio scuro uniforme)
-                    fig_macro.add_trace(go.Bar(
-                        x=df_m_g['Macro_Category_Clean'],
-                        y=df_m_g['Sales_PY'],
+                    fig_trader_bar.add_trace(go.Bar(
+                        y=df_ctg_g_trader['CTG_Label'],
+                        x=df_ctg_g_trader['Sales_PY'],
                         name='PY Precedente',
+                        orientation='h',
                         marker_color='#555555',
-                        text=df_m_g['Sales_PY'],
+                        text=df_ctg_g_trader['Sales_PY'],
                         texttemplate='%{text:.2s}',
                         textposition='outside'
                     ))
                     
-                    fig_macro.update_layout(
-                        title="Fatturato per Macro Categoria (TY vs PY)",
+                    fig_trader_bar.update_layout(
+                        title="Fatturato per Sotto-Categoria TRADER (Selezionata vs PY)",
                         template='plotly_dark',
                         barmode='group',
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                     )
-                    st.plotly_chart(fig_macro, use_container_width=True)
+                    st.plotly_chart(fig_trader_bar, use_container_width=True)
                     
-                with mc2: 
-                    st.plotly_chart(px.pie(df_m_g, values='Visits_TY', names='Macro_Category_Clean', title="Mix Visite Segmenti", template='plotly_dark', hole=0.4), use_container_width=True)
-
-# =============================================================================
-# PARTE 4.B: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO HORECA (BARRE AFFIANCATE)
-# =============================================================================
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                st.subheader("🍽️ Performance Sotto-Categorie Segmento HORECA")
-                df_horeca_only = match_ctg[match_ctg['Macro_Category_Clean'] == 'HORECA'].copy()
-                df_ctg_g_horeca = df_horeca_only.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Visits_TY': 'sum'}).reset_index().sort_values(by='Sales_TY', ascending=True)
-                df_ctg_g_horeca = df_ctg_g_horeca[(df_ctg_g_horeca['Sales_TY'] > 0) | (df_ctg_g_horeca['Sales_PY'] > 0)]
-
-                if not df_ctg_g_horeca.empty:
-                    g1, g2 = st.columns(2)
-                    with g1: 
-                        # Grafico Orizzontale HORECA raggruppato
-                        fig_horeca_bar = go.Figure()
-                        
-                        # Generazione di una palette sfumata di blu per il TY
-                        colori_blues = px.colors.sample_colorscale("Blues", [i/(len(df_ctg_g_horeca)-1 or 1) for i in range(len(df_ctg_g_horeca))])
-                        
-                        # 1. Barre TY Corrente (Scala di Blu originale)
-                        fig_horeca_bar.add_trace(go.Bar(
-                            y=df_ctg_g_horeca['CTG_Label'],
-                            x=df_ctg_g_horeca['Sales_TY'],
-                            name='TY Corrente',
-                            orientation='h',
-                            marker_color=colori_blues,
-                            text=df_ctg_g_horeca['Sales_TY'],
-                            texttemplate='%{text:.2s}',
-                            textposition='outside'
-                        ))
-                        
-                        # 2. Barre PY Precedente (Grigio scuro uniforme)
-                        fig_horeca_bar.add_trace(go.Bar(
-                            y=df_ctg_g_horeca['CTG_Label'],
-                            x=df_ctg_g_horeca['Sales_PY'],
-                            name='PY Precedente',
-                            orientation='h',
-                            marker_color='#555555',
-                            text=df_ctg_g_horeca['Sales_PY'],
-                            texttemplate='%{text:.2s}',
-                            textposition='outside'
-                        ))
-                        
-                        fig_horeca_bar.update_layout(
-                            title="Fatturato per Sotto-Categoria HORECA (TY vs PY)",
-                            template='plotly_dark',
-                            barmode='group',
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                        )
-                        st.plotly_chart(fig_horeca_bar, use_container_width=True)
-                        
-                    with g2: 
-                        st.plotly_chart(px.pie(df_ctg_g_horeca, values='Visits_TY', names='CTG_Label', title="Mix Visite HORECA", template='plotly_dark', hole=0.4), use_container_width=True)
-                    
-                    df_ch_horeca = df_horeca_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
-                    df_ch_horeca['Scontrino_Medio'] = df_ch_horeca.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
-                    
-                    ch1, ch2 = st.columns(2)
-                    with ch1: 
-                        st.plotly_chart(px.bar(df_ch_horeca, x='Channel_Label', y='Sales_TY', title="Fatturato HORECA per Canale", template="plotly_dark", color='Channel_Label'), use_container_width=True)
-                    with ch2: 
-                        st.plotly_chart(px.bar(df_ch_horeca, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio HORECA (€ per Visita)", template="plotly_dark", color='Channel_Label'), use_container_width=True)
-# =============================================================================
-# PARTE 4.C: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO SCO (BARRE AFFIANCATE)
-# =============================================================================
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                st.subheader("🏪 Performance Sotto-Categorie Segmento SCO")
-                df_sco_only = match_ctg[match_ctg['Macro_Category_Clean'] == 'SCO'].copy()
-                df_ctg_g_sco = df_sco_only.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Visits_TY': 'sum'}).reset_index().sort_values(by='Sales_TY', ascending=True)
-                df_ctg_g_sco = df_ctg_g_sco[(df_ctg_g_sco['Sales_TY'] > 0) | (df_ctg_g_sco['Sales_PY'] > 0)]
-
-                if not df_ctg_g_sco.empty:
-                    g1_sco, g2_sco = st.columns(2)
-                    with g1_sco: 
-                        # Grafico Orizzontale SCO raggruppato
-                        fig_sco_bar = go.Figure()
-                        
-                        # Generazione di una palette sfumata di verdi per il TY
-                        colori_greens = px.colors.sample_colorscale("Greens", [i/(len(df_ctg_g_sco)-1 or 1) for i in range(len(df_ctg_g_sco))])
-                        
-                        # 1. Barre TY Corrente (Scala di Verdi originale)
-                        fig_sco_bar.add_trace(go.Bar(
-                            y=df_ctg_g_sco['CTG_Label'],
-                            x=df_ctg_g_sco['Sales_TY'],
-                            name='TY Corrente',
-                            orientation='h',
-                            marker_color=colori_greens,
-                            text=df_ctg_g_sco['Sales_TY'],
-                            texttemplate='%{text:.2s}',
-                            textposition='outside'
-                        ))
-                        
-                        # 2. Barre PY Precedente (Grigio scuro uniforme)
-                        fig_sco_bar.add_trace(go.Bar(
-                            y=df_ctg_g_sco['CTG_Label'],
-                            x=df_ctg_g_sco['Sales_PY'],
-                            name='PY Precedente',
-                            orientation='h',
-                            marker_color='#555555',
-                            text=df_ctg_g_sco['Sales_PY'],
-                            texttemplate='%{text:.2s}',
-                            textposition='outside'
-                        ))
-                        
-                        fig_sco_bar.update_layout(
-                            title="Fatturato per Sotto-Categoria SCO (TY vs PY)",
-                            template='plotly_dark',
-                            barmode='group',
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                        )
-                        st.plotly_chart(fig_sco_bar, use_container_width=True)
-                        
-                    with g2_sco: 
-                        st.plotly_chart(px.pie(df_ctg_g_sco, values='Visits_TY', names='CTG_Label', title="Mix Visite SCO", template='plotly_dark', hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r), use_container_width=True)
-                    
-                    df_ch_sco = df_sco_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
-                    df_ch_sco['Scontrino_Medio'] = df_ch_sco.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
-                    
-                    ch1_sco, ch2_sco = st.columns(2)
-                    with ch1_sco: 
-                        st.plotly_chart(px.bar(df_ch_sco, x='Channel_Label', y='Sales_TY', title="Fatturato SCO per Canale", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Set2), use_container_width=True)
-                    with ch2_sco: 
-                        st.plotly_chart(px.bar(df_ch_sco, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio SCO (€ per Visita)", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Set2), use_container_width=True)
-
-# =============================================================================
-# PARTE 4.D: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO TRADER (BARRE AFFIANCATE)
-# =============================================================================
-                st.markdown("<br><br>", unsafe_allow_html=True)
-                st.subheader("📦 Performance Sotto-Categorie Segmento TRADER")
-                df_trader_only = match_ctg[match_ctg['Macro_Category_Clean'] == 'TRADER'].copy()
-                df_ctg_g_trader = df_trader_only.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Visits_TY': 'sum'}).reset_index().sort_values(by='Sales_TY', ascending=True)
-                df_ctg_g_trader = df_ctg_g_trader[(df_ctg_g_trader['Sales_TY'] > 0) | (df_ctg_g_trader['Sales_PY'] > 0)]
-
-                if not df_ctg_g_trader.empty:
-                    g1_tr, g2_tr = st.columns(2)
-                    with g1_tr: 
-                        # Grafico Orizzontale TRADER raggruppato
-                        fig_trader_bar = go.Figure()
-                        
-                        # Generazione di una palette sfumata di arancioni per il TY
-                        colori_oranges = px.colors.sample_colorscale("Oranges", [i/(len(df_ctg_g_trader)-1 or 1) for i in range(len(df_ctg_g_trader))])
-                        
-                        # 1. Barre TY Corrente (Scala di Arancioni originale)
-                        fig_trader_bar.add_trace(go.Bar(
-                            y=df_ctg_g_trader['CTG_Label'],
-                            x=df_ctg_g_trader['Sales_TY'],
-                            name='TY Corrente',
-                            orientation='h',
-                            marker_color=colori_oranges,
-                            text=df_ctg_g_trader['Sales_TY'],
-                            texttemplate='%{text:.2s}',
-                            textposition='outside'
-                        ))
-                        
-                        # 2. Barre PY Precedente (Grigio scuro uniforme)
-                        fig_trader_bar.add_trace(go.Bar(
-                            y=df_ctg_g_trader['CTG_Label'],
-                            x=df_ctg_g_trader['Sales_PY'],
-                            name='PY Precedente',
-                            orientation='h',
-                            marker_color='#555555',
-                            text=df_ctg_g_trader['Sales_PY'],
-                            texttemplate='%{text:.2s}',
-                            textposition='outside'
-                        ))
-                        
-                        fig_trader_bar.update_layout(
-                            title="Fatturato per Sotto-Categoria TRADER (TY vs PY)",
-                            template='plotly_dark',
-                            barmode='group',
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                        )
-                        st.plotly_chart(fig_trader_bar, use_container_width=True)
-                        
-                    with g2_tr: 
-                        st.plotly_chart(px.pie(df_ctg_g_trader, values='Visits_TY', names='CTG_Label', title="Mix Visite TRADER", template='plotly_dark', hole=0.4, color_discrete_sequence=px.colors.sequential.Oranges_r), use_container_width=True)
-                    
-                    df_ch_trader = df_trader_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
-                    df_ch_trader['Scontrino_Medio'] = df_ch_trader.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
-                    
-                    ch1_tr, ch2_tr = st.columns(2)
-                    with ch1_tr: 
-                        st.plotly_chart(px.bar(df_ch_trader, x='Channel_Label', y='Sales_TY', title="Fatturato TRADER per Canale", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Pastel1), use_container_width=True)
-                    with ch2_tr: 
-                        st.plotly_chart(px.bar(df_ch_trader, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio TRADER (€ per Visita)", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Pastel1), use_container_width=True)
+                with g2_tr: 
+                    st.plotly_chart(px.pie(df_ctg_g_trader, values='Visits_TY', names='CTG_Label', title="Mix Visite TRADER Selezione", template='plotly_dark', hole=0.4, color_discrete_sequence=px.colors.sequential.Oranges_r), use_container_width=True)
+                
+                df_ch_trader = df_trader_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
+                df_ch_trader['Scontrino_Medio'] = df_ch_trader.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
+                
+                ch1_tr, ch2_tr = st.columns(2)
+                with ch1_tr: 
+                    st.plotly_chart(px.bar(df_ch_trader, x='Channel_Label', y='Sales_TY', title="Fatturato TRADER per Canale Selezione", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Pastel1), use_container_width=True)
+                with ch2_tr: 
+                    st.plotly_chart(px.bar(df_ch_trader, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio TRADER Selezione", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Pastel1), use_container_width=True)
+else:
+    st.caption("ℹ️ Carica il report CTG valido per abilitare l'analisi dei canali e segmenti commerciali.")
     
 # =============================================================================
 # PARTE 5.A: FILTRI DINAMICI INTEGRALI E PUNTAMENTO COLONNE H, I, J (RISOLTO)
