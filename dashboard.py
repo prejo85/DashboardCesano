@@ -782,18 +782,15 @@ if not df_ctg.empty:
                     st.plotly_chart(px.bar(df_ch_horeca, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio HORECA Selezione", template="plotly_dark", color='Channel_Label'), use_container_width=True)
 
 # =============================================================================
-# PARTE 4.C: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO SCO FILTRATO (RESET LAYOUT)
+# PARTE 4.C: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO SCO FILTRATO
 # =============================================================================
-            # Usciamo esplicitamente dalle colonne precedenti stampando a larghezza intera
-            st.markdown("---") 
+            st.markdown("---")
             st.subheader("🏪 Performance Sotto-Categorie Segmento SCO")
-            
             df_sco_only = df_ctg_visualizzazione[df_ctg_visualizzazione['Macro_Category_Clean'] == 'SCO'].copy()
             df_ctg_g_sco = df_sco_only.groupby('CTG_Label').agg({'Sales_TY': 'sum', 'Sales_PY': 'sum', 'Visits_TY': 'sum'}).reset_index().sort_values(by='Sales_TY', ascending=True)
             df_ctg_g_sco = df_ctg_g_sco[(df_ctg_g_sco['Sales_TY'] > 0) | (df_ctg_g_sco['Sales_PY'] > 0)]
 
             if not df_ctg_g_sco.empty:
-                # Creiamo un NUOVO set di colonne pulito e indipendente
                 g1_sco, g2_sco = st.columns(2)
                 with g1_sco: 
                     fig_sco_bar = go.Figure()
@@ -832,18 +829,17 @@ if not df_ctg.empty:
                 with g2_sco: 
                     st.plotly_chart(px.pie(df_ctg_g_sco, values='Visits_TY', names='CTG_Label', title="Mix Visite SCO Selezione", template='plotly_dark', hole=0.4, color_discrete_sequence=px.colors.sequential.Greens_r), use_container_width=True)
                 
-                # Altro set di colonne pulito per i canali dello SCO
-                ch1_sco, ch2_sco = st.columns(2)
                 df_ch_sco = df_sco_only.groupby('Channel_Label').agg({'Sales_TY': 'sum', 'Visits_TY': 'sum'}).reset_index()
                 df_ch_sco['Scontrino_Medio'] = df_ch_sco.apply(lambda r: r['Sales_TY']/r['Visits_TY'] if r['Visits_TY'] > 0 else 0, axis=1)
                 
+                ch1_sco, ch2_sco = st.columns(2)
                 with ch1_sco: 
                     st.plotly_chart(px.bar(df_ch_sco, x='Channel_Label', y='Sales_TY', title="Fatturato SCO per Canale Selezione", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Set2), use_container_width=True)
                 with ch2_sco: 
                     st.plotly_chart(px.bar(df_ch_sco, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio SCO Selezione", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Set2), use_container_width=True)
 
 # =============================================================================
-# PARTE 4.D: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO TRADER FILTRATO (ALLINEATO)
+# PARTE 4.D: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO TRADER FILTRATO
 # =============================================================================
             st.markdown("<br><br>", unsafe_allow_html=True)
             st.subheader("📦 Performance Sotto-Categorie Segmento TRADER")
@@ -857,7 +853,6 @@ if not df_ctg.empty:
                     fig_trader_bar = go.Figure()
                     colori_oranges = px.colors.sample_colorscale("Oranges", [i/(len(df_ctg_g_trader)-1 or 1) for i in range(len(df_ctg_g_trader))])
                     
-                    # 1. Barre Anno Corrente (TY)
                     fig_trader_bar.add_trace(go.Bar(
                         y=df_ctg_g_trader['CTG_Label'],
                         x=df_ctg_g_trader['Sales_TY'],
@@ -869,7 +864,6 @@ if not df_ctg.empty:
                         textposition='outside'
                     ))
                     
-                    # 2. Barre Anno Precedente (PY)
                     fig_trader_bar.add_trace(go.Bar(
                         y=df_ctg_g_trader['CTG_Label'],
                         x=df_ctg_g_trader['Sales_PY'],
