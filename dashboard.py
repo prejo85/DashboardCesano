@@ -670,9 +670,10 @@ with tab1:
             else:
                 df_ctg_visualizzazione = match_ctg.copy()
 
+            # Estrazione sicura come STRINGA (risolve l'AttributeError)
             c_macro_find = [c for c in df_ctg_visualizzazione.columns if 'category' in c.lower() or 'segmento' in c.lower()]
             if c_macro_find and len(c_macro_find) > 0:
-                c_macro_name = c_macro_find
+                c_macro_name = c_macro_find[0]  # Prende la stringa pura, non la lista
                 df_ctg_visualizzazione['Macro_Category_Clean'] = df_ctg_visualizzazione[c_macro_name].astype(str).str.upper().apply(
                     lambda x: 'HORECA' if 'HORECA' in x else ('SCO' if 'SCO' in x else ('TRADER' if 'TRADER' in x else 'ALTRO'))
                 )
