@@ -146,7 +146,7 @@ u_ctg = st.sidebar.file_uploader("2. File CTG (.csv)", type="csv")
 u_sel = st.sidebar.file_uploader("3. File Free Analysis Sellout (.csv)", type="csv")
 u_ind = st.sidebar.file_uploader("4. File Indispensabili (.csv)", type="csv")
 u_men = st.sidebar.file_uploader("5. File Mensilizzazione (.csv)", type="csv")
-u_add = st.sidebar.file_uploader("6. File Report Aggiuntivo (.csv)", type="csv") # Nuova sorgente dati
+u_add = st.sidebar.file_uploader("6. File Article Analysis (.csv)", type="csv") # Nuova sorgente dati
 
 if not (u_rep and u_ctg and u_sel and u_ind and u_men and u_add):
     st.info("💡 Carica tutti i 6 report commerciali puliti nel pannello laterale sinistro per attivare l'interfaccia.")
@@ -782,7 +782,7 @@ if not df_ctg.empty:
             st.plotly_chart(px.bar(df_ch_horeca, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio HORECA Selezione", template="plotly_dark", color='Channel_Label'), use_container_width=True)
 
 # =============================================================================
-# PARTE 4.C: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO SCO FILTRATO
+# PARTE 4.C: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO SCO FILTRATO (ALLINEATO)
 # =============================================================================
             st.markdown("<br><br>", unsafe_allow_html=True)
             st.subheader("🏪 Performance Sotto-Categorie Segmento SCO")
@@ -841,7 +841,7 @@ if not df_ctg.empty:
                     st.plotly_chart(px.bar(df_ch_sco, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio SCO Selezione", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Set2), use_container_width=True)
 
 # =============================================================================
-# PARTE 4.D: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO TRADER FILTRATO (INDENTATO)
+# PARTE 4.D: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO TRADER FILTRATO (ALLINEATO)
 # =============================================================================
             st.markdown("<br><br>", unsafe_allow_html=True)
             st.subheader("📦 Performance Sotto-Categorie Segmento TRADER")
@@ -855,6 +855,7 @@ if not df_ctg.empty:
                     fig_trader_bar = go.Figure()
                     colori_oranges = px.colors.sample_colorscale("Oranges", [i/(len(df_ctg_g_trader)-1 or 1) for i in range(len(df_ctg_g_trader))])
                     
+                    # 1. Barre Anno Corrente (TY)
                     fig_trader_bar.add_trace(go.Bar(
                         y=df_ctg_g_trader['CTG_Label'],
                         x=df_ctg_g_trader['Sales_TY'],
@@ -866,6 +867,7 @@ if not df_ctg.empty:
                         textposition='outside'
                     ))
                     
+                    # 2. Barre Anno Precedente (PY)
                     fig_trader_bar.add_trace(go.Bar(
                         y=df_ctg_g_trader['CTG_Label'],
                         x=df_ctg_g_trader['Sales_PY'],
@@ -896,8 +898,7 @@ if not df_ctg.empty:
                     st.plotly_chart(px.bar(df_ch_trader, x='Channel_Label', y='Sales_TY', title="Fatturato TRADER per Canale Selezione", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Pastel1), use_container_width=True)
                 with ch2_tr: 
                     st.plotly_chart(px.bar(df_ch_trader, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio TRADER Selezione", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Pastel1), use_container_width=True)
-else:
-    st.caption("ℹ️ Carica il report CTG valido per abilitare l'analisi dei canali e segmenti commerciali.")
+
     
 # =============================================================================
 # PARTE 5.A: FILTRI DINAMICI INTEGRALI E PUNTAMENTO COLONNE H, I, J (RISOLTO)
