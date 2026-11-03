@@ -807,7 +807,7 @@ with tab1:
                         name='PY Precedente',
                         orientation='h',
                         marker_color='#555555',
-                        text=df_sco_g_sco = df_ctg_g_sco['Sales_PY'],
+                        text=df_ctg_g_sco['Sales_PY'],
                         texttemplate='%{text:.2s}',
                         textposition='outside'
                     ))
@@ -831,6 +831,7 @@ with tab1:
                     st.plotly_chart(px.bar(df_ch_sco, x='Channel_Label', y='Sales_TY', title="Fatturato SCO per Canale", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Set2), use_container_width=True)
                 with ch2_sco: 
                     st.plotly_chart(px.bar(df_ch_sco, x='Channel_Label', y='Scontrino_Medio', title="Scontrino Medio SCO (€ per Visita)", template="plotly_dark", color='Channel_Label', color_discrete_sequence=px.colors.qualitative.Set2), use_container_width=True)
+
 # =============================================================================
 # PARTE 4.D: PORTAFOGLIO CATEGORIE E CANALI - SEGMENTO TRADER (BARRE AFFIANCATE)
 # =============================================================================
