@@ -367,7 +367,7 @@ with tab1:
             delta_colli_dinamico = ((valore_colli_ty - valore_colli_py) / valore_colli_py * 100) if valore_colli_py > 0 else 0.0
 
             box_m3.metric(
-                label="📦 Volume Totale (Colli)", 
+                label="📦 Volume (Colli)", 
                 value=f"{valore_colli_ty:,}".replace(',', '.'), 
                 delta=f"{delta_colli_dinamico:+.2f}% vs PY"
             )
